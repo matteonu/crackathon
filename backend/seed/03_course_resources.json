@@ -1,0 +1,30 @@
+[
+  {
+    "id": 1,
+    "course_id": 1,
+    "kind": "resource",
+    "title": "Exercise sessions",
+    "url": "https://example.com/eprog/exercises"
+  },
+  {
+    "id": 2,
+    "course_id": 1,
+    "kind": "doc",
+    "title": "Lecture slides",
+    "url": "https://example.com/eprog/slides.pdf"
+  },
+  {
+    "id": 3,
+    "course_id": 2,
+    "kind": "doc",
+    "title": "Lecture notes",
+    "url": "https://example.com/linalg/notes.pdf"
+  },
+  {
+    "id": 4,
+    "course_id": 4,
+    "kind": "resource",
+    "title": "Past exams",
+    "url": "https://example.com/and/exams"
+  }
+]

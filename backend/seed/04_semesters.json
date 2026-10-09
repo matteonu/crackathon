@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "user_id": 1,
+    "label": "HS25",
+    "study_hours_per_week": 20
+  },
+  {
+    "id": 2,
+    "user_id": 1,
+    "label": "FS26",
+    "study_hours_per_week": 25
+  },
+  {
+    "id": 3,
+    "user_id": 2,
+    "label": "HS25",
+    "study_hours_per_week": 15
+  }
+]

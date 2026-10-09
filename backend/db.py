@@ -17,6 +17,7 @@ def get_db():
     if "db" not in g:
         g.db = sqlite3.connect(DB_PATH)
         g.db.row_factory = sqlite3.Row
+        g.db.execute("PRAGMA foreign_keys = ON")
     return g.db
 
 
@@ -46,6 +47,7 @@ def reset_db():
         os.remove(DB_PATH)
     init_db()
     with sqlite3.connect(DB_PATH) as db:
+        db.execute("PRAGMA foreign_keys = ON")
         for path, table in seed_files():
             with open(path) as f:
                 rows = json.load(f)
