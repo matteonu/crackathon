@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cardinal — make Anki cards from slides</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="header"><div class="logo">cardinal</div><div class="header-note">slides → flashcards</div></header>
+    <section class="hero"><p class="eyebrow">MAKE AN ANKI DECK FROM A LECTURE</p><h1>Turn slides into<br><em>cards you’ll actually use.</em></h1><p class="subhead">Upload a PDF. Review five examples. Tell us what to change. Download the finished deck.</p></section>
+    <div class="steps" aria-label="Deck creation steps"><div class="step active" data-step="1"><span>1</span>Upload slides</div><i></i><div class="step" data-step="2"><span>2</span>Review examples</div><i></i><div class="step" data-step="3"><span>3</span>Download deck</div></div>
+
+    <section class="panel" id="uploadPanel"><div class="panel-title"><span class="step-kicker">STEP 1</span><h2>Upload your lecture PDF</h2><p>We’ll make five example cards first, so you can steer the result.</p></div><label class="dropzone" id="dropzone" for="fileInput"><input id="fileInput" type="file" accept="application/pdf,.pdf" /><div class="upload-icon">↑</div><strong>Drop your PDF here</strong><span>or click to choose a file</span><small>PDF · up to 50 MB</small></label><div class="selected-file hidden" id="selectedFile"><span class="pdf">PDF</span><div><strong id="fileName"></strong><small id="fileSize"></small></div><button id="removeFile" type="button" aria-label="Remove selected file">×</button></div><button class="button primary full" id="makeExamples" type="button" disabled>Make 5 example cards <span>→</span></button><p class="error" id="uploadError"></p></section>
+
+    <section class="panel hidden" id="reviewPanel"><div class="panel-title"><span class="step-kicker">STEP 2</span><h2>Review all five examples</h2><p>Your overall feedback is the main input. The per-card buttons are optional if one example is especially off.</p></div><div class="cards-list" id="cardsList"></div><div class="general-feedback"><label for="generalFeedback">Overall feedback <b>main focus</b></label><p>Describe the quality and distribution you want in the final deck.</p><textarea id="generalFeedback" placeholder="Example: make answers shorter, ask more application questions, cover the main ideas evenly, and avoid trivial definitions…"></textarea></div><button class="button primary full" id="continueToGenerate" type="button">Use this feedback <span>→</span></button></section>
+
+    <section class="panel hidden" id="generatePanel"><div class="panel-title"><span class="step-kicker">STEP 3</span><h2>Your deck is ready to generate</h2><p>We’ll apply your feedback to the whole lecture.</p></div><div class="deck-options"><label>Deck name<input id="deckName" value="Lecture deck" /></label><label>Number of cards<select id="deckSize"><option value="30">About 30</option><option value="50" selected>About 50</option><option value="80">About 80</option></select></label></div><button class="button primary full" id="generateDeck" type="button">Generate full deck <span>→</span></button><div class="generation-status hidden" id="generationStatus"><span class="spinner"></span><span>Generating cards from your slides…</span></div><div class="download-area hidden" id="downloadArea"><div class="success">✓</div><div><strong>Your deck is ready.</strong><p id="downloadMeta"></p></div><button class="button primary" id="downloadDeck" type="button">Download .apkg</button></div><p class="error" id="generationError"></p></section>
+    <footer>Cardinal keeps your PDF on this machine while it creates the deck.</footer>
+  </main><div class="toast" id="toast" role="status" aria-live="polite"></div><script src="app.js"></script>
+</body>
+</html>
