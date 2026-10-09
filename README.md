@@ -45,3 +45,7 @@ Each component is normalized against the best team's score.
 - **Nomination round (Sunday):** we present to our stakeholder group. The best team in each group goes straight to the final. The second-best is nominated, and the jury picks 2–5 finalists from the nominees.
 - **Final:** the finalists present to everyone, and participants vote for their top 3 teams (5, 3 and 1 points).
 - **Sidequests:** you can do one per hour, at the helpdesk. They are ranked per leaderboard, and the team score is the average over members, so everyone should try every sidequest.
+
+
+
+ölkjölkj
