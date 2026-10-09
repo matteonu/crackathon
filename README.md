@@ -9,19 +9,26 @@ Flask (`backend/`) serves the API under `/api` and the built Angular app (`front
 **Deploy (on the VM):**
 
 ```bash
+cp .env.example .env           # then set SECRET_KEY, e.g. python3 -c "import secrets; print(secrets.token_hex(32))"
 docker compose up -d --build   # serves on :8080, restarts automatically
+docker compose exec app flask --app app create-user <name>   # prompts for a password
 ```
+
+The user database lives in the `app-data` Docker volume, so accounts survive rebuilds.
 
 **Develop locally:**
 
 ```bash
 # Terminal 1: backend on :8080
 python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
+.venv/bin/flask --app backend/app.py create-user <name>   # once, to get a login
 .venv/bin/python backend/app.py
 
 # Terminal 2: frontend with hot reload on :4200 (proxies /api to :8080)
 cd frontend && npm install && npm start
 ```
+
+**Login:** accounts are created only with the `create-user` command above (there's no sign-up form). Flask-Login keeps the session in a cookie, and passwords are stored hashed in SQLite (`backend/data/app.db` locally). Protect a new endpoint with `@login_required`, and use `current_user.username` to see who's calling.
 
 ## Deadlines
 

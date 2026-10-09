@@ -4,3 +4,5 @@ frontend/.angular
 **/__pycache__
 .venv
 .git
+backend/data
+.env
