@@ -1,4 +1,6 @@
 import os
+import base64
+import binascii
 
 import click
 from flask import Flask, jsonify, request, send_from_directory
@@ -12,7 +14,16 @@ from flask_login import (
 )
 from werkzeug.security import check_password_hash
 
-import db
+try:
+    import db
+except ModuleNotFoundError:
+    from . import db
+try:  # Supports both `flask --app backend/app.py` and `import backend.app`.
+    from document_engine.engine import DocumentEngine, EngineError
+    from document_engine.models import Card, ProcessingMode
+except ModuleNotFoundError:
+    from .document_engine.engine import DocumentEngine, EngineError
+    from .document_engine.models import Card, ProcessingMode
 
 STATIC_DIR = os.environ.get(
     "STATIC_DIR",
@@ -26,6 +37,7 @@ app.teardown_appcontext(db.close_db)
 db.init_db()
 
 login_manager = LoginManager(app)
+document_engine = DocumentEngine()
 
 
 class User(UserMixin):
@@ -73,6 +85,72 @@ def me():
 @login_required
 def dashboard():
     return jsonify(db.get_dashboard(current_user.id))
+
+
+def _document_payload():
+    data = request.get_json(silent=True) or {}
+    encoded = data.get("pdfBase64", "")
+    if not isinstance(encoded, str):
+        raise EngineError("pdfBase64 must be a base64-encoded PDF.")
+    if encoded.startswith("data:"):
+        encoded = encoded.split(",", 1)[-1]
+    try:
+        pdf_data = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise EngineError("pdfBase64 must be a base64-encoded PDF.") from exc
+    mode = ProcessingMode(data.get("mode", ProcessingMode.QUICK.value))
+    return data, pdf_data, mode
+
+
+def _cards_json(cards: list[Card]):
+    return [{"front": card.front, "back": card.back, "type": card.type, "source_pages": list(card.source_pages)} for card in cards]
+
+
+@app.post("/api/generate-examples")
+@app.post("/api/generate-samples")
+@login_required
+def generate_examples():
+    try:
+        data, pdf_data, mode = _document_payload()
+        cards = document_engine.generate_examples(pdf_data, data.get("filename", "lecture.pdf"), mode)
+        return jsonify(cards=_cards_json(cards), model=document_engine.client.model)
+    except (EngineError, ValueError) as exc:
+        return jsonify(error=str(exc)), getattr(exc, "status_code", 400)
+
+
+@app.post("/api/generate-final")
+@app.post("/api/generate-deck")
+@login_required
+def generate_final():
+    try:
+        data, pdf_data, mode = _document_payload()
+        feedback = {"per_card": data.get("feedback", []), "overall": data.get("generalFeedback", "")}
+        cards = document_engine.generate_final_deck(pdf_data, feedback, filename=data.get("filename", "lecture.pdf"), mode=mode, target_count=int(data.get("cardCount", 50)))
+        return jsonify(cards=_cards_json(cards), model=document_engine.client.model)
+    except (EngineError, ValueError) as exc:
+        return jsonify(error=str(exc)), getattr(exc, "status_code", 400)
+
+
+@app.post("/api/export-anki")
+@app.post("/api/export")
+@login_required
+def export_anki():
+    try:
+        data = request.get_json(silent=True) or {}
+        cards = document_engine.export(document_engine_cards(data.get("cards", [])), str(data.get("deckName", "Document deck"))[:100])
+        response = app.response_class(cards, mimetype="application/vnd.anki")
+        response.headers["Content-Disposition"] = 'attachment; filename="document-deck.apkg"'
+        return response
+    except (EngineError, ValueError) as exc:
+        return jsonify(error=str(exc)), 400
+
+
+def document_engine_cards(raw):
+    try:
+        from document_engine.engine import validate_cards
+    except ModuleNotFoundError:
+        from .document_engine.engine import validate_cards
+    return validate_cards({"cards": raw})
 
 
 @app.get("/api/hello")
