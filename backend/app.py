@@ -69,6 +69,12 @@ def me():
     return jsonify(username=current_user.username)
 
 
+@app.get("/api/dashboard")
+@login_required
+def dashboard():
+    return jsonify(db.get_dashboard(current_user.id))
+
+
 @app.get("/api/hello")
 @login_required
 def hello():

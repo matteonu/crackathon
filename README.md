@@ -24,11 +24,13 @@ python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
 cd frontend && npm install && npm start
 ```
 
+**UI components:** the frontend uses [zard/ui](https://zardui.com) with Tailwind. Components are copied into `frontend/src/app/shared/components/`; add more with `cd frontend && npx zard-cli@1.0.1 add <name>` (see the component list on the zard/ui site).
+
 ## Data
 
 The database is rebuilt from git on every start, both locally and on the server. Whatever users change in the app is gone after the next restart or deploy, and the only way to change the starting data is a commit.
 
-- **`backend/schema.sql`:** all tables. Add new tables here.
+- **`backend/schema.sql`:** all tables. Add new tables here. Currently: `users`, `courses` (shared catalog) with `course_resources`, each user's `semesters`, the courses taken per semester (`semester_courses`, with `desired_grade`), and `statistics` per user and semester.
 - **`backend/seed/NN_<table>.json`:** the starting rows for each table, as a list of `{column: value}` objects. Files load in number order, so a table that others reference needs a lower number. A `password` field is hashed into `password_hash` when loading.
 
 Demo logins: `alice` / `alice123`, `bob` / `bob123` (see `backend/seed/01_users.json`). The repo is public, so these are not secret.

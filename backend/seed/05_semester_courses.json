@@ -1,0 +1,32 @@
+[
+  {
+    "semester_id": 1,
+    "course_id": 1,
+    "desired_grade": 5.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 2,
+    "desired_grade": 4.5
+  },
+  {
+    "semester_id": 2,
+    "course_id": 4,
+    "desired_grade": 5.5
+  },
+  {
+    "semester_id": 2,
+    "course_id": 5,
+    "desired_grade": null
+  },
+  {
+    "semester_id": 3,
+    "course_id": 1,
+    "desired_grade": 4.0
+  },
+  {
+    "semester_id": 3,
+    "course_id": 3,
+    "desired_grade": 4.5
+  }
+]
