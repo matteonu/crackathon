@@ -2,6 +2,7 @@
 .venv/
 __pycache__/
 backend/data/
+toby-ideas.yml
 
 slides2anki/assets/openai-key.txt
 slides2anki/.collection-*.anki2
