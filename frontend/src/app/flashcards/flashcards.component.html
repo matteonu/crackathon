@@ -1,0 +1,173 @@
+<div class="mx-auto flex max-w-3xl flex-col gap-6 p-4 sm:p-8">
+  <div>
+    <h1 class="text-2xl font-semibold">Flashcards</h1>
+    <p class="text-sm text-muted-foreground">
+      Turn lecture slides into an Anki deck: upload a PDF, steer five example cards, then download the full deck.
+    </p>
+  </div>
+
+  <ol class="flex flex-wrap items-center gap-2 text-sm">
+    @for (label of steps; track label; let i = $index) {
+      <li class="flex items-center gap-2">
+        <z-badge [zType]="step === i + 1 ? 'default' : 'outline'">{{ i + 1 }}</z-badge>
+        <span [class.text-muted-foreground]="step !== i + 1">{{ label }}</span>
+        @if (i < steps.length - 1) {
+          <span class="text-muted-foreground">→</span>
+        }
+      </li>
+    }
+  </ol>
+
+  @if (step === 1) {
+    <z-card>
+      <z-card-header>
+        <z-card-title zTitle="Upload your lecture PDF" />
+        <z-card-description zDescription="We make five example cards first, so you can steer the result." />
+      </z-card-header>
+      <z-card-content class="flex flex-col gap-4">
+        <label
+          for="pdf"
+          class="flex cursor-pointer flex-col items-center gap-1 rounded-lg border border-dashed p-8 text-center transition-colors hover:bg-muted/50"
+          [class.bg-muted]="dragging"
+          (dragover)="$event.preventDefault(); dragging = true"
+          (dragleave)="dragging = false"
+          (drop)="onDrop($event)"
+        >
+          <span class="font-medium">Drop your PDF here</span>
+          <span class="text-sm text-muted-foreground">or click to choose a file · up to 50 MB</span>
+          <input id="pdf" type="file" accept="application/pdf,.pdf" class="sr-only" (change)="onFileInput($event)" />
+        </label>
+
+        @if (file) {
+          <div class="flex items-center gap-3 rounded-lg border p-3">
+            <z-badge zType="secondary">PDF</z-badge>
+            <div class="min-w-0 flex-1">
+              <div class="truncate text-sm font-medium">{{ file.name }}</div>
+              <div class="text-xs text-muted-foreground">{{ fileSize() }}</div>
+            </div>
+            <button z-button zType="ghost" zSize="sm" type="button" (click)="removeFile()">Remove</button>
+          </div>
+        }
+
+        <div class="grid gap-2">
+          <span class="text-sm font-medium">Processing</span>
+          <z-select [(ngModel)]="mode">
+            <z-select-item zValue="quick">Quick: reads the slide text</z-select-item>
+            <z-select-item zValue="deep">Deep: also looks at the slide images (slower)</z-select-item>
+          </z-select>
+        </div>
+
+        @if (error) {
+          <z-alert zType="destructive" zTitle="Something went wrong" [zDescription]="error" />
+        }
+
+        <button z-button type="button" class="w-full" [disabled]="!file || loading" (click)="makeExamples()">
+          {{ loading ? 'Making example cards… (this can take a minute)' : 'Make 5 example cards →' }}
+        </button>
+      </z-card-content>
+    </z-card>
+  }
+
+  @if (step === 2) {
+    <div class="flex flex-col gap-3">
+      @for (card of examples; track $index; let i = $index) {
+        <z-card zSize="sm">
+          <z-card-header>
+            <z-card-description [zDescription]="'Example ' + (i + 1)" />
+            <z-card-action><z-badge zType="outline">{{ card.type }}</z-badge></z-card-action>
+          </z-card-header>
+          <z-card-content class="flex flex-col gap-2">
+            <p class="font-medium">{{ card.front }}</p>
+            <p class="text-muted-foreground">{{ card.back }}</p>
+            @if (card.source_pages.length) {
+              <p class="text-xs text-muted-foreground">Pages {{ card.source_pages.join(', ') }}</p>
+            }
+            <div class="flex flex-wrap gap-1 pt-1">
+              @for (option of feedbackOptions; track option) {
+                <button
+                  z-button
+                  zSize="xs"
+                  type="button"
+                  [zType]="feedback[i] === option ? 'default' : 'outline'"
+                  [attr.aria-pressed]="feedback[i] === option"
+                  (click)="toggleFeedback(i, option)"
+                >
+                  {{ option }}
+                </button>
+              }
+            </div>
+          </z-card-content>
+        </z-card>
+      }
+    </div>
+
+    <z-card>
+      <z-card-header>
+        <z-card-title zTitle="Overall feedback" />
+        <z-card-description
+          zDescription="The main input for the final deck. Per-card buttons above are optional."
+        />
+      </z-card-header>
+      <z-card-content class="flex flex-col gap-4">
+        <textarea
+          z-textarea
+          rows="4"
+          [(ngModel)]="generalFeedback"
+          placeholder="e.g. shorter answers, more application questions, cover all topics evenly, skip trivial definitions…"
+        ></textarea>
+        <div class="flex justify-between gap-2">
+          <button z-button zType="ghost" type="button" (click)="step = 1">← Back</button>
+          <button z-button type="button" (click)="step = 3">Use this feedback →</button>
+        </div>
+      </z-card-content>
+    </z-card>
+  }
+
+  @if (step === 3) {
+    <z-card>
+      <z-card-header>
+        <z-card-title zTitle="Generate your deck" />
+        <z-card-description zDescription="Your feedback is applied to the whole lecture." />
+      </z-card-header>
+      <z-card-content class="flex flex-col gap-4">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="grid gap-2">
+            <label for="deckName" class="text-sm font-medium">Deck name</label>
+            <input z-input id="deckName" [(ngModel)]="deckName" />
+          </div>
+          <div class="grid gap-2">
+            <span class="text-sm font-medium">Number of cards</span>
+            <z-select [(ngModel)]="cardCount">
+              <z-select-item zValue="30">About 30</z-select-item>
+              <z-select-item zValue="50">About 50</z-select-item>
+              <z-select-item zValue="80">About 80</z-select-item>
+            </z-select>
+          </div>
+        </div>
+
+        @if (error) {
+          <z-alert zType="destructive" zTitle="Something went wrong" [zDescription]="error" />
+        }
+
+        @if (deck) {
+          <div class="flex flex-wrap items-center gap-3 rounded-lg border p-4">
+            <div class="flex-1">
+              <div class="font-medium">Your deck is ready</div>
+              <div class="text-sm text-muted-foreground">{{ deck.count }} cards · import the .apkg file into Anki</div>
+            </div>
+            <button z-button type="button" (click)="download()">Download .apkg</button>
+          </div>
+        }
+
+        <div class="flex justify-between gap-2">
+          <button z-button zType="ghost" type="button" [disabled]="loading" (click)="deck ? restart() : (step = 2)">
+            {{ deck ? 'Start over' : '← Back' }}
+          </button>
+          <button z-button type="button" [disabled]="loading" (click)="generateDeck()">
+            {{ loading ? 'Generating… (this can take a minute)' : deck ? 'Generate again' : 'Generate full deck →' }}
+          </button>
+        </div>
+      </z-card-content>
+    </z-card>
+  }
+</div>

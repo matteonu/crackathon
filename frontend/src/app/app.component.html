@@ -1,6 +1,26 @@
 @if (checked) {
   @if (user) {
-    <app-dashboard [username]="user" (loggedOut)="user = null" />
+    <header class="border-b">
+      <div class="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3 sm:px-8">
+        <span class="font-semibold">crackathon</span>
+        <nav class="flex gap-1">
+          @for (item of nav; track item.path) {
+            <a
+              z-button
+              zType="ghost"
+              zSize="sm"
+              [routerLink]="item.path"
+              routerLinkActive="bg-accent"
+              [routerLinkActiveOptions]="{ exact: true }"
+              >{{ item.label }}</a
+            >
+          }
+        </nav>
+        <span class="ml-auto hidden text-sm text-muted-foreground sm:inline">{{ user }}</span>
+        <button z-button zType="outline" zSize="sm" type="button" (click)="logout()">Log out</button>
+      </div>
+    </header>
+    <router-outlet />
   } @else {
     <app-login (loggedIn)="user = $event" />
   }
