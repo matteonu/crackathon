@@ -9,7 +9,7 @@ Flask (`backend/`) serves the API under `/api` and the built Angular app (`front
 **Deploy:** every push to `main` is deployed to the VM by `.github/workflows/deploy.yml`. One-time VM setup:
 
 ```bash
-cp .env.example .env           # then set SECRET_KEY, e.g. python3 -c "import secrets; print(secrets.token_hex(32))"
+cp .env.example .env           # then set SECRET_KEY (python3 -c "import secrets; print(secrets.token_hex(32))") and OPENAI_API_KEY
 docker compose up -d --build   # serves on :8080, restarts automatically
 ```
 
@@ -18,11 +18,15 @@ docker compose up -d --build   # serves on :8080, restarts automatically
 ```bash
 # Terminal 1: backend on :8080
 python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
-.venv/bin/python backend/app.py
+.venv/bin/python backend/run.py            # rebuilds the database from the seed, then serves
 
 # Terminal 2: frontend with hot reload on :4200 (proxies /api to :8080)
 cd frontend && npm install && npm start
 ```
+
+**Tests:** `cd backend && ../.venv/bin/python -m unittest` (CI runs them before every deploy).
+
+**Flashcards** need an LLM key: `OPENAI_API_KEY=... .venv/bin/python backend/run.py`, or put it in `.env` on the VM. Without it, the Flashcards page shows "The model API key is missing."
 
 **UI components:** the frontend uses [zard/ui](https://zardui.com) with Tailwind. Components are copied into `frontend/src/app/shared/components/`; add more with `cd frontend && npx zard-cli@1.0.1 add <name>` (see the component list on the zard/ui site).
 
@@ -36,13 +40,28 @@ The database is rebuilt from git on every start, both locally and on the server.
 Demo logins: `alice` / `alice123`, `bob` / `bob123` (see `backend/seed/01_users.json`). The repo is public, so these are not secret.
 
 ```bash
-.venv/bin/flask --app backend/app.py reset-db    # reload the seed without restarting
-.venv/bin/flask --app backend/app.py dump-seed   # write the current database back into backend/seed/
+cd backend
+../.venv/bin/flask --app studyapp reset-db    # reload the seed without restarting
+../.venv/bin/flask --app studyapp dump-seed   # write the current database back into backend/seed/
 ```
 
 To build test data by hand, click it together in the app, run `dump-seed`, check the diff, and commit. On the server, `docker compose restart` reloads the seed.
 
 **Login:** there's no sign-up form; accounts come from the seed. Flask-Login keeps the session in a cookie. Protect a new endpoint with `@login_required`, and use `current_user.username` to see who's calling.
+
+## Backend structure
+
+`backend/studyapp/` is one Flask app (`create_app()` in `__init__.py`) with one package per feature. Each feature has a `routes.py` (a blueprint: parses HTTP, calls the feature) and keeps its own SQL in `queries.py`:
+
+| Package | What it does | Routes |
+|---|---|---|
+| `auth/` | login, logout, current user | `/api/login`, `/api/logout`, `/api/me` |
+| `planner/` | the user's semesters and dashboard | `/api/dashboard` |
+| `catalog/` | the shared course catalog (search, VVZ import) | – |
+| `flashcards/` | lecture PDF → example cards → feedback → Anki deck; logic in `engine/` (see its `AGENTS.md`) | `/api/flashcards/examples`, `/final`, `/export` |
+| `db.py`, `config.py` | shared database helpers and seed CLI; all settings from env | – |
+
+A new feature gets its own package with a blueprint, registered in `create_app()`. Code always runs from `backend/` and imports `studyapp.…`: gunicorn uses `studyapp:create_app()`, the CLI `--app studyapp`, local dev `backend/run.py`.
 
 ## Deadlines
 
