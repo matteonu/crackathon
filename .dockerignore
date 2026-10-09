@@ -6,3 +6,4 @@ frontend/.angular
 .git
 backend/data
 .env
+backend/tests

@@ -1,21 +1,29 @@
+"""Database infrastructure shared by all features: connection, schema, seed.
+
+Features keep their own queries (e.g. planner/queries.py); this module only
+knows how to connect and how to rebuild the database from backend/seed/.
+"""
 import glob
 import json
 import os
 import sqlite3
 
-from flask import g
+import click
+from flask import current_app, g
 from werkzeug.security import check_password_hash, generate_password_hash
 
-DB_PATH = os.environ.get(
-    "DATABASE_PATH", os.path.join(os.path.dirname(__file__), "data", "app.db")
-)
-SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
-SEED_DIR = os.path.join(os.path.dirname(__file__), "seed")
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SCHEMA_PATH = os.path.join(BACKEND_DIR, "schema.sql")
+SEED_DIR = os.path.join(BACKEND_DIR, "seed")
+
+
+def _path():
+    return current_app.config["DATABASE_PATH"]
 
 
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
+        g.db = sqlite3.connect(_path())
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA foreign_keys = ON")
     return g.db
@@ -28,8 +36,8 @@ def close_db(_exc=None):
 
 
 def init_db():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    with sqlite3.connect(DB_PATH) as db, open(SCHEMA_PATH) as f:
+    os.makedirs(os.path.dirname(_path()), exist_ok=True)
+    with sqlite3.connect(_path()) as db, open(SCHEMA_PATH) as f:
         db.executescript(f.read())
 
 
@@ -43,10 +51,10 @@ def seed_files():
 
 def reset_db():
     """Delete the database and rebuild it from the seed files."""
-    if os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
+    if os.path.exists(_path()):
+        os.remove(_path())
     init_db()
-    with sqlite3.connect(DB_PATH) as db:
+    with sqlite3.connect(_path()) as db:
         db.execute("PRAGMA foreign_keys = ON")
         for path, table in seed_files():
             with open(path) as f:
@@ -65,7 +73,7 @@ def dump_seed():
     existing = {table: path for path, table in seed_files()}
     next_num = len(existing) + 1
     written = []
-    with sqlite3.connect(DB_PATH) as db:
+    with sqlite3.connect(_path()) as db:
         db.row_factory = sqlite3.Row
         tables = [r["name"] for r in db.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid"
@@ -99,36 +107,17 @@ def _keep_plaintext_passwords(path, rows):
     return rows
 
 
-def get_user_by_id(user_id):
-    return get_db().execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+def init_app(app):
+    app.teardown_appcontext(close_db)
 
+    @app.cli.command("reset-db")
+    def reset_db_command():
+        """Delete the database and rebuild it from backend/seed/."""
+        reset_db()
+        click.echo("Database reset from seed")
 
-def get_user_by_username(username):
-    return get_db().execute(
-        "SELECT * FROM users WHERE username = ?", (username,)
-    ).fetchone()
-
-
-def get_dashboard(user_id):
-    """Everything the dashboard shows for one user."""
-    conn = get_db()
-    user = conn.execute(
-        "SELECT username, birth_date, study_start FROM users WHERE id = ?", (user_id,)
-    ).fetchone()
-    semesters = [dict(r) for r in conn.execute(
-        "SELECT id, label, study_hours_per_week FROM semesters WHERE user_id = ? ORDER BY id",
-        (user_id,),
-    )]
-    for semester in semesters:
-        semester["courses"] = [dict(r) for r in conn.execute(
-            """SELECT c.id, c.code, c.title, c.term, c.ects, c.professor, sc.desired_grade
-               FROM semester_courses sc JOIN courses c ON c.id = sc.course_id
-               WHERE sc.semester_id = ? ORDER BY c.code""",
-            (semester["id"],),
-        )]
-        for course in semester["courses"]:
-            course["resources"] = [dict(r) for r in conn.execute(
-                "SELECT kind, title, url FROM course_resources WHERE course_id = ? ORDER BY id",
-                (course["id"],),
-            )]
-    return {"user": dict(user), "semesters": semesters}
+    @app.cli.command("dump-seed")
+    def dump_seed_command():
+        """Write the current database into backend/seed/."""
+        for path in dump_seed():
+            click.echo(f"Wrote {os.path.relpath(path)}")

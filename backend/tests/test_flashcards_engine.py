@@ -2,9 +2,9 @@ import unittest
 import zipfile
 from unittest.mock import Mock, patch
 
-from backend.document_engine.anki import export_apkg
-from backend.document_engine.engine import DocumentEngine, validate_cards
-from backend.document_engine.models import Card, DocumentPage, ProcessingMode
+from studyapp.flashcards.engine.anki import export_apkg
+from studyapp.flashcards.engine.engine import DocumentEngine, validate_cards
+from studyapp.flashcards.engine.models import Card, DocumentPage, ProcessingMode
 
 
 class DocumentEngineTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class DocumentEngineTests(unittest.TestCase):
         client = Mock()
         client.generate_json.return_value = {"cards": [{"front": "Q", "back": "A"}]}
         engine = DocumentEngine(client)
-        with patch("backend.document_engine.engine.pdf.prepare_pages", return_value=(DocumentPage(1, "text"),)) as prepare:
+        with patch("studyapp.flashcards.engine.engine.pdf.prepare_pages", return_value=(DocumentPage(1, "text"),)) as prepare:
             examples = engine.generate_examples(b"pdf", "slides.pdf", ProcessingMode.DEEP)
             final = engine.generate_final_deck(b"pdf", {"overall": "More detail"}, filename="slides.pdf", mode=ProcessingMode.QUICK)
         self.assertEqual(len(examples), 1)
