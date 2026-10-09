@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+api-key.txt
+questions_output/
+*summaries*.json
+*.zip
+*.pdf
