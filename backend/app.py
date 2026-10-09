@@ -1,5 +1,4 @@
 import os
-import sqlite3
 
 import click
 from flask import Flask, jsonify, request, send_from_directory
@@ -85,18 +84,24 @@ def frontend(path):
     return send_from_directory(STATIC_DIR, "index.html")
 
 
-@app.cli.command("create-user")
-@click.argument("username")
-def create_user_command(username):
-    """Create a login account."""
-    password = click.prompt("Password", hide_input=True, confirmation_prompt=True)
-    try:
-        db.create_user(username, password)
-    except sqlite3.IntegrityError:
-        raise click.ClickException(f"User '{username}' already exists")
-    click.echo(f"Created user '{username}'")
+@app.cli.command("reset-db")
+def reset_db_command():
+    """Delete the database and rebuild it from backend/seed/."""
+    db.reset_db()
+    click.echo("Database reset from seed")
+
+
+@app.cli.command("dump-seed")
+def dump_seed_command():
+    """Write the current database into backend/seed/."""
+    for path in db.dump_seed():
+        click.echo(f"Wrote {os.path.relpath(path)}")
 
 
 if __name__ == "__main__":
     app.secret_key = app.secret_key or "dev-only-secret"
+    # The debug reloader runs this file twice; only reset in the outer process,
+    # so code reloads keep the data you clicked together.
+    if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+        db.reset_db()
     app.run(host="0.0.0.0", port=8080, debug=True)

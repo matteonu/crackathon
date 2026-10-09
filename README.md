@@ -6,29 +6,41 @@ Team repo for the VIScon 2026 Hackathon. Replace `NN` below with our team number
 
 Flask (`backend/`) serves the API under `/api` and the built Angular app (`frontend/`) for every other path.
 
-**Deploy (on the VM):**
+**Deploy:** every push to `main` is deployed to the VM by `.github/workflows/deploy.yml`. One-time VM setup:
 
 ```bash
 cp .env.example .env           # then set SECRET_KEY, e.g. python3 -c "import secrets; print(secrets.token_hex(32))"
 docker compose up -d --build   # serves on :8080, restarts automatically
-docker compose exec app flask --app app create-user <name>   # prompts for a password
 ```
-
-The user database lives in the `app-data` Docker volume, so accounts survive rebuilds.
 
 **Develop locally:**
 
 ```bash
 # Terminal 1: backend on :8080
 python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
-.venv/bin/flask --app backend/app.py create-user <name>   # once, to get a login
 .venv/bin/python backend/app.py
 
 # Terminal 2: frontend with hot reload on :4200 (proxies /api to :8080)
 cd frontend && npm install && npm start
 ```
 
-**Login:** accounts are created only with the `create-user` command above (there's no sign-up form). Flask-Login keeps the session in a cookie, and passwords are stored hashed in SQLite (`backend/data/app.db` locally). Protect a new endpoint with `@login_required`, and use `current_user.username` to see who's calling.
+## Data
+
+The database is rebuilt from git on every start, both locally and on the server. Whatever users change in the app is gone after the next restart or deploy, and the only way to change the starting data is a commit.
+
+- **`backend/schema.sql`:** all tables. Add new tables here.
+- **`backend/seed/NN_<table>.json`:** the starting rows for each table, as a list of `{column: value}` objects. Files load in number order, so a table that others reference needs a lower number. A `password` field is hashed into `password_hash` when loading.
+
+Demo logins: `alice` / `alice123`, `bob` / `bob123` (see `backend/seed/01_users.json`). The repo is public, so these are not secret.
+
+```bash
+.venv/bin/flask --app backend/app.py reset-db    # reload the seed without restarting
+.venv/bin/flask --app backend/app.py dump-seed   # write the current database back into backend/seed/
+```
+
+To build test data by hand, click it together in the app, run `dump-seed`, check the diff, and commit. On the server, `docker compose restart` reloads the seed.
+
+**Login:** there's no sign-up form; accounts come from the seed. Flask-Login keeps the session in a cookie. Protect a new endpoint with `@login_required`, and use `current_user.username` to see who's calling.
 
 ## Deadlines
 
