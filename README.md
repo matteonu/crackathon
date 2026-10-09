@@ -2,6 +2,34 @@
 
 Team repo for the VIScon 2026 Hackathon. Replace `NN` below with our team number.
 
+## Running the app
+
+Flask (`backend/`) serves the API under `/api` and the built Angular app (`frontend/`) for every other path.
+
+**Deploy (on the VM):**
+
+```bash
+cp .env.example .env           # then set SECRET_KEY, e.g. python3 -c "import secrets; print(secrets.token_hex(32))"
+docker compose up -d --build   # serves on :8080, restarts automatically
+docker compose exec app flask --app app create-user <name>   # prompts for a password
+```
+
+The user database lives in the `app-data` Docker volume, so accounts survive rebuilds.
+
+**Develop locally:**
+
+```bash
+# Terminal 1: backend on :8080
+python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
+.venv/bin/flask --app backend/app.py create-user <name>   # once, to get a login
+.venv/bin/python backend/app.py
+
+# Terminal 2: frontend with hot reload on :4200 (proxies /api to :8080)
+cd frontend && npm install && npm start
+```
+
+**Login:** accounts are created only with the `create-user` command above (there's no sign-up form). Flask-Login keeps the session in a cookie, and passwords are stored hashed in SQLite (`backend/data/app.db` locally). Protect a new endpoint with `@login_required`, and use `current_user.username` to see who's calling.
+
 ## Deadlines
 
 - **Sunday noon:** we lose access to the VM, so the app must already be running on its own (Docker Compose with `restart: unless-stopped`).
@@ -45,7 +73,3 @@ Each component is normalized against the best team's score.
 - **Nomination round (Sunday):** we present to our stakeholder group. The best team in each group goes straight to the final. The second-best is nominated, and the jury picks 2–5 finalists from the nominees.
 - **Final:** the finalists present to everyone, and participants vote for their top 3 teams (5, 3 and 1 points).
 - **Sidequests:** you can do one per hour, at the helpdesk. They are ranked per leaderboard, and the team score is the average over members, so everyone should try every sidequest.
-
-
-
-ölkjölkj

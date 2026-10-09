@@ -1,0 +1,24 @@
+<main>
+  <h1>crackathon</h1>
+
+  @if (user) {
+    <p>Logged in as <strong>{{ user }}</strong></p>
+    <p>Backend says: {{ message }}</p>
+    <button type="button" (click)="logout()">Log out</button>
+  } @else {
+    <form (ngSubmit)="login()">
+      <label>
+        Username
+        <input name="username" [(ngModel)]="username" autocomplete="username" required />
+      </label>
+      <label>
+        Password
+        <input name="password" type="password" [(ngModel)]="password" autocomplete="current-password" required />
+      </label>
+      <button type="submit">Log in</button>
+      @if (error) {
+        <p class="error">{{ error }}</p>
+      }
+    </form>
+  }
+</main>
