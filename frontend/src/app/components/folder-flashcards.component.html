@@ -1,0 +1,33 @@
+@if(!learning()){
+  <div class="folder-card-heading"><div><h2>{{name()}}</h2><p class="muted">{{cards().length}} cards</p></div><button class="button primary" [disabled]="!cards().length" (click)="startLearning.emit()">Start learning</button></div>
+  @if(preferenceFolders().length){
+    <details class="deck-preferences"><summary>Deck preferences</summary><p class="field-hint">Folder weights control how often their cards are selected. A higher weight gives a folder more turns.</p>
+      @for(folder of preferenceFolders();track folder.id){<label>{{folder.name}} <input type="number" min="0.01" step="0.1" [attr.aria-label]="'Learning weight for '+folder.name" [ngModel]="folder.folderWeight??1" [disabled]="savingPreference()" (ngModelChange)="setWeight(folder.id,$event)"></label>}
+      @if(preferenceError()){<p class="form-error" role="alert">{{preferenceError()}}</p>}
+    </details>
+  }
+  <div class="folder-card-list">@for(card of cards();track card.key){<details class="folder-card-item"><summary><span><strong>{{card.question}}</strong><small>{{card.fileName}} @if(card.demo){ · Demo card}</small></span></summary><p>{{card.answer}}</p><button class="text-button" (click)="openFile.emit(card.fileId)">Open source or deck →</button></details>}@empty{<div class="empty-state">No flashcards yet. Generate or add cards to a deck.</div>}</div>
+}@else{
+  <section class="learning-workspace" [attr.aria-busy]="busy()">
+    <header class="learning-header"><h2>{{name()}}</h2><div class="learning-stats" aria-label="Collection statistics"><span><strong>{{summary()?.due_cards??'—'}}</strong> Due</span><span><strong>{{summary()?.states?.new??'—'}}</strong> New</span><span><strong>{{summary()?(summary()!.states.learning+summary()!.states.relearning):'—'}}</strong> Learning</span><span><strong>{{summary()?.mature_cards??'—'}}</strong> Mature</span></div></header>
+    @if(error()){<p class="form-error" role="alert">{{error()}}</p>}
+    @if(current();as card){
+      <article class="learning-card" aria-label="Learning flashcard">@if(card.demo){<span class="demo-badge">Demo card</span>}<h3>{{card.question}}</h3>
+        @if(revealed()){<p class="learning-answer">{{card.answer}}</p><div class="learning-actions">@for(rating of ratings;track rating){<button [class]="'button rating-button rating-'+rating" [attr.aria-keyshortcuts]="ratingShortcuts[rating]" [title]="'Shortcut: '+ratingShortcuts[rating]" [disabled]="busy()" (click)="rate(rating)">{{ratingLabels[rating]}}<small>{{delay(card.predictions[rating].seconds)}}</small></button>}</div>}
+        @else{<button class="button primary reveal-answer" aria-keyshortcuts="Space" title="Shortcut: Space" [disabled]="busy()" (click)="revealed.set(true)">Reveal answer</button>}
+      </article>
+    }@else if(busy()){
+      <div class="learning-complete" role="status">Loading cards…</div>
+    }@else{
+      <div class="learning-complete"><h3>{{reviewed()?'Session complete':'No cards available'}}</h3><p>{{reviewed()}} cards reviewed.</p>
+        @if(ready()){<p>Cards are ready for another session.</p>}
+        @else if(nextDue()){<p>Next review: {{nextDue() | date:'medium'}}.</p>}
+        @else if(dueCount()){<p>Increase the new-card limit to include the remaining due cards.</p>}
+        @else{<p>No further cards are scheduled.</p>}
+        <button class="button primary" [disabled]="!ready()||!validLimits()" (click)="start()">Start next session</button>
+      </div>
+    }
+    <footer class="practice-settings"><label>Cards this session <input aria-label="Cards this session" title="Applies to the next batch" type="number" min="1" step="1" [ngModel]="limit()" (ngModelChange)="limit.set($event)"> <small aria-live="polite">{{reviewed()}} reviewed · {{queue().length}} remaining</small></label><label>New cards <input aria-label="New cards" title="Applies to the next batch" type="number" min="0" step="1" [ngModel]="newLimit()" (ngModelChange)="newLimit.set($event)"></label></footer>
+    @if(!validLimits()){<p class="form-error">Use a positive whole number of cards and a non-negative whole number of new cards.</p>}
+  </section>
+}

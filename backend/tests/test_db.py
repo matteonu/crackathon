@@ -22,8 +22,8 @@ def emails(app):
 class SeedTests(unittest.TestCase):
     def test_document_type_migration_preserves_the_old_library_and_pdf(self):
         with tempfile.TemporaryDirectory() as temp:
-            # Build the pre-migration table, so this exercises ALTER TABLE rather
-            # than merely creating a fresh table from the current schema.
+            # Build the pre-migration table with its original material defaults.
+            # Startup now rebuilds it for decks as well as adding document types.
             path = Path(temp) / 'app.db'
             conn = sqlite3.connect(path)
             try:
@@ -31,14 +31,16 @@ class SeedTests(unittest.TestCase):
                     INSERT INTO users VALUES (1, 'alice@ethz.ch', 'Alice');
                     CREATE TABLE materials (
                       id TEXT PRIMARY KEY, user_id INTEGER, subject_id TEXT, parent_id TEXT,
-                      kind TEXT, name TEXT, description TEXT, category TEXT, marker TEXT,
-                      size INTEGER, content TEXT, sha256 TEXT, added_at INTEGER, outputs TEXT, processing TEXT);''')
+                      kind TEXT, name TEXT, description TEXT NOT NULL DEFAULT '', category TEXT,
+                      marker TEXT NOT NULL DEFAULT 'To read', size INTEGER NOT NULL DEFAULT 0,
+                      content TEXT, sha256 TEXT, added_at INTEGER NOT NULL DEFAULT 0, outputs TEXT, processing TEXT);''')
                 for category in (*CATEGORY_TYPES, 'Notes', 'Books', 'Transcripts'):
                     conn.execute("INSERT INTO materials VALUES (?,1,'subject',NULL,'pdf',?,'Keep me',?,'Done',123,NULL,'digest',42,?,NULL)",
                                  (category, category + '.pdf', category, '{"summary":{"text":"Keep this."}}'))
                 conn.execute("INSERT INTO materials (id, user_id, subject_id, kind, name, category) VALUES ('folder',1,'subject','folder','Folder','Slides')")
                 conn.commit()
                 original = conn.execute('SELECT * FROM materials ORDER BY id').fetchall()
+                original_columns = [row[1] for row in conn.execute('PRAGMA table_info(materials)')]
             finally:
                 conn.close()
             pdf = Path(temp) / 'learning' / 'Slides' / 'source.pdf'
@@ -50,7 +52,7 @@ class SeedTests(unittest.TestCase):
                 with app.app_context():
                     conn = db.get_db()
                     rows = conn.execute('SELECT * FROM materials ORDER BY id').fetchall()
-                    self.assertEqual([tuple(row)[:-1] for row in rows], original)
+                    self.assertEqual([tuple(row[column] for column in original_columns) for row in rows], original)
                     for row in rows:
                         expected = CATEGORY_TYPES.get(row['category']) if row['kind'] != 'folder' else None
                         self.assertEqual(row['type'], expected)

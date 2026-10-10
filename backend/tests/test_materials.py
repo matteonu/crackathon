@@ -139,16 +139,19 @@ class MaterialTests(unittest.TestCase):
         self.assertEqual((response.status_code, response.get_json()['error']),
                          (400, 'Only text files can be edited.'))
 
-    def test_outputs_and_processing_are_stored_as_sent(self):
+    def test_summary_and_processing_stay_on_pdf_and_cards_move_into_deck(self):
         pdf = self.create()
         outputs = {'summary': {'text': 'One sentence.'},
                    'flashcards': {'cards': [{'id': 'c1', 'question': 'Q', 'answer': 'A', 'generated': True}]}}
         updated = self.client.patch(f"/api/materials/{pdf['id']}",
                                     json={'outputs': outputs, 'processing': {'status': 'complete', 'mode': 'deep'}},
                                     headers=ALICE).get_json()
-        self.assertEqual(updated['outputs'], outputs)
+        self.assertEqual(updated['outputs'], {'summary': outputs['summary']})
         self.assertEqual(updated['processing'], {'status': 'complete', 'mode': 'deep'})
-        self.assertEqual(self.client.get('/api/materials', headers=ALICE).get_json()[0]['outputs'], outputs)
+        listing = self.client.get('/api/materials', headers=ALICE).get_json()
+        deck = next(m for m in listing if m['kind'] == 'deck')
+        self.assertEqual(deck['sourcePdfId'], pdf['id'])
+        self.assertEqual(deck['outputs']['flashcards']['cards'][0]['question'], 'Q')
 
     def test_a_pdf_is_uploaded_once_and_served_back(self):
         pdf = self.create()

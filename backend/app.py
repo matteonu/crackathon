@@ -37,6 +37,8 @@ import learning  # noqa: E402
 import materials  # noqa: E402
 import planner  # noqa: E402
 import tasks  # noqa: E402
+import decks  # noqa: E402
+import practice  # noqa: E402
 import vvz.sync  # noqa: E402
 from learning import RequestError, StudyJobs  # noqa: E402
 from learning.document_chat import DocumentChat, bp as document_chat_bp  # noqa: E402
@@ -104,7 +106,11 @@ def create_app(overrides=None):
             db.reset_db()
             print(f"Loaded the seed from {os.pathsep.join(app.config['SEED_DIRS'])}", flush=True)
 
-    app.extensions["learning_jobs"] = StudyJobs(app.config["LEARNING_DIR"])
+    def save_deck(document_id, result):
+        with app.app_context():
+            decks.persist_result(db.get_db(), document_id, result)
+
+    app.extensions["learning_jobs"] = StudyJobs(app.config["LEARNING_DIR"], on_complete=save_deck)
     app.extensions["document_chat"] = DocumentChat(app.config["DATABASE_PATH"], app.config["LEARNING_DIR"],
         background=app.config.get("CHAT_BACKGROUND_TASKS", True) and not app.testing)
     if app.config.get("CHAT_BACKGROUND_TASKS", True) and not app.testing and (not _flask_cli() or "run" in sys.argv[1:]):
@@ -114,6 +120,7 @@ def create_app(overrides=None):
     app.register_blueprint(planner.bp)
     app.register_blueprint(tasks.bp)
     app.register_blueprint(learning.bp)
+    app.register_blueprint(practice.bp)
     app.register_blueprint(document_chat_bp)
     if app.config["VVZ_AUTO_SYNC"] and not app.testing and not _flask_cli():
         vvz.sync.start_background(app.config["DATABASE_PATH"], app.config["DATA_DIR"])
