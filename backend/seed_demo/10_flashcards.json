@@ -1,0 +1,1829 @@
+[
+  {
+    "id": "d44c4065-3212-5cee-bc58-7eb5cf2299d9",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 1?",
+    "answer": "The key point 1 about finite automata.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "99b90384-8e66-5b1b-8fbd-f7236901cb76",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 2?",
+    "answer": "The key point 2 about finite automata.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "086edf6c-b5fa-5d3e-840d-b0cde7d41b88",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 3?",
+    "answer": "The key point 3 about finite automata.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "18ee921d-fee4-5e2d-a71e-8e58ad416a6c",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 4?",
+    "answer": "The key point 4 about finite automata.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "ac1742e2-0434-5add-9602-e8fd7da5b691",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 5?",
+    "answer": "The key point 5 about finite automata.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "8f3b223c-88db-548c-acfb-48b2e1fcd995",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 6?",
+    "answer": "The key point 6 about finite automata.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "741ff273-b6f7-5f0c-bc19-f29db1816f6d",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 7?",
+    "answer": "The key point 7 about finite automata.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "03c47448-d7e5-56c8-8f56-18d47b1e7cec",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 8?",
+    "answer": "The key point 8 about finite automata.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "6065585c-c2c0-52cf-9340-c95b8a498091",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 9?",
+    "answer": "The key point 9 about finite automata.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "d7fd8d07-b223-593d-9e01-675d56febcb8",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 10?",
+    "answer": "The key point 10 about finite automata.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "46e5a6d8-1a40-55fb-b50f-81fd7e809b1c",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 11?",
+    "answer": "The key point 11 about finite automata.",
+    "position": 10,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "2238a66f-cb87-591d-9dbc-5570c8868262",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 12?",
+    "answer": "The key point 12 about finite automata.",
+    "position": 11,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "11376358-d2d4-5b7b-a655-c01a5ee653b4",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 13?",
+    "answer": "The key point 13 about finite automata.",
+    "position": 12,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "56bc6b4e-772f-5677-914a-ae7e9134634d",
+    "deck_id": "8d9878af-e02e-5e02-87a8-3ed2795bcab7",
+    "question": "Finite automata: question 14?",
+    "answer": "The key point 14 about finite automata.",
+    "position": 13,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "27d5c54c-57c7-5176-8291-318680ffd074",
+    "deck_id": "8b6afce6-f2a8-508b-bad0-380bdae0ce66",
+    "question": "Regular languages: question 1?",
+    "answer": "The key point 1 about regular languages.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "b2f9361a-4750-5fff-aa3f-5a96eda392fe",
+    "deck_id": "8b6afce6-f2a8-508b-bad0-380bdae0ce66",
+    "question": "Regular languages: question 2?",
+    "answer": "The key point 2 about regular languages.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "7d3d1b87-57c8-5394-a44f-727ce962f663",
+    "deck_id": "8b6afce6-f2a8-508b-bad0-380bdae0ce66",
+    "question": "Regular languages: question 3?",
+    "answer": "The key point 3 about regular languages.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "e92c16f3-bd20-5088-a9f8-5c178c42c7ae",
+    "deck_id": "8b6afce6-f2a8-508b-bad0-380bdae0ce66",
+    "question": "Regular languages: question 4?",
+    "answer": "The key point 4 about regular languages.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "98851be6-2496-5434-83cf-b4d61f6267ae",
+    "deck_id": "8b6afce6-f2a8-508b-bad0-380bdae0ce66",
+    "question": "Regular languages: question 5?",
+    "answer": "The key point 5 about regular languages.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "cdca00c3-947e-5836-9496-7855ab298c03",
+    "deck_id": "8b6afce6-f2a8-508b-bad0-380bdae0ce66",
+    "question": "Regular languages: question 6?",
+    "answer": "The key point 6 about regular languages.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "6862a0d4-abbf-51af-8693-4300c58ef0c3",
+    "deck_id": "8b6afce6-f2a8-508b-bad0-380bdae0ce66",
+    "question": "Regular languages: question 7?",
+    "answer": "The key point 7 about regular languages.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "bfdf463a-2d22-5ecf-a9df-f67f3d62907e",
+    "deck_id": "8b6afce6-f2a8-508b-bad0-380bdae0ce66",
+    "question": "Regular languages: question 8?",
+    "answer": "The key point 8 about regular languages.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "63886b47-82cd-5ea9-85ef-9df1ec0e2295",
+    "deck_id": "8b6afce6-f2a8-508b-bad0-380bdae0ce66",
+    "question": "Regular languages: question 9?",
+    "answer": "The key point 9 about regular languages.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "23bd5d2b-f141-52d5-b290-475992de7db2",
+    "deck_id": "8b6afce6-f2a8-508b-bad0-380bdae0ce66",
+    "question": "Regular languages: question 10?",
+    "answer": "The key point 10 about regular languages.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "bfc443a2-4f32-5434-9411-9d4e237ee00b",
+    "deck_id": "8b6afce6-f2a8-508b-bad0-380bdae0ce66",
+    "question": "Regular languages: question 11?",
+    "answer": "The key point 11 about regular languages.",
+    "position": 10,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "fda535a6-b66f-5243-a5a1-7e5cfd3e56cc",
+    "deck_id": "8b6afce6-f2a8-508b-bad0-380bdae0ce66",
+    "question": "Regular languages: question 12?",
+    "answer": "The key point 12 about regular languages.",
+    "position": 11,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "f627f206-4c37-5a52-a119-803859c5501f",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 1?",
+    "answer": "The key point 1 about context-free grammars.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "6bb54e41-110e-5243-993e-b2c9472264df",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 2?",
+    "answer": "The key point 2 about context-free grammars.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "e0e8a51f-6755-54ae-95a0-a4764ecfbac5",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 3?",
+    "answer": "The key point 3 about context-free grammars.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "cddd80f1-2d81-5e4b-b17d-4e0cb1c4ef0d",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 4?",
+    "answer": "The key point 4 about context-free grammars.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "75851a06-bcfe-595f-a021-6a2ef55fdcc5",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 5?",
+    "answer": "The key point 5 about context-free grammars.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "52e67b01-5153-5f0a-935d-b3a8dfa6103b",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 6?",
+    "answer": "The key point 6 about context-free grammars.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "d784dbff-0992-5b08-b902-c40bad5bf70c",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 7?",
+    "answer": "The key point 7 about context-free grammars.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "f295e510-991b-525a-8dd5-91817145f0a6",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 8?",
+    "answer": "The key point 8 about context-free grammars.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "eeaf34cb-e559-581d-9c5a-9f069fe102ef",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 9?",
+    "answer": "The key point 9 about context-free grammars.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "d1a143a0-acbc-5dab-85e0-a4287c9c178b",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 10?",
+    "answer": "The key point 10 about context-free grammars.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "9bbd29c2-f4cd-58a5-8117-73bcd3e99f92",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 11?",
+    "answer": "The key point 11 about context-free grammars.",
+    "position": 10,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "3de4cd15-6705-5f6e-9c7e-9d17340b86da",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 12?",
+    "answer": "The key point 12 about context-free grammars.",
+    "position": 11,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "53d55d86-ee47-5a8a-906f-e43cef63c2a9",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 13?",
+    "answer": "The key point 13 about context-free grammars.",
+    "position": 12,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "b259dfb6-1fc3-573d-a654-a05ac6891856",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 14?",
+    "answer": "The key point 14 about context-free grammars.",
+    "position": 13,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "7cf08aa3-9d66-572f-9956-394c9381c39b",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 15?",
+    "answer": "The key point 15 about context-free grammars.",
+    "position": 14,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "ddf9866f-6ffa-5a04-a457-ef0c9d33b54b",
+    "deck_id": "174a9779-c189-50e1-bdce-3c426563068e",
+    "question": "Context-free grammars: question 16?",
+    "answer": "The key point 16 about context-free grammars.",
+    "position": 15,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "547bcf04-12f0-5da3-9def-99842a1a0506",
+    "deck_id": "9b987525-7cb0-5498-8763-7a2885718a1d",
+    "question": "Pushdown automata: question 1?",
+    "answer": "The key point 1 about pushdown automata.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "c3dc90f3-d5e0-5ff3-980a-29dc3deb625b",
+    "deck_id": "9b987525-7cb0-5498-8763-7a2885718a1d",
+    "question": "Pushdown automata: question 2?",
+    "answer": "The key point 2 about pushdown automata.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "11457f56-961d-5a47-ac80-d90abd213e9e",
+    "deck_id": "9b987525-7cb0-5498-8763-7a2885718a1d",
+    "question": "Pushdown automata: question 3?",
+    "answer": "The key point 3 about pushdown automata.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "6a163d70-faf1-5308-aa08-8e52941b4751",
+    "deck_id": "9b987525-7cb0-5498-8763-7a2885718a1d",
+    "question": "Pushdown automata: question 4?",
+    "answer": "The key point 4 about pushdown automata.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "db52f889-2f09-505f-891d-de94b27b7296",
+    "deck_id": "9b987525-7cb0-5498-8763-7a2885718a1d",
+    "question": "Pushdown automata: question 5?",
+    "answer": "The key point 5 about pushdown automata.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "5c0a62e7-09f4-5063-a268-e42b1592c02b",
+    "deck_id": "9b987525-7cb0-5498-8763-7a2885718a1d",
+    "question": "Pushdown automata: question 6?",
+    "answer": "The key point 6 about pushdown automata.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "c6733c03-48e5-5f43-87a0-3ccec5d42518",
+    "deck_id": "9b987525-7cb0-5498-8763-7a2885718a1d",
+    "question": "Pushdown automata: question 7?",
+    "answer": "The key point 7 about pushdown automata.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "16ebb5f9-2c5e-5179-bcac-0f05432d384d",
+    "deck_id": "9b987525-7cb0-5498-8763-7a2885718a1d",
+    "question": "Pushdown automata: question 8?",
+    "answer": "The key point 8 about pushdown automata.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "1e99c1d0-84a7-5d5e-a421-4ca1f451e024",
+    "deck_id": "9b987525-7cb0-5498-8763-7a2885718a1d",
+    "question": "Pushdown automata: question 9?",
+    "answer": "The key point 9 about pushdown automata.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "76b4214e-0dad-5fd7-b0f3-fcf6d09676f8",
+    "deck_id": "9b987525-7cb0-5498-8763-7a2885718a1d",
+    "question": "Pushdown automata: question 10?",
+    "answer": "The key point 10 about pushdown automata.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "9f934f66-5150-5f13-9b11-ea38a4591851",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 1?",
+    "answer": "The key point 1 about turing machines.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "699077ea-295b-5e7e-9e3b-563c36325847",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 2?",
+    "answer": "The key point 2 about turing machines.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "9bd137c8-91af-5261-8fe5-b31bba5533da",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 3?",
+    "answer": "The key point 3 about turing machines.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "0125aa9a-63af-5a86-a5da-b28b34fe8538",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 4?",
+    "answer": "The key point 4 about turing machines.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "1b3ed390-49c7-504f-88e0-07855cfe4e6e",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 5?",
+    "answer": "The key point 5 about turing machines.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "73c2ebf1-8e08-55f6-8f5e-3632057a96f3",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 6?",
+    "answer": "The key point 6 about turing machines.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "7b333267-529c-592f-87d1-d4da2fe2437d",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 7?",
+    "answer": "The key point 7 about turing machines.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "4e73f2c9-6fd8-5a93-9e04-4eba3b2d3992",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 8?",
+    "answer": "The key point 8 about turing machines.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "fd815a89-c3ce-5469-8f3e-0715ce71dd9a",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 9?",
+    "answer": "The key point 9 about turing machines.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "d39d3f73-5921-5775-9942-bdb8f8c5aac7",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 10?",
+    "answer": "The key point 10 about turing machines.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "627d8726-c034-59d1-8cb2-aaaecd30b34e",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 11?",
+    "answer": "The key point 11 about turing machines.",
+    "position": 10,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "831785c4-05e0-5b31-8157-fbcd5762dcd9",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 12?",
+    "answer": "The key point 12 about turing machines.",
+    "position": 11,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "8e32a393-0065-5578-b56d-b14df482820e",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 13?",
+    "answer": "The key point 13 about turing machines.",
+    "position": 12,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "ac53136e-8d00-58d2-801e-a2e348864569",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 14?",
+    "answer": "The key point 14 about turing machines.",
+    "position": 13,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "f8d806da-cc24-5319-8410-9cd29e51400b",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 15?",
+    "answer": "The key point 15 about turing machines.",
+    "position": 14,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "19ffd282-bcfa-5741-b2ae-493d16ab1dca",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 16?",
+    "answer": "The key point 16 about turing machines.",
+    "position": 15,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "a1fd865d-da4a-5ef6-8204-c1f33982335b",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 17?",
+    "answer": "The key point 17 about turing machines.",
+    "position": 16,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "864ea3ad-253f-5ae6-98ef-404c00ab54f1",
+    "deck_id": "9a8c5084-b875-5895-8fc7-d69514ecbe7d",
+    "question": "Turing machines: question 18?",
+    "answer": "The key point 18 about turing machines.",
+    "position": 17,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "9b71058d-a9a8-5a8e-9076-7281e1cf5c3a",
+    "deck_id": "587c7b20-45d8-5fbb-96ca-964d1b700f26",
+    "question": "Decidability: question 1?",
+    "answer": "The key point 1 about decidability.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "784e9a8f-c4e9-5726-ab89-f1f73f32ab26",
+    "deck_id": "587c7b20-45d8-5fbb-96ca-964d1b700f26",
+    "question": "Decidability: question 2?",
+    "answer": "The key point 2 about decidability.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "12a5282c-92fa-5f94-b181-b53e4cedd23a",
+    "deck_id": "587c7b20-45d8-5fbb-96ca-964d1b700f26",
+    "question": "Decidability: question 3?",
+    "answer": "The key point 3 about decidability.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "c1f19925-c7bd-5076-b6fb-04fb01d14b39",
+    "deck_id": "587c7b20-45d8-5fbb-96ca-964d1b700f26",
+    "question": "Decidability: question 4?",
+    "answer": "The key point 4 about decidability.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "ff21f9b8-6867-50c1-8cfe-8cecc468caee",
+    "deck_id": "587c7b20-45d8-5fbb-96ca-964d1b700f26",
+    "question": "Decidability: question 5?",
+    "answer": "The key point 5 about decidability.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "866074dd-4d2c-528f-9919-289832344c22",
+    "deck_id": "587c7b20-45d8-5fbb-96ca-964d1b700f26",
+    "question": "Decidability: question 6?",
+    "answer": "The key point 6 about decidability.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "c908e029-f86b-58be-babb-3da792279a0e",
+    "deck_id": "587c7b20-45d8-5fbb-96ca-964d1b700f26",
+    "question": "Decidability: question 7?",
+    "answer": "The key point 7 about decidability.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "cb8a76c1-a6d0-54cf-b8e9-5f2897553786",
+    "deck_id": "587c7b20-45d8-5fbb-96ca-964d1b700f26",
+    "question": "Decidability: question 8?",
+    "answer": "The key point 8 about decidability.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "2314bc92-53e0-5767-a922-8588e3722369",
+    "deck_id": "587c7b20-45d8-5fbb-96ca-964d1b700f26",
+    "question": "Decidability: question 9?",
+    "answer": "The key point 9 about decidability.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "8680bea2-575b-5ad4-a193-5898f2a9f0f5",
+    "deck_id": "587c7b20-45d8-5fbb-96ca-964d1b700f26",
+    "question": "Decidability: question 10?",
+    "answer": "The key point 10 about decidability.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "4d98d2ae-d144-5b0f-acbb-3dccf03372bd",
+    "deck_id": "587c7b20-45d8-5fbb-96ca-964d1b700f26",
+    "question": "Decidability: question 11?",
+    "answer": "The key point 11 about decidability.",
+    "position": 10,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "31b6a15e-2494-5caa-86d5-276a378e6e2f",
+    "deck_id": "587c7b20-45d8-5fbb-96ca-964d1b700f26",
+    "question": "Decidability: question 12?",
+    "answer": "The key point 12 about decidability.",
+    "position": 11,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "091b7e3a-0651-56ac-9ec9-08b01d1a1e91",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 1?",
+    "answer": "The key point 1 about reductions.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "5bc88aa4-0070-555d-88ff-f0b4ce75a10a",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 2?",
+    "answer": "The key point 2 about reductions.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "7f176f7f-4a15-5451-bfb9-c1f977a21eb3",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 3?",
+    "answer": "The key point 3 about reductions.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "a62742bb-a35f-5f72-972f-7078bcce8b27",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 4?",
+    "answer": "The key point 4 about reductions.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "c5dc7497-dafe-5dda-84ef-498951f51052",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 5?",
+    "answer": "The key point 5 about reductions.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "80e79817-9ad5-5f47-a13a-e4a5f871b383",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 6?",
+    "answer": "The key point 6 about reductions.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "329baa82-d59d-5ee8-abca-07ef72031ae2",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 7?",
+    "answer": "The key point 7 about reductions.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "be4240e7-8d33-5ee3-b836-cb604d0b1bcc",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 8?",
+    "answer": "The key point 8 about reductions.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "c1cfca70-924a-55a3-9177-4519c661a691",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 9?",
+    "answer": "The key point 9 about reductions.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "41b12422-1ccf-5546-a619-8e0fd5a09fe4",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 10?",
+    "answer": "The key point 10 about reductions.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "7c6e8a46-bbb8-5188-8fad-f135bafc8711",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 11?",
+    "answer": "The key point 11 about reductions.",
+    "position": 10,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "892a1b5a-62ad-5a4d-a547-a6d9d232cc2c",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 12?",
+    "answer": "The key point 12 about reductions.",
+    "position": 11,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "588c17a9-4ac3-525d-a5e6-2477c68ab32a",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 13?",
+    "answer": "The key point 13 about reductions.",
+    "position": 12,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "685f4ed9-2efa-51b6-8509-9c08343faab9",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 14?",
+    "answer": "The key point 14 about reductions.",
+    "position": 13,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "a79ed042-5901-59fe-aa2b-71e2fd8e69e8",
+    "deck_id": "e76161e2-014a-5a5b-9bf5-7e40ec8e5225",
+    "question": "Reductions: question 15?",
+    "answer": "The key point 15 about reductions.",
+    "position": 14,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "ac1f8f82-18be-587d-bbeb-905a0431358d",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 1?",
+    "answer": "The key point 1 about complexity classes.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "ed357688-15b9-58fb-93d2-0a788d12a659",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 2?",
+    "answer": "The key point 2 about complexity classes.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "6cb05931-f0f9-5d7a-aabf-4ddf370f552a",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 3?",
+    "answer": "The key point 3 about complexity classes.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "b4a03c5b-8377-524b-9b7f-9051b074f96a",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 4?",
+    "answer": "The key point 4 about complexity classes.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "452e92f3-3236-5579-a293-c7dfc45fd512",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 5?",
+    "answer": "The key point 5 about complexity classes.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "c229d79f-0452-56e1-a636-35884e4e219f",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 6?",
+    "answer": "The key point 6 about complexity classes.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "2fbaf2a9-6886-516b-b7ad-668de350fa35",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 7?",
+    "answer": "The key point 7 about complexity classes.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "64bddf89-2abb-528e-b449-820c6e8481f0",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 8?",
+    "answer": "The key point 8 about complexity classes.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "32b06bd1-a756-53eb-b8dc-4f355631112b",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 9?",
+    "answer": "The key point 9 about complexity classes.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "eded2f51-1b45-576e-81c0-66d080afbf9a",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 10?",
+    "answer": "The key point 10 about complexity classes.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "0e95eae2-8639-5f86-8a55-424973c762f7",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 11?",
+    "answer": "The key point 11 about complexity classes.",
+    "position": 10,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "32c4d13e-9a21-558e-9329-89de8aef1987",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 12?",
+    "answer": "The key point 12 about complexity classes.",
+    "position": 11,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "ff2b6aad-8e71-5106-b29b-ffe4529ba5f5",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 13?",
+    "answer": "The key point 13 about complexity classes.",
+    "position": 12,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "31a17de0-e422-53fb-af7b-3a54b77663d1",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 14?",
+    "answer": "The key point 14 about complexity classes.",
+    "position": 13,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "a7f85ae3-d6d7-572b-abcc-70f3af52eb84",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 15?",
+    "answer": "The key point 15 about complexity classes.",
+    "position": 14,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "ff1ae2bc-a00d-58dd-9242-215498087400",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 16?",
+    "answer": "The key point 16 about complexity classes.",
+    "position": 15,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "2fb13f2a-31ff-530a-b526-f9c6d634c789",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 17?",
+    "answer": "The key point 17 about complexity classes.",
+    "position": 16,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "fe0730fe-3fba-56d1-8b83-b27f6f7b0fc0",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 18?",
+    "answer": "The key point 18 about complexity classes.",
+    "position": 17,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "9c808f17-7330-55ed-bac8-c97a3f2b962d",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 19?",
+    "answer": "The key point 19 about complexity classes.",
+    "position": 18,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "89ac896d-5cf1-5774-84f5-2cdd3ec3b6df",
+    "deck_id": "bd749c99-e997-5746-b59b-31351a588a04",
+    "question": "Complexity classes: question 20?",
+    "answer": "The key point 20 about complexity classes.",
+    "position": 19,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "96a056c9-b9dd-5381-acce-0eff419ff72e",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 1?",
+    "answer": "The key point 1 about c basics.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "7a92c336-13f2-58d0-9119-1391e64f0b39",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 2?",
+    "answer": "The key point 2 about c basics.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "6d9dc82c-2734-54c2-bac1-6584244bce81",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 3?",
+    "answer": "The key point 3 about c basics.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "e38e2dff-0933-504a-b074-bd3d870115d7",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 4?",
+    "answer": "The key point 4 about c basics.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "fe89d0bd-28ec-5eef-8ce0-5ba156d8eb6d",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 5?",
+    "answer": "The key point 5 about c basics.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "0792122b-87db-5d29-9833-947041c85d3a",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 6?",
+    "answer": "The key point 6 about c basics.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "46d840f6-3b5e-5ed1-88cb-96bc98e16ce5",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 7?",
+    "answer": "The key point 7 about c basics.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "a0d82cb4-c6d9-5eda-9245-1b7a239f4f48",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 8?",
+    "answer": "The key point 8 about c basics.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "79c6ab97-dea6-5415-b3a8-243692901b15",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 9?",
+    "answer": "The key point 9 about c basics.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "12639d6c-c1fa-59ff-b5fd-ec43d189cc81",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 10?",
+    "answer": "The key point 10 about c basics.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "c0e69d05-abfb-5bf7-bbbf-9089b45dc3e6",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 11?",
+    "answer": "The key point 11 about c basics.",
+    "position": 10,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "627f579a-3775-517e-8dd9-7ddbdcdd13a7",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 12?",
+    "answer": "The key point 12 about c basics.",
+    "position": 11,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "8560e9c5-3f59-5840-a268-1d2f5dfd54ac",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 13?",
+    "answer": "The key point 13 about c basics.",
+    "position": 12,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "c3c89915-cc6f-50fb-bf6a-a9d656b94abf",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 14?",
+    "answer": "The key point 14 about c basics.",
+    "position": 13,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "262e7b82-de27-503b-8cc9-7829e2363035",
+    "deck_id": "80dfe3f9-a56f-5baa-83e0-1bfe42051318",
+    "question": "C basics: question 15?",
+    "answer": "The key point 15 about c basics.",
+    "position": 14,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "56dbcc74-fa82-5420-99f6-63bbe3da9c13",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 1?",
+    "answer": "The key point 1 about pointers and memory.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "913f2a37-4f42-5c37-9a0b-8a297fd35218",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 2?",
+    "answer": "The key point 2 about pointers and memory.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "e9e78f6f-c08a-5ee3-b6ae-6d681ab3cfbf",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 3?",
+    "answer": "The key point 3 about pointers and memory.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "dbddbb7a-8772-54d5-b9dd-5085a1fba2ab",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 4?",
+    "answer": "The key point 4 about pointers and memory.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "8d3ab985-12fd-5240-86cc-ad75e3032902",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 5?",
+    "answer": "The key point 5 about pointers and memory.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "35320c86-6e0c-5f02-9251-b48222d5f032",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 6?",
+    "answer": "The key point 6 about pointers and memory.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "95374590-8b48-589f-b61a-eb5f35b3e1fc",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 7?",
+    "answer": "The key point 7 about pointers and memory.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "b95212a1-74ed-5409-8f82-7b9b343aa1a5",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 8?",
+    "answer": "The key point 8 about pointers and memory.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "871f5ba3-1f70-58ce-8a02-ccb13a3cccc5",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 9?",
+    "answer": "The key point 9 about pointers and memory.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "1e5cecdf-e2ad-5659-8fc4-a867e6b083f2",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 10?",
+    "answer": "The key point 10 about pointers and memory.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "7b309e80-bdd4-5e32-9019-f3c9abb5264a",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 11?",
+    "answer": "The key point 11 about pointers and memory.",
+    "position": 10,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "4a7ca956-d0a5-54b7-bcc3-ee9762871d4b",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 12?",
+    "answer": "The key point 12 about pointers and memory.",
+    "position": 11,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "c9f8578f-3245-52e0-821b-7635297f9c91",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 13?",
+    "answer": "The key point 13 about pointers and memory.",
+    "position": 12,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "4de953e9-5a73-57d5-8d01-117b68af1b15",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 14?",
+    "answer": "The key point 14 about pointers and memory.",
+    "position": 13,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "a68c18e0-f872-51b8-a5bd-7ffbceac4a22",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 15?",
+    "answer": "The key point 15 about pointers and memory.",
+    "position": 14,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "fd543047-1af7-5119-8d39-5b56392440a8",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 16?",
+    "answer": "The key point 16 about pointers and memory.",
+    "position": 15,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "6e64c7ff-cda1-5a1a-b37a-c80c0edbf371",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 17?",
+    "answer": "The key point 17 about pointers and memory.",
+    "position": 16,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "f67a522b-d285-5e10-8393-c08c2b8803b7",
+    "deck_id": "fb41f161-ad7c-5142-8edc-2935a9a204b9",
+    "question": "Pointers and memory: question 18?",
+    "answer": "The key point 18 about pointers and memory.",
+    "position": 17,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "222d2191-5212-56f6-b176-70441e8026d0",
+    "deck_id": "287bee81-335a-515d-a722-b4723ec8608d",
+    "question": "Caches: question 1?",
+    "answer": "The key point 1 about caches.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "ab3e6836-3743-5964-9462-73a88f92821f",
+    "deck_id": "287bee81-335a-515d-a722-b4723ec8608d",
+    "question": "Caches: question 2?",
+    "answer": "The key point 2 about caches.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "fed51d22-1cf3-5dd6-b7d2-51f5f341f11c",
+    "deck_id": "287bee81-335a-515d-a722-b4723ec8608d",
+    "question": "Caches: question 3?",
+    "answer": "The key point 3 about caches.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "5a82a420-9179-5eb4-a32e-5d4280328ab9",
+    "deck_id": "287bee81-335a-515d-a722-b4723ec8608d",
+    "question": "Caches: question 4?",
+    "answer": "The key point 4 about caches.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "02de7659-61d2-5408-8af5-9e3db2418fdc",
+    "deck_id": "287bee81-335a-515d-a722-b4723ec8608d",
+    "question": "Caches: question 5?",
+    "answer": "The key point 5 about caches.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "50ac2207-3231-5fcd-b798-3984fefda78e",
+    "deck_id": "287bee81-335a-515d-a722-b4723ec8608d",
+    "question": "Caches: question 6?",
+    "answer": "The key point 6 about caches.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "6a73ef30-8345-572f-af0d-f5d00dd5ff78",
+    "deck_id": "287bee81-335a-515d-a722-b4723ec8608d",
+    "question": "Caches: question 7?",
+    "answer": "The key point 7 about caches.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "aa41c019-57d0-5ddf-9e57-07d220a73173",
+    "deck_id": "287bee81-335a-515d-a722-b4723ec8608d",
+    "question": "Caches: question 8?",
+    "answer": "The key point 8 about caches.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "1087abff-2f02-505c-81bc-6f8f185dbad1",
+    "deck_id": "287bee81-335a-515d-a722-b4723ec8608d",
+    "question": "Caches: question 9?",
+    "answer": "The key point 9 about caches.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "852861d9-acff-5c96-9d7a-1552a3aa1d5e",
+    "deck_id": "287bee81-335a-515d-a722-b4723ec8608d",
+    "question": "Caches: question 10?",
+    "answer": "The key point 10 about caches.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "8f8b0700-a181-5628-acc8-1f61dcfae257",
+    "deck_id": "287bee81-335a-515d-a722-b4723ec8608d",
+    "question": "Caches: question 11?",
+    "answer": "The key point 11 about caches.",
+    "position": 10,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "8441fc76-6ed7-54d7-8245-7e2554c4ce35",
+    "deck_id": "287bee81-335a-515d-a722-b4723ec8608d",
+    "question": "Caches: question 12?",
+    "answer": "The key point 12 about caches.",
+    "position": 11,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "0766e4aa-c6cd-5894-b984-0fcfbc08b01f",
+    "deck_id": "ae056bcf-4303-5a9a-bce9-16dec0b62771",
+    "question": "1: question 1?",
+    "answer": "The key point 1 about 1.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "af063c8f-1014-500a-8bc6-ef6dedfa2b98",
+    "deck_id": "ae056bcf-4303-5a9a-bce9-16dec0b62771",
+    "question": "1: question 2?",
+    "answer": "The key point 2 about 1.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "8a4af1b9-47c3-548f-9c13-30a1cb56d4a4",
+    "deck_id": "ae056bcf-4303-5a9a-bce9-16dec0b62771",
+    "question": "1: question 3?",
+    "answer": "The key point 3 about 1.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "f092ff77-483a-599e-9058-bfb7d0d7017b",
+    "deck_id": "ae056bcf-4303-5a9a-bce9-16dec0b62771",
+    "question": "1: question 4?",
+    "answer": "The key point 4 about 1.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "457467d5-45e3-53c9-b611-80af420c4fe6",
+    "deck_id": "ae056bcf-4303-5a9a-bce9-16dec0b62771",
+    "question": "1: question 5?",
+    "answer": "The key point 5 about 1.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "b0d287e2-4dfb-53ca-9fb7-fbfcf3aee7ec",
+    "deck_id": "ae056bcf-4303-5a9a-bce9-16dec0b62771",
+    "question": "1: question 6?",
+    "answer": "The key point 6 about 1.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "041b8f48-f08d-5191-a9d7-e50dacf025c5",
+    "deck_id": "ae056bcf-4303-5a9a-bce9-16dec0b62771",
+    "question": "1: question 7?",
+    "answer": "The key point 7 about 1.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "36d95789-bb60-57f4-a0e6-d8336e5e5677",
+    "deck_id": "ae056bcf-4303-5a9a-bce9-16dec0b62771",
+    "question": "1: question 8?",
+    "answer": "The key point 8 about 1.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "60894efc-6696-50fa-a5e0-f8297f7f8e6d",
+    "deck_id": "e6957656-f16c-5a08-9fc4-1f55d17193c8",
+    "question": "2: question 1?",
+    "answer": "The key point 1 about 2.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "2e7ad824-3133-5433-87c2-bdc32c851279",
+    "deck_id": "e6957656-f16c-5a08-9fc4-1f55d17193c8",
+    "question": "2: question 2?",
+    "answer": "The key point 2 about 2.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "39d27007-fac8-56a8-b389-ba2b699f52df",
+    "deck_id": "e6957656-f16c-5a08-9fc4-1f55d17193c8",
+    "question": "2: question 3?",
+    "answer": "The key point 3 about 2.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "7f4a363b-d502-5bf4-805e-109f044a8438",
+    "deck_id": "e6957656-f16c-5a08-9fc4-1f55d17193c8",
+    "question": "2: question 4?",
+    "answer": "The key point 4 about 2.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "fe436a9b-13a6-5ff8-b605-961587a05598",
+    "deck_id": "e6957656-f16c-5a08-9fc4-1f55d17193c8",
+    "question": "2: question 5?",
+    "answer": "The key point 5 about 2.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "4e42cdbd-59fd-5b18-8daf-47540b370e22",
+    "deck_id": "e6957656-f16c-5a08-9fc4-1f55d17193c8",
+    "question": "2: question 6?",
+    "answer": "The key point 6 about 2.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "ffcb2d0b-e9e3-5f75-951a-dd00fcd1bddd",
+    "deck_id": "e6957656-f16c-5a08-9fc4-1f55d17193c8",
+    "question": "2: question 7?",
+    "answer": "The key point 7 about 2.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "9b459e0c-b8cc-5058-9a66-06819dfc7402",
+    "deck_id": "e6957656-f16c-5a08-9fc4-1f55d17193c8",
+    "question": "2: question 8?",
+    "answer": "The key point 8 about 2.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "74d85f68-91fb-5d7d-96dd-51a7eb46fb6d",
+    "deck_id": "e6957656-f16c-5a08-9fc4-1f55d17193c8",
+    "question": "2: question 9?",
+    "answer": "The key point 9 about 2.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "b55ba3be-53f6-5a72-84e6-069f6d1b2d71",
+    "deck_id": "f1411a8c-aacd-5652-b2b5-e1ece0f1174d",
+    "question": "point: question 1?",
+    "answer": "The key point 1 about point.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "f66a5e49-2ff9-5d39-aab4-c8f282f0b5b3",
+    "deck_id": "f1411a8c-aacd-5652-b2b5-e1ece0f1174d",
+    "question": "point: question 2?",
+    "answer": "The key point 2 about point.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "2a5e11cb-6f44-5914-bbab-73610a4d31c2",
+    "deck_id": "f1411a8c-aacd-5652-b2b5-e1ece0f1174d",
+    "question": "point: question 3?",
+    "answer": "The key point 3 about point.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "9ba38342-aefd-5893-ae09-7adbdef5acf0",
+    "deck_id": "f1411a8c-aacd-5652-b2b5-e1ece0f1174d",
+    "question": "point: question 4?",
+    "answer": "The key point 4 about point.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "f8c71387-c40d-5ba6-b848-c2b7d684c3c3",
+    "deck_id": "f1411a8c-aacd-5652-b2b5-e1ece0f1174d",
+    "question": "point: question 5?",
+    "answer": "The key point 5 about point.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "61edfb1d-61e6-5ecc-b960-e369b9df998b",
+    "deck_id": "f1411a8c-aacd-5652-b2b5-e1ece0f1174d",
+    "question": "point: question 6?",
+    "answer": "The key point 6 about point.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "570b2d99-fdc4-58ac-9d85-0724f9accd2e",
+    "deck_id": "f1411a8c-aacd-5652-b2b5-e1ece0f1174d",
+    "question": "point: question 7?",
+    "answer": "The key point 7 about point.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "e1a2ad8e-b709-53ae-a277-6c298d68c273",
+    "deck_id": "f1411a8c-aacd-5652-b2b5-e1ece0f1174d",
+    "question": "point: question 8?",
+    "answer": "The key point 8 about point.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "308d8eac-525c-5726-87b2-88def7f20672",
+    "deck_id": "f1411a8c-aacd-5652-b2b5-e1ece0f1174d",
+    "question": "point: question 9?",
+    "answer": "The key point 9 about point.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "cd2147af-1175-5f8e-a94d-f6e2ad5afb15",
+    "deck_id": "f1411a8c-aacd-5652-b2b5-e1ece0f1174d",
+    "question": "point: question 10?",
+    "answer": "The key point 10 about point.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "bb19e297-e2ca-51d4-a044-15734265544f",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 1?",
+    "answer": "The key point 1 about systems.",
+    "position": 0,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "7727da2f-e342-59bb-bc59-da3c5b5977e6",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 2?",
+    "answer": "The key point 2 about systems.",
+    "position": 1,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "c4e822ab-890a-52d5-b628-d2e0b19e9ab9",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 3?",
+    "answer": "The key point 3 about systems.",
+    "position": 2,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "d42f2142-2c65-5209-a978-54add3509eb1",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 4?",
+    "answer": "The key point 4 about systems.",
+    "position": 3,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "9c76523e-7012-5629-98e3-4483111e1598",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 5?",
+    "answer": "The key point 5 about systems.",
+    "position": 4,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "e979896c-f639-53f8-8e0e-a74186f44726",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 6?",
+    "answer": "The key point 6 about systems.",
+    "position": 5,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "573a3262-69b9-5b7d-bcbd-522350915d2b",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 7?",
+    "answer": "The key point 7 about systems.",
+    "position": 6,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "b7336041-38b7-57cf-99a5-03e57a3e7b1f",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 8?",
+    "answer": "The key point 8 about systems.",
+    "position": 7,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "6d168cfb-213b-5500-a5a8-00bb8b6f38a9",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 9?",
+    "answer": "The key point 9 about systems.",
+    "position": 8,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "d113f63d-ab84-5430-b72b-4de5316c2919",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 10?",
+    "answer": "The key point 10 about systems.",
+    "position": 9,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "9af33635-d4dd-5661-aba3-99d6ee3d6820",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 11?",
+    "answer": "The key point 11 about systems.",
+    "position": 10,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "29e9af4a-b39e-5a1a-b32b-44f5b28aaa62",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 12?",
+    "answer": "The key point 12 about systems.",
+    "position": 11,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "9d044e42-63dd-5d14-8b84-58b86c020544",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 13?",
+    "answer": "The key point 13 about systems.",
+    "position": 12,
+    "demo": 1,
+    "generated": 0
+  },
+  {
+    "id": "ef5fc450-21ad-59d7-85b8-c86f038d052a",
+    "deck_id": "a1d7b2bb-1036-50df-8d2a-f47cef61f156",
+    "question": "systems: question 14?",
+    "answer": "The key point 14 about systems.",
+    "position": 13,
+    "demo": 1,
+    "generated": 0
+  }
+]

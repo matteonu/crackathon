@@ -1,9 +1,10 @@
 """Per-subject to-do lists, scoped to the caller. Like Google Tasks: a task has a title,
-optional notes and due date, is open or done, and open tasks keep a manual order.
+optional notes and due date, a priority (high, medium or low), and is open or done. Open
+tasks sort by priority and keep a manual order within each priority.
 
     GET    /api/tasks?subject=<id>      the caller's tasks, optionally one subject
-    POST   /api/tasks                   {id, subjectId, title, notes?, due?, position?}
-    PATCH  /api/tasks/<id>              any of title, notes, due, done, position
+    POST   /api/tasks                   {id, subjectId, title, notes?, due?, priority?, position?}
+    PATCH  /api/tasks/<id>              any of title, notes, due, priority, done, position
     DELETE /api/tasks/<id>
     DELETE /api/tasks/completed?subject=<id>   clear the done tasks of one subject
 """
@@ -21,12 +22,15 @@ bp = Blueprint("tasks", __name__, url_prefix="/api/tasks")
 
 MAX_TITLE = 500
 MAX_NOTES = 5000
-COLUMNS = "id, subject_id, title, notes, due, done, completed_at, position, created_at"
+PRIORITIES = ("high", "medium", "low")
+COLUMNS = "id, subject_id, title, notes, due, priority, done, completed_at, position, created_at"
+# Open tasks: high first, then manual order within a priority.
+ORDER = "done, CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, position, created_at DESC"
 
 
 def to_json(row):
     return {"id": row["id"], "subjectId": row["subject_id"], "title": row["title"], "notes": row["notes"],
-            "due": row["due"], "done": bool(row["done"]), "completedAt": row["completed_at"],
+            "due": row["due"], "priority": row["priority"], "done": bool(row["done"]), "completedAt": row["completed_at"],
             "position": row["position"], "createdAt": row["created_at"]}
 
 
@@ -55,6 +59,12 @@ def clean_due(value):
         raise RequestError(400, "Use a due date like 2026-11-30.") from None
 
 
+def clean_priority(value):
+    if value not in PRIORITIES:
+        raise RequestError(400, "Priority must be high, medium or low.")
+    return value
+
+
 def clean_position(value):
     if not isinstance(value, (int, float)) or isinstance(value, bool) or not abs(value) < 1e15:
         raise RequestError(400, "Invalid task position.")
@@ -79,7 +89,7 @@ def index():
     if subject:
         sql += " AND subject_id = ?"
         values.append(subject)
-    rows = db.get_db().execute(sql + " ORDER BY done, position, created_at DESC", values)
+    rows = db.get_db().execute(f"{sql} ORDER BY {ORDER}", values)
     return jsonify([to_json(r) for r in rows])
 
 
@@ -97,6 +107,7 @@ def create():
     title = clean_title(body.get("title"))
     notes = clean_notes(body.get("notes"))
     due = clean_due(body.get("due"))
+    priority = clean_priority(body.get("priority", "medium"))
     conn = db.get_db()
     if "position" in body:
         position = clean_position(body["position"])
@@ -107,9 +118,9 @@ def create():
         position = (lowest if lowest is not None else 0) - 1
     with conn:
         conn.execute(
-            """INSERT INTO tasks (id, user_id, subject_id, title, notes, due, done, completed_at, position, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)""",
-            (task_id, user["id"], subject_id, title, notes, due, position, int(time.time() * 1000)))
+            """INSERT INTO tasks (id, user_id, subject_id, title, notes, due, priority, done, completed_at, position, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)""",
+            (task_id, user["id"], subject_id, title, notes, due, priority, position, int(time.time() * 1000)))
     return jsonify(to_json(row(task_id))), 201
 
 
@@ -128,6 +139,9 @@ def update(task_id):
     if "due" in body:
         sets.append("due = ?")
         values.append(clean_due(body["due"]))
+    if "priority" in body:
+        sets.append("priority = ?")
+        values.append(clean_priority(body["priority"]))
     if "done" in body:
         if not isinstance(body["done"], bool):
             raise RequestError(400, "done must be true or false.")

@@ -180,6 +180,20 @@ export function planAdherence(days: DayPoint[], asOf: string): PlanAdherence {
     ratio: plannedHours ? recordedOnPlannedDays / plannedHours : 0};
 }
 
+export interface PlanVsRecordedDay { date: string; planned: number; recorded: number; }
+
+/** One subject's planned and recorded hours for the `count` study-phase days up to asOf
+ *  (fewer when the phase started more recently). */
+export function recentPlanVsRecorded(data: StudyData, subjectId: string, asOf: string, count = 7): PlanVsRecordedDay[] {
+  const subject = data.subjects.find(s => s.id === subjectId);
+  if (!subject) return [];
+  return data.dates.filter(d => d <= asOf).slice(-count).map(date => ({
+    date,
+    planned: round1((data.sessions ?? []).filter(s => s.subjectId === subjectId && s.date === date).reduce((sum, s) => sum + s.hours, 0)),
+    recorded: round1(subject.hours[date] ?? 0),
+  }));
+}
+
 /** Hours already in the calendar after asOf, per day, and whether they cover what is still needed. */
 export function plannedAhead(data: StudyData, asOf: string): { hours: number; days: number; perDay: number } {
   const ahead = (data.sessions ?? []).filter(s => s.date > asOf);

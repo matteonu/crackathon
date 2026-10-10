@@ -335,7 +335,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     due TEXT,                         -- 'YYYY-MM-DD' or NULL
     done INTEGER NOT NULL DEFAULT 0,
     completed_at INTEGER,             -- milliseconds since the epoch, NULL while open
-    position REAL NOT NULL,           -- manual order among open tasks, ascending
+    position REAL NOT NULL,           -- manual order among open tasks, ascending, within a priority
+    priority TEXT NOT NULL DEFAULT 'medium',  -- 'high', 'medium' or 'low'; open tasks sort by it first
     created_at INTEGER NOT NULL       -- milliseconds since the epoch
 );
 CREATE INDEX IF NOT EXISTS tasks_by_subject ON tasks (user_id, subject_id);

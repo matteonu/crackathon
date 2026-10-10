@@ -295,6 +295,24 @@ class SchemaUpgradeTests(unittest.TestCase):
                 row = db.get_db().execute("SELECT target_hours, completed, next_action, exam_date FROM semester_courses").fetchone()
             self.assertEqual(tuple(row), (0, 0, "", None))
 
+    def test_an_old_tasks_table_gets_a_medium_priority(self):
+        with tempfile.TemporaryDirectory() as temp:
+            import sqlite3
+            from pathlib import Path
+            old = sqlite3.connect(Path(temp) / "app.db")
+            old.executescript("""CREATE TABLE tasks (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, subject_id TEXT NOT NULL,
+                                 title TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '', due TEXT,
+                                 done INTEGER NOT NULL DEFAULT 0, completed_at INTEGER, position REAL NOT NULL,
+                                 created_at INTEGER NOT NULL);
+                                 INSERT INTO tasks (id, user_id, subject_id, title, position, created_at)
+                                 VALUES ('t1', 1, 'analysis', 'Read', 0, 0);""")
+            old.commit()
+            old.close()
+            app = build_app(temp)
+            with app.app_context():
+                row = db.get_db().execute("SELECT priority FROM tasks").fetchone()
+            self.assertEqual(row["priority"], "medium")
+
     def test_an_old_users_table_gets_the_selected_semester(self):
         with tempfile.TemporaryDirectory() as temp:
             import sqlite3

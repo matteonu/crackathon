@@ -3,9 +3,8 @@ import { RouterLink } from '@angular/router';
 import { StudyStore } from '../services/study-store';
 import { dayLabel } from '../models/study';
 import { IconComponent } from '../shared/icon.component';
-import { ScrollButtonsComponent } from '../shared/scroll-buttons.component';
 
-@Component({selector:'app-schedule',standalone:true,imports:[RouterLink,IconComponent,ScrollButtonsComponent],templateUrl:'./schedule.component.html'})
+@Component({selector:'app-schedule',standalone:true,imports:[RouterLink,IconComponent],templateUrl:'./schedule.component.html'})
 export class ScheduleComponent {
   readonly store=inject(StudyStore);
   readonly expanded=input(false);

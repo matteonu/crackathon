@@ -69,6 +69,29 @@ class TaskTests(unittest.TestCase):
         response = self.client.patch(f"/api/tasks/{task['id']}", json={'done': 'yes'}, headers=ALICE)
         self.assertEqual(response.status_code, 400)
 
+    def test_priority_defaults_to_medium_and_can_be_set_and_changed(self):
+        self.assertEqual(self.create('plain')['priority'], 'medium')
+        task = self.create('urgent', priority='high')
+        self.assertEqual(task['priority'], 'high')
+        lowered = self.client.patch(f"/api/tasks/{task['id']}", json={'priority': 'low'}, headers=ALICE).get_json()
+        self.assertEqual(lowered['priority'], 'low')
+        for bad in ('urgent', None, 1):
+            created = self.client.post('/api/tasks', json={'id': str(uuid.uuid4()), 'subjectId': 'analysis', 'title': 'x',
+                                                           'priority': bad}, headers=ALICE)
+            patched = self.client.patch(f"/api/tasks/{task['id']}", json={'priority': bad}, headers=ALICE)
+            for response in (created, patched):
+                self.assertEqual((response.status_code, response.get_json()['error']),
+                                 (400, 'Priority must be high, medium or low.'), bad)
+
+    def test_open_tasks_sort_by_priority_then_manual_order(self):
+        self.create('low', priority='low')
+        self.create('medium b')
+        self.create('high', priority='high')
+        self.create('medium a')
+        done = self.create('done high', priority='high')
+        self.client.patch(f"/api/tasks/{done['id']}", json={'done': True}, headers=ALICE)
+        self.assertEqual(self.titles('analysis'), ['high', 'medium a', 'medium b', 'low', 'done high'])
+
     def test_tasks_are_private_to_their_owner(self):
         task = self.create()
         self.assertEqual(self.titles(headers=BOB), [])

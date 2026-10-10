@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
-import { Task, cleanTitle, movedPosition, openTasks, topPosition, validTask } from '../models/task';
+import { Priority, Task, cleanTitle, droppedPlacement, openTasks, topPosition, validTask } from '../models/task';
 
-type TaskPatch=Partial<Pick<Task,'title'|'notes'|'due'|'done'|'position'>>;
+type TaskPatch=Partial<Pick<Task,'title'|'notes'|'due'|'priority'|'done'|'position'>>;
 
 /** Per-subject to-do lists, stored on the server (`/api/tasks`). Same shape as MaterialStore:
  *  optimistic signal state, one queue so edits do not race, and a user-facing error. */
@@ -27,11 +27,11 @@ export class TaskStore {
     catch(e){this.error.set(e instanceof Error?e.message:'Could not load your tasks.');}
     finally{this.loading.set(false);}
   }
-  /** Adds a task at the top of the subject's list. Returns it, or null with `error` set. */
-  add(subjectId:string,title:string,due:string|null=null):Promise<Task|null>{return this.queue(async()=>{
+  /** Adds a task at the top of its priority in the subject's list. Returns it, or null with `error` set. */
+  add(subjectId:string,title:string,due:string|null=null,priority:Priority='medium'):Promise<Task|null>{return this.queue(async()=>{
     const clean=cleanTitle(title);
     if(!clean){this.error.set('Give the task a title.');return null;}
-    const draft={id:crypto.randomUUID(),subjectId,title:clean,notes:'',due,position:topPosition(this.tasks(),subjectId)};
+    const draft={id:crypto.randomUUID(),subjectId,title:clean,notes:'',due,priority,position:topPosition(this.tasks(),subjectId)};
     try{const saved=this.store(await this.request<Task>('/api/tasks',this.json(draft,'POST')));this.error.set('');return saved;}
     catch(e){this.error.set(e instanceof Error?e.message:'Could not add the task. Please retry.');return null;}
   });}
@@ -44,11 +44,14 @@ export class TaskStore {
     catch(e){this.error.set(e instanceof Error?e.message:'Could not save the task. Please retry.');return false;}
   });}
   toggle(id:string):Promise<boolean>{const task=this.tasks().find(t=>t.id===id);return task?this.update(id,{done:!task.done}):Promise.resolve(false);}
-  /** Moves an open task one step up or down within its subject. */
-  move(id:string,direction:-1|1):Promise<boolean>{
+  /** Puts a dragged open task where it was dropped in its subject's open list. The new place
+   *  shows at once, so the row does not jump back while saving; a failed save puts it back. */
+  place(id:string,index:number):Promise<boolean>{
     const task=this.tasks().find(t=>t.id===id);if(!task||task.done)return Promise.resolve(false);
-    const position=movedPosition(openTasks(this.tasks(),task.subjectId),id,direction);
-    return position===null?Promise.resolve(false):this.update(id,{position});
+    const placement=droppedPlacement(openTasks(this.tasks(),task.subjectId),id,index);
+    if(!placement)return Promise.resolve(false);
+    this.store({...task,...placement});
+    return this.update(id,placement).then(saved=>{if(!saved)this.tasks.update(values=>values.map(t=>t.id===id?task:t));return saved;});
   }
   remove(id:string):Promise<boolean>{return this.queue(async()=>{
     if(!this.tasks().some(t=>t.id===id))return false;

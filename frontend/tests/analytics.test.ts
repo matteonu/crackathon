@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { asOfDate, balanceDelta, consistency, dailySeries, pace, planAdherence, plannedAhead, subjectStats, weekdayProfile, weeklySeries } from '../src/app/models/analytics.ts';
+import { asOfDate, balanceDelta, consistency, dailySeries, pace, planAdherence, plannedAhead, recentPlanVsRecorded, subjectStats, weekdayProfile, weeklySeries } from '../src/app/models/analytics.ts';
 import type { StudyData, Subject } from '../src/app/models/study.ts';
 
 // A 14-day phase: Mon 2027-01-04 .. Sun 2027-01-17.
@@ -74,4 +74,11 @@ test('plan adherence looks at planned days so far, planned-ahead at the rest',()
   assert.deepEqual([adherence.plannedDays,adherence.keptDays,adherence.plannedHours,adherence.recordedOnPlannedDays],[2,1,5,2]);
   assert.equal(Math.round(adherence.ratio*100),40);
   assert.deepEqual(plannedAhead(data(),'2027-01-10'),{hours:2.5,days:1,perDay:2.5});
+});
+
+test('plan versus recorded covers the last days of the phase up to as-of, for one subject',()=>{
+  const days=recentPlanVsRecorded(data(),'a','2027-01-07',3);
+  assert.deepEqual(days,[{date:'2027-01-05',planned:2,recorded:3},{date:'2027-01-06',planned:0,recorded:0},{date:'2027-01-07',planned:0,recorded:1}]);
+  assert.equal(recentPlanVsRecorded(data(),'a','2027-01-05').length,2);   // the phase began on the 4th
+  assert.deepEqual(recentPlanVsRecorded(data(),'missing','2027-01-07'),[]);
 });
