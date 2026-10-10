@@ -42,6 +42,7 @@ import practice  # noqa: E402
 import vvz.sync  # noqa: E402
 from learning import RequestError, StudyJobs  # noqa: E402
 from learning.document_chat import DocumentChat, bp as document_chat_bp  # noqa: E402
+from learning.mcq import MCQJobs  # noqa: E402
 
 
 PUBLIC_URL = "https://13.hackathon.ethz.ch/"
@@ -115,6 +116,7 @@ def create_app(overrides=None):
         background=app.config.get("CHAT_BACKGROUND_TASKS", True) and not app.testing)
     if app.config.get("CHAT_BACKGROUND_TASKS", True) and not app.testing and (not _flask_cli() or "run" in sys.argv[1:]):
         app.extensions["document_chat"].start()
+    app.extensions["mcq_jobs"] = MCQJobs(app.config["DATABASE_PATH"], app.extensions["learning_jobs"])
     auth.init_app(app)
     app.register_blueprint(materials.bp)
     app.register_blueprint(planner.bp)
@@ -190,6 +192,7 @@ def create_app(overrides=None):
         for name in os.listdir(learning_dir) if os.path.isdir(learning_dir) else []:
             shutil.rmtree(os.path.join(learning_dir, name), ignore_errors=True)
             removed += 1
+        db.restore_seed_assets()
         click.echo(f"Database reloaded from the seed, {removed} uploaded document(s) deleted")
         refill_catalogue()
 
@@ -211,6 +214,7 @@ if __name__ == "__main__":
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         print(f" * Database: {app.config['DATABASE_PATH']}", flush=True)
         key = learning.pdf_study.API_KEY
+        from learning.config import MODELS
         print(f" * PDF pipeline: OPENAI_API_KEY {'is set' if key else 'is NOT set (add it to .env)'}, "
-              f"model {learning.pdf_study.MODEL}", flush=True)
+              f"models {MODELS}", flush=True)
     app.run(host="0.0.0.0", port=8080, debug=True)

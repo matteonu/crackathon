@@ -26,11 +26,12 @@ from pypdf import PdfReader, PdfWriter
 import db
 import materials
 from . import pdf_study
+from .config import model_for, reasoning_for
 from .jobs import RequestError
 
 CHAT_TYPES = {'slides', 'exercise_solution', 'mock_exam', 'script'}
-CHAT_MODEL = os.environ.get('OPENAI_CHAT_MODEL', 'gpt-6-astra')
-CHAT_REASONING_EFFORT = os.environ.get('OPENAI_CHAT_REASONING_EFFORT', 'high')
+CHAT_MODEL = model_for("chat")
+CHAT_REASONING_EFFORT = reasoning_for("chat")
 bp = Blueprint('document_chat', __name__, url_prefix='/api/learning/documents')
 INSTRUCTIONS = """You are a helpful study tutor answering questions about one PDF.
 The attached PDF contains ONLY the user's currently visible page and its immediate
@@ -314,12 +315,14 @@ class DocumentChat:
         self.assert_live(document_id, user_id)
         try:
             with self.client_factory() as client:
+                options = ({'reasoning': {'effort': CHAT_REASONING_EFFORT}}
+                           if CHAT_REASONING_EFFORT else {})
                 response = client.responses.create(
                     model=CHAT_MODEL, instructions=INSTRUCTIONS + mapping, input=inputs,
                     tools=[{'type': 'file_search', 'vector_store_ids': [state['vector_store_id']],
                             'max_num_results': 5}] if ready else [],
                     tool_choice='auto', parallel_tool_calls=False, max_tool_calls=2,
-                    max_output_tokens=16000, reasoning={'effort': CHAT_REASONING_EFFORT},
+                    max_output_tokens=16000, **options,
                     timeout=180, store=False)
         except RequestError:
             raise

@@ -164,11 +164,11 @@ Generation requests accept these headers:
 
 ## Configuration
 
-- `OPENAI_MODEL` selects the flashcard/standalone CLI model (default: `gpt-6-astra`).
-- `OPENAI_SUMMARY_MODEL` selects the upload-summary model (default: `gpt-6-luna`).
-- `OPENAI_SUMMARY_REASONING_EFFORT` defaults to `none` for fast summaries. If overriding
-  the model, choose a supported effort or set this to empty to omit the reasoning option.
-- `/api/learning/health` reports both `model` and `summaryModel`.
+- `learning/config.json` selects the model and reasoning effort independently for
+  summaries, flashcards, MC questions, and document chat.
+- `OPENAI_<FEATURE>_MODEL` and `OPENAI_<FEATURE>_REASONING_EFFORT` optionally override
+  one feature at deployment time, where `<FEATURE>` is `SUMMARY`, `FLASHCARDS`, `MCQ`,
+  or `CHAT`. Set a reasoning-effort override to an empty value to omit it.
 - `OPENAI_BASE_URL` selects an OpenAI-compatible endpoint.
 - `PDF_DEEP_MODE` sets only the standalone CLI default.
 - `DEFAULT_QUESTIONS` in `jobs.py` applies when a request omits the count header.

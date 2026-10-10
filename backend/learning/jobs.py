@@ -19,6 +19,7 @@ import time
 from errors import RequestError
 
 from . import pdf_study
+from .config import model_for, reasoning_for
 
 SUMMARY_SENTENCES = 1
 DEFAULT_QUESTIONS = 60
@@ -174,7 +175,8 @@ class StudyJobs:
             raise RequestError(404, "This PDF was deleted.")
         return self.read(self.result_path(document_id, mode, task))
 
-    def submit(self, document_id: str, name: str, pdf: bytes | None = None, mode: str = "shallow", questions: int | None = None, task: str = "flashcards") -> dict:
+    def submit(self, document_id: str, name: str, pdf: bytes | None = None, mode: str = "shallow",
+               questions: int | None = None, task: str = "flashcards", regenerate: bool = False) -> dict:
         """Start a run. Without `pdf`, the PDF stored for this document is used."""
         questions = self.questions if questions is None else questions
         if task == "summary":
@@ -204,17 +206,17 @@ class StudyJobs:
             if (source.exists() and hashlib.sha256(source.read_bytes()).hexdigest() != digest) or (data and data.get("pdf_sha256") != digest):
                 raise RequestError(409, "This file ID belongs to a different PDF. Upload it as a new file.")
             if active_key in self.active:
-                if count_changed:
-                    raise RequestError(409, "Wait for the current generation to finish before changing the count.")
+                if count_changed or regenerate:
+                    raise RequestError(409, "Wait for the current generation to finish before starting another.")
                 return data
-            if data and data.get("status") == "complete" and not count_changed:
+            if data and data.get("status") == "complete" and not count_changed and not regenerate:
                 return data
             if not pdf_study.API_KEY.strip():
                 raise RequestError(503, "The model API key is missing. Set OPENAI_API_KEY in .env and restart the server, then retry.")
             output.parent.mkdir(parents=True, exist_ok=True)
             if not source.exists():
                 source.write_bytes(pdf)
-            if data is None or count_changed:
+            if data is None or count_changed or regenerate:
                 documents = []
                 # Reuse the upload summary; generating cards must not erase it or
                 # spend another request on the same abstract.
@@ -242,13 +244,13 @@ class StudyJobs:
             if self.is_deleted(document_id):
                 return
             data = self.read(output)
-            model = pdf_study.SUMMARY_MODEL if task == "summary" else pdf_study.MODEL
+            model = model_for(task)
             data.update(status="running", error="", model=model)
             pdf_study.write_json(output, data)
             args = argparse.Namespace(pdfs=[str(source)], output=str(output),
                                       sentences=data["requested_sentences"], questions=data["requested_questions"],
                                       language="same language as the PDF", model=model,
-                                      reasoning_effort=pdf_study.SUMMARY_REASONING_EFFORT if task == "summary" else None,
+                                      reasoning_effort=reasoning_for(task),
                                       timeout=600, allow_empty_pages=False, feedback="", deep_mode=mode == "deep",
                                       cancelled=lambda: self.is_deleted(document_id), task=task)
             self.runner(args)

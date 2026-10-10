@@ -1,0 +1,19 @@
+[
+  {
+    "id": "6a3e1d60-d094-4a42-b549-5479229363fb",
+    "user_id": 1,
+    "subject_id": "course-9",
+    "parent_id": null,
+    "kind": "pdf",
+    "name": "4-multimodal_language_models.pdf",
+    "description": "",
+    "category": "Slides",
+    "type": "slides",
+    "marker": "To read",
+    "size": 2752241,
+    "sha256": "d33db82e972a485eab1369655e5bff9baaa588a15fbfbf9acb0783e5eebdcb7f",
+    "added_at": 1760054400000,
+    "outputs": null,
+    "processing": null
+  }
+]

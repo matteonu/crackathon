@@ -114,7 +114,7 @@ export class MaterialStore {
       this.error.set(e instanceof Error?e.message:'Could not delete this item. Please retry.');return false;
     }
   });}
-  async process(id:string,resume=false,selectedMode?:LearningMode,count?:number,selectedTask?:LearningTask):Promise<void>{
+  async process(id:string,resume=false,selectedMode?:LearningMode,count?:number,selectedTask?:LearningTask,regenerate=false):Promise<void>{
     const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)!=='pdf'||this.activeJobs.has(id))return;
     const mode=selectedMode??file.processing?.mode??'shallow';
     const task=selectedTask??file.processing?.task??'flashcards';
@@ -127,7 +127,7 @@ export class MaterialStore {
       await this.pipeline.process(file,async result=>{
         if(!await this.update(id,current=>learningPatch(current,result)))throw new Error(this.error()||'Could not save generated results.');
         if(result.status==='complete')await this.refresh();
-      },resume,mode,task,requestedQuestions);
+      },resume,mode,task,requestedQuestions,regenerate);
     }catch(e){await this.update(id,{processing:{status:'error',mode,task,requestedQuestions,error:e instanceof Error?e.message:'Processing failed. Retry this file.'}});}
     finally{this.activeJobs.delete(id);}
   }

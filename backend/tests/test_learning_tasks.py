@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 import uuid
 
 from learning import pdf_study
+from learning.config import reasoning_for
 from learning.jobs import StudyJobs
 from tests.support import build_app
 from tests.test_learning import FIXTURE, fake_model
@@ -45,6 +46,10 @@ class LearningTaskTests(unittest.TestCase):
                 self.assertEqual([call.args[2]['stage'] for call in request.call_args_list], ['abstract'])
                 self.assertFalse(jobs.result_path(document_id, 'shallow').exists())
                 request.reset_mock()
+                jobs.submit(document_id, 'slides.pdf', mode='deep', task='summary', regenerate=True)
+                summary = self.wait_result(jobs, document_id, 'deep', 'summary')
+                self.assertEqual([call.args[2]['stage'] for call in request.call_args_list], ['abstract'])
+                request.reset_mock()
                 jobs.submit(document_id, 'slides.pdf', mode='shallow', questions=7)
                 cards = self.wait_result(jobs, document_id, 'shallow', 'flashcards')
                 self.assertEqual(len(cards['documents'][0]['questions']), 7)
@@ -72,11 +77,15 @@ class LearningTaskTests(unittest.TestCase):
             args = argparse.Namespace(pdfs=[str(FIXTURE)], output=str(Path(temp) / 'summary.json'),
                                       sentences=1, questions=0, language='English', model=pdf_study.SUMMARY_MODEL,
                                       timeout=10, allow_empty_pages=False, deep_mode=True,
-                                      task='summary', reasoning_effort='none')
+                                      task='summary', reasoning_effort=reasoning_for('summary'))
             pdf_study.run(args)
             request = provider.responses.create.call_args.kwargs
             self.assertEqual(request['model'], pdf_study.SUMMARY_MODEL)
-            self.assertEqual(request['reasoning'], {'effort': 'none'})
+            summary_reasoning = reasoning_for('summary')
+            if summary_reasoning:
+                self.assertEqual(request['reasoning'], {'effort': summary_reasoning})
+            else:
+                self.assertNotIn('reasoning', request)
             self.assertEqual(request['text']['format']['schema'], pdf_study.SUMMARY_SCHEMA)
             self.assertEqual(request['input'][0]['content'][0]['type'], 'input_file')
             result = json.loads(Path(args.output).read_text())['documents'][0]
@@ -98,6 +107,12 @@ class LearningTaskTests(unittest.TestCase):
                     url = f'/api/learning/documents/{document_id}'
                     self.assertEqual(client.post(url, headers={'X-Learning-Task': 'summary', 'X-Learning-Mode': 'deep'}).status_code, 202)
                     self.assertEqual(submit.call_args.args[-1], 'summary')
+                    self.assertFalse(submit.call_args.kwargs['regenerate'])
+                    if category == 'Slides':
+                        regenerated = client.post(url, headers={'X-Learning-Task': 'summary',
+                                                  'X-Learning-Mode': 'deep', 'X-Regenerate': 'true'})
+                        self.assertEqual(regenerated.status_code, 202)
+                        self.assertTrue(submit.call_args.kwargs['regenerate'])
                     submit.reset_mock()
                     cards = client.post(url, headers={'X-Learning-Task': 'flashcards', 'X-Flashcard-Count': '12'})
                     allowed = category in {'Slides', 'Solutions', 'Scripts'}

@@ -12,6 +12,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+try:
+    from .config import model_for, reasoning_for
+except ImportError:  # Direct execution: python learning/pdf_study.py ...
+    from config import model_for, reasoning_for
+
 
 def configured_api_key() -> str:
     value = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -28,9 +33,8 @@ def configured_api_key() -> str:
 # Server-side settings. Never embed API credentials in source code.
 API_KEY = configured_api_key()
 API_BASE_URL = os.environ.get('OPENAI_BASE_URL', 'https://api.openai.com/v1')
-MODEL = os.environ.get('OPENAI_MODEL', 'gpt-6-astra')
-SUMMARY_MODEL = os.environ.get('OPENAI_SUMMARY_MODEL', 'gpt-6-luna')
-SUMMARY_REASONING_EFFORT = os.environ.get('OPENAI_SUMMARY_REASONING_EFFORT', 'none')
+MODEL = model_for("flashcards")
+SUMMARY_MODEL = model_for("summary")
 MAX_OUTPUT_TOKENS = 16000
 DEEP_MODE = os.environ.get('PDF_DEEP_MODE', 'false').lower() == 'true'
 
@@ -425,7 +429,8 @@ Return only the JSON object specified by the response schema.
 
 
 def request_json(client, model: str, data: dict, schema: dict, label: str,
-                 file_input: dict | None = None) -> dict:
+                 file_input: dict | None = None, instructions: str = STUDY_INSTRUCTIONS,
+                 reasoning_effort: str | None = None) -> dict:
     import openai
 
     check_cancelled()
@@ -437,11 +442,14 @@ def request_json(client, model: str, data: dict, schema: dict, label: str,
     # Job-local settings keep concurrent card generation on its own model defaults.
     options = {"reasoning": {"effort": _reasoning_effort.get()}} if _reasoning_effort.get() else {}
     try:
-        response = client.responses.create(
-            model=model, instructions=STUDY_INSTRUCTIONS, input=content,
+        request_options = dict(
+            model=model, instructions=instructions, input=content,
             text={"format": {"type": "json_schema", "name": "study_material", "strict": True, "schema": schema}},
             max_output_tokens=MAX_OUTPUT_TOKENS, store=False, **options,
         )
+        if reasoning_effort:
+            request_options["reasoning"] = {"effort": reasoning_effort}
+        response = client.responses.create(**request_options)
     except openai.AuthenticationError:
         raise WorkflowError("API key rejected. Set a valid OPENAI_API_KEY in the server environment and restart.") from None
     except openai.RateLimitError:
@@ -712,6 +720,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", default="study_materials.json", help="Combined JSON to create, append to, or resume.")
     parser.add_argument("--language", default="same language as the PDF")
     parser.add_argument("--model", default=MODEL)
+    parser.add_argument("--reasoning-effort", default=reasoning_for("flashcards"))
     parser.add_argument("--mode", choices=("shallow", "deep"), default="deep" if DEEP_MODE else "shallow",
                         help="Shallow extracts text; deep reads full PDF pages including visuals.")
     parser.add_argument("--timeout", type=int, default=600)
