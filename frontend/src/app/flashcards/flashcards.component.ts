@@ -57,7 +57,9 @@ export class FlashcardsComponent {
   dragging = false;
 
   file: File | null = null;
-  private pdfBase64 = '';
+  // Started as soon as a file is chosen; the click awaits it. Reading early matters:
+  // Chrome refuses to read a file that changed on disk after it was picked.
+  private pdfBase64: Promise<string> | null = null;
   mode: 'quick' | 'deep' = 'quick';
 
   examples: Card[] = [];
@@ -80,7 +82,8 @@ export class FlashcardsComponent {
       return;
     }
     this.file = file;
-    this.pdfBase64 = '';
+    this.pdfBase64 = readAsBase64(file);
+    this.pdfBase64.catch(() => {}); // reported when the user clicks
   }
 
   onFileInput(event: Event) {
@@ -95,7 +98,7 @@ export class FlashcardsComponent {
 
   removeFile() {
     this.file = null;
-    this.pdfBase64 = '';
+    this.pdfBase64 = null;
   }
 
   fileSize(): string {
@@ -103,20 +106,24 @@ export class FlashcardsComponent {
   }
 
   async makeExamples() {
-    if (!this.file) return;
+    if (!this.file || !this.pdfBase64) return;
     this.start();
+    let pdfBase64: string;
     try {
-      // Read on click (not on select), so a fast click never finds the PDF half-read.
-      this.pdfBase64 ||= await readAsBase64(this.file);
-    } catch {
+      pdfBase64 = await this.pdfBase64;
+    } catch (err) {
       this.loading = false;
-      this.error = 'The PDF could not be read.';
+      const reason = err instanceof DOMException ? ` (${err.name})` : '';
+      this.error =
+        `Your browser could not read this file${reason}. ` +
+        'If it was still downloading, syncing (iCloud, OneDrive) or changed after you chose it, choose it again.';
+      this.removeFile();
       return;
     }
     this.http
       .post<{ cards: Card[] }>('/api/flashcards/examples', {
         filename: this.file.name,
-        pdfBase64: this.pdfBase64,
+        pdfBase64,
         mode: this.mode,
       })
       .subscribe({
@@ -138,17 +145,18 @@ export class FlashcardsComponent {
     this.feedback[index] = this.feedback[index] === option ? null : option;
   }
 
-  generateDeck() {
-    if (!this.file) return;
+  async generateDeck() {
+    if (!this.file || !this.pdfBase64) return;
     this.start();
     this.deck = null;
+    const pdfBase64 = await this.pdfBase64; // already read successfully in step 1
     const perCard = this.examples
       .map((card, i) => (this.feedback[i] ? { card: card.front, feedback: this.feedback[i] } : null))
       .filter((item) => item !== null);
     this.http
       .post<{ cards: Card[] }>('/api/flashcards/final', {
         filename: this.file.name,
-        pdfBase64: this.pdfBase64,
+        pdfBase64,
         mode: this.mode,
         feedback: perCard,
         generalFeedback: this.generalFeedback,
