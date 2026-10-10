@@ -1,0 +1,506 @@
+[
+  {
+    "semester_id": 4,
+    "id": "a801c6eb-37e7-5052-7867-f4696f75c1ce",
+    "course_id": 1,
+    "date": "2026-12-28",
+    "start": "08:15",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "id": "9f3ad2f5-f6d3-6f28-09ad-a1e52262ee11",
+    "course_id": 1,
+    "date": "2026-12-30",
+    "start": "08:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "0f2dff0e-3b0c-16ba-2af2-d49657a07869",
+    "course_id": 1,
+    "date": "2026-12-31",
+    "start": "08:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "4ac1cb7a-a5eb-a471-e71b-a8254678e31f",
+    "course_id": 1,
+    "date": "2027-01-01",
+    "start": "10:15",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "id": "9a49ebaa-ff74-3bcd-0dd8-078dc7ded0dd",
+    "course_id": 1,
+    "date": "2027-01-01",
+    "start": "13:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "b1a9af72-6b4b-3298-b6da-180781120882",
+    "course_id": 1,
+    "date": "2027-01-01",
+    "start": "15:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "d68860cb-197b-142b-83f3-3c28fa9cb316",
+    "course_id": 3,
+    "date": "2027-01-02",
+    "start": "13:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "f44cfc51-a41f-38cb-aecf-dd5b61006d36",
+    "course_id": 1,
+    "date": "2027-01-03",
+    "start": "18:00",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "98f7dd56-f48d-f0b2-4079-26856ae2e786",
+    "course_id": 1,
+    "date": "2027-01-04",
+    "start": "08:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "44373541-38c2-0169-778e-e1a4d2252d0e",
+    "course_id": 1,
+    "date": "2027-01-04",
+    "start": "15:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "96bbe03b-0c71-2ddd-f924-7e527f56c7cf",
+    "course_id": 3,
+    "date": "2027-01-05",
+    "start": "10:15",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "id": "34dcae69-7b51-2668-7129-6bb1bed18718",
+    "course_id": 1,
+    "date": "2027-01-05",
+    "start": "18:00",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "1e600716-ded1-3815-75b3-8b7f920e094f",
+    "course_id": 1,
+    "date": "2027-01-09",
+    "start": "10:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "9ff269e9-b2d5-cb64-f375-0b8a19bbf951",
+    "course_id": 3,
+    "date": "2027-01-10",
+    "start": "15:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "daf92d1e-a569-5c71-9f8e-ac2c25692d0c",
+    "course_id": 1,
+    "date": "2027-01-11",
+    "start": "08:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "90d2da7b-dd64-8943-b77c-7b01a42c8164",
+    "course_id": 1,
+    "date": "2027-01-11",
+    "start": "15:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "ec97416a-0f19-6a38-834f-5bff23b2fed5",
+    "course_id": 1,
+    "date": "2027-01-12",
+    "start": "08:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "e4d95182-b458-2b08-853b-feb13bc152d7",
+    "course_id": 1,
+    "date": "2027-01-12",
+    "start": "10:15",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "id": "64988beb-6040-26f3-c3f9-7194e70f82db",
+    "course_id": 1,
+    "date": "2027-01-12",
+    "start": "18:00",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "26a61d44-c929-0d33-2617-ee9b3ee21953",
+    "course_id": 1,
+    "date": "2027-01-14",
+    "start": "15:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "5ad7032a-5c7b-7eeb-2953-59551aa56022",
+    "course_id": 3,
+    "date": "2027-01-14",
+    "start": "18:00",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "a0f7916a-d002-2969-d011-8f8ca196c61e",
+    "course_id": 1,
+    "date": "2027-01-15",
+    "start": "10:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "9712fd7f-f437-2561-accf-642e49f31763",
+    "course_id": 1,
+    "date": "2027-01-15",
+    "start": "13:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "3c550e47-a863-e029-df8d-814f2ee464b1",
+    "course_id": 1,
+    "date": "2027-01-15",
+    "start": "18:00",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "574c2d9d-7b67-47a3-31b1-3ae9e80dc967",
+    "course_id": 1,
+    "date": "2027-01-16",
+    "start": "10:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "aae6ac25-8b75-48e7-d2d1-5487fb469181",
+    "course_id": 3,
+    "date": "2027-01-17",
+    "start": "13:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "0c6d317f-4ad9-72b6-9cb8-c6b4687c37e7",
+    "course_id": 1,
+    "date": "2027-01-18",
+    "start": "18:00",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "f60cb070-c4b8-942f-41d2-de731e7db273",
+    "course_id": 1,
+    "date": "2027-01-20",
+    "start": "08:15",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "id": "a74348d9-4395-a3d5-4d2b-d4fa55d45e7b",
+    "course_id": 1,
+    "date": "2027-01-20",
+    "start": "18:00",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "17746b01-0f99-b79f-e0be-9c445e0f6d6d",
+    "course_id": 1,
+    "date": "2027-01-21",
+    "start": "13:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "1322d810-6af9-34cc-92e0-a8860f3eab01",
+    "course_id": 1,
+    "date": "2027-01-21",
+    "start": "15:15",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "id": "e65c58cb-2bd3-05af-d76f-4ad49438593c",
+    "course_id": 1,
+    "date": "2027-01-22",
+    "start": "10:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "aa005cd1-99f1-613e-2755-5118ae724c7a",
+    "course_id": 1,
+    "date": "2027-01-22",
+    "start": "18:00",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "7000a22e-ab97-9bf7-ad7c-b7474c3ef976",
+    "course_id": 1,
+    "date": "2027-01-23",
+    "start": "13:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "0003efc6-900b-b170-6b38-208c1c81b192",
+    "course_id": 1,
+    "date": "2027-01-25",
+    "start": "13:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "f9bb4212-f841-2a8c-0364-e6fc4ab7cb74",
+    "course_id": 1,
+    "date": "2027-01-25",
+    "start": "18:00",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "id": "4e1fcba9-7372-acef-6ec7-8d927865bd5d",
+    "course_id": 3,
+    "date": "2027-01-26",
+    "start": "10:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "5cfb3e59-93e2-0ea2-9412-7b897a5d01ef",
+    "course_id": 1,
+    "date": "2027-01-26",
+    "start": "15:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "6ea03a2f-978b-84bc-5d67-0cc4105647f6",
+    "course_id": 3,
+    "date": "2027-01-27",
+    "start": "10:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "16301aaa-c466-ae59-9e28-33da4ff0be07",
+    "course_id": 3,
+    "date": "2027-01-28",
+    "start": "10:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "ec5fb0d1-677f-8127-dcf8-847faba70087",
+    "course_id": 3,
+    "date": "2027-01-28",
+    "start": "18:00",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "82a30096-8091-5369-ba44-851a79f49c0c",
+    "course_id": 3,
+    "date": "2027-01-29",
+    "start": "10:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "0f6bf8c3-137c-709f-c847-445ae420e36e",
+    "course_id": 2,
+    "date": "2027-01-29",
+    "start": "18:00",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "ca603cd2-8ab8-cdf9-3134-0335ed995ca4",
+    "course_id": 2,
+    "date": "2027-01-30",
+    "start": "15:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "97553b67-0b77-43de-ca26-64c80ced8610",
+    "course_id": 2,
+    "date": "2027-01-31",
+    "start": "08:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "ec2fd292-d560-4222-57a5-6d9d97358a3c",
+    "course_id": 2,
+    "date": "2027-02-01",
+    "start": "10:15",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "id": "851ebd74-4dfe-e384-70ef-0aa8d605d92a",
+    "course_id": 2,
+    "date": "2027-02-01",
+    "start": "15:15",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "id": "84f6a490-17b9-2c37-fc7f-293dca6a5e25",
+    "course_id": 2,
+    "date": "2027-02-02",
+    "start": "13:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "b26eb165-e60e-cdf3-7c1c-46a52181026a",
+    "course_id": 2,
+    "date": "2027-02-02",
+    "start": "18:00",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "d2f2a6a6-a13c-a210-af38-16fcf53c3bf7",
+    "course_id": 4,
+    "date": "2027-02-03",
+    "start": "10:15",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "0cbc7307-ea69-ab0b-bd00-f579367f5bb0",
+    "course_id": 4,
+    "date": "2027-02-03",
+    "start": "15:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "8f572200-b9b6-7764-8f09-096f727663ec",
+    "course_id": 4,
+    "date": "2027-02-03",
+    "start": "18:00",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "id": "f6959c16-43d5-d70b-372f-1f467abf968f",
+    "course_id": 4,
+    "date": "2027-02-04",
+    "start": "13:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "224311fd-fdc2-2dbc-dcc5-690823c149da",
+    "course_id": 4,
+    "date": "2027-02-04",
+    "start": "15:15",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "id": "a4ea6384-9495-a4a6-f349-84caae3b4875",
+    "course_id": 4,
+    "date": "2027-02-04",
+    "start": "18:00",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "211004a0-1e9b-6f22-1947-4dd53ac7aab5",
+    "course_id": 4,
+    "date": "2027-02-05",
+    "start": "08:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "f7343546-7c72-d645-8a01-d5ba691d8efe",
+    "course_id": 4,
+    "date": "2027-02-05",
+    "start": "15:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "ed28a474-d82c-105f-81a1-96e8e0cb5626",
+    "course_id": 4,
+    "date": "2027-02-05",
+    "start": "18:00",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "id": "873b0fda-e4e5-444c-8b59-9b5cd1a26823",
+    "course_id": 4,
+    "date": "2027-02-06",
+    "start": "10:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "b01c6e3c-94c3-0ea9-e39c-7cfdaf4e845d",
+    "course_id": 4,
+    "date": "2027-02-08",
+    "start": "10:15",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "id": "e3ae38bd-f7f1-9be2-69e4-70f7658cc4ed",
+    "course_id": 4,
+    "date": "2027-02-08",
+    "start": "15:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "d587404f-9fd4-6a51-4b3e-066dfc7c735c",
+    "course_id": 4,
+    "date": "2027-02-09",
+    "start": "10:15",
+    "hours": 2
+  },
+  {
+    "semester_id": 4,
+    "id": "c170c422-bc7d-14a0-6516-cba91d1c7cee",
+    "course_id": 4,
+    "date": "2027-02-09",
+    "start": "15:15",
+    "hours": 2.5
+  }
+]

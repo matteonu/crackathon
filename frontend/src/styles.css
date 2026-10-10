@@ -716,3 +716,57 @@ html:has(.file-viewer-dialog[open]) { overflow:hidden; }
 .task-completed .task-list { margin-top: 4px; }
 .task-completed .text-button { margin-top: 8px; }
 @media (prefers-reduced-motion: reduce) { .task, .task-tools, .task-tool, .task-completed-toggle, .task-chevron, .task-collapse { transition: none; } .task-fade { animation: none; } }
+/* Schedule statistics (analytics page) */
+.stats-panel { padding-bottom: 20px; margin-top: 20px; }
+.stats-panel .panel-heading { margin-bottom: 14px; }
+.stats-panel .soft-badge.badge-warn { background: #fbf1e3; color: #9d742d; }
+.stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0; }
+.stat-tile { padding: 4px 20px 6px 0; border-right: 1px solid var(--line); margin-right: 20px; min-width: 0; }
+.stat-tile:last-child { border-right: 0; margin-right: 0; }
+.stat-tile > .eyebrow { display: block; margin-bottom: 14px; font-size: 9px; }
+.stat-tile .hero-metric { font-size: 30px; gap: 0; }
+.stat-tile .hero-metric > span { font-size: 14px; }
+.stat-tile .hero-metric small { font-size: 11px; }
+.stat-tile .hero-metric .subject-dot { width: 10px; height: 10px; margin-right: 8px; align-self: center; }
+.stat-tile .progress-track { margin-top: 14px; }
+.stat-tile p { font-size: 10px; color: #5f7154; margin-top: 12px; line-height: 1.6; }
+.stat-tile p strong { font-weight: 600; color: var(--ink); }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.stats-grid .stats-panel { margin-top: 20px; }
+.chart { display: block; max-width: 100%; height: auto; font-family: inherit; overflow: visible; }
+.chart-scroll .chart { max-width: none; }
+.chart .grid { stroke: #edf1e7; stroke-width: 1; }
+.chart .baseline { stroke: #d5dccf; stroke-width: 1; }
+.chart .axis { font-size: 9px; fill: #8b9786; }
+.chart .label { font-size: 9px; fill: var(--ink); font-weight: 600; }
+.chart .recorded { fill: var(--green); }
+.chart .recorded.dim { fill: #a7bba9; }
+.chart .planned { fill: #eef3e8; stroke: #a7bba9; stroke-width: 1; stroke-dasharray: 2 2; }
+.chart .target-tick { stroke: #9d742d; stroke-width: 2; stroke-linecap: round; }
+.chart .exam line { stroke-width: 1; stroke-dasharray: 2 3; opacity: .8; }
+.chart .asof { stroke: var(--ink); stroke-width: 1; opacity: .5; }
+.chart .pace-line { stroke: #b9c5b2; stroke-width: 1.5; }
+.chart .cumulative-area { fill: var(--green); opacity: .08; }
+.chart .cumulative-line { fill: none; stroke: var(--green); stroke-width: 2; stroke-linejoin: round; }
+.chart .cumulative-end { fill: var(--green); stroke: var(--surface); stroke-width: 2; }
+.chart rect:hover, .chart circle:hover { opacity: .85; }
+.chart-note { font-size: 10px; color: #5f7154; margin-top: 10px; }
+.chart-legend .legend-planned { background: #eef3e8; border: 1px dashed #a7bba9; border-radius: 2px; width: 10px; height: 8px; }
+.chart-legend .legend-asof { background: var(--ink); width: 2px; height: 10px; border-radius: 1px; opacity: .5; }
+.chart-legend .legend-pace { background: #b9c5b2; width: 14px; height: 2px; border-radius: 1px; }
+.chart-legend .legend-target { background: #9d742d; width: 12px; height: 2px; border-radius: 1px; }
+.stats-table { width: 100%; min-width: 820px; border-collapse: collapse; font-size: 11px; }
+.stats-table th, .stats-table td { padding: 12px 10px; border-bottom: 1px solid #e7edde; text-align: right; white-space: nowrap; }
+.stats-table thead { color: #839478; font-size: 10px; background: #f7f9f3; }
+.stats-table th:first-child, .stats-table td:first-child { text-align: left; }
+.stats-table tbody th { font-weight: 500; }
+.stats-table tbody th a { display: inline-flex; align-items: center; gap: 8px; }
+.stats-table tbody th a:hover { color: var(--green); }
+.stats-table td:nth-child(2) { min-width: 160px; }
+.bar-track.wide { width: 140px; height: 6px; }
+.stat-pill { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 5px; font-size: 9px; font-weight: 600; letter-spacing: .02em; }
+.stat-pill.on-track { background: #eff5e9; color: #4d7050; }
+.stat-pill.done { background: #e8eee5; color: var(--green-dark); }
+.stat-pill.behind { background: #fbf1e3; color: #9d742d; }
+.stat-pill.at-risk { background: #fdeceb; color: #9f453f; }
+@media (max-width: 900px) { .stat-tile { border-right: 0; margin-right: 0; } }

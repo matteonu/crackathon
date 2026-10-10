@@ -28,5 +28,41 @@
     "semester_id": 3,
     "course_id": 3,
     "desired_grade": 4.5
+  },
+  {
+    "semester_id": 4,
+    "course_id": 1,
+    "desired_grade": 5.0,
+    "target_hours": 60,
+    "exam_date": "2027-01-26",
+    "color": "#2598A2",
+    "next_action": "Redo the exercise sheet on recursion"
+  },
+  {
+    "semester_id": 4,
+    "course_id": 2,
+    "desired_grade": 5.5,
+    "target_hours": 110,
+    "exam_date": "2027-02-02",
+    "color": "#E4AC17",
+    "next_action": "Eigenvalues: finish the old exam from 2024"
+  },
+  {
+    "semester_id": 4,
+    "course_id": 3,
+    "desired_grade": 4.5,
+    "target_hours": 80,
+    "exam_date": "2027-01-29",
+    "color": "#D56568",
+    "next_action": "Proof techniques summary"
+  },
+  {
+    "semester_id": 4,
+    "course_id": 4,
+    "desired_grade": 5.0,
+    "target_hours": 70,
+    "exam_date": "2027-02-09",
+    "color": "#5586CA",
+    "next_action": "Dynamic programming: knapsack and LCS"
   }
 ]
