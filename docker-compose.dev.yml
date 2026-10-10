@@ -1,0 +1,16 @@
+# Dev mode: a throwaway database filled with the demo dataset, rebuilt on every start,
+# and no reverse proxy in front, so DEV_USER stands in for its user headers.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#
+# Production (plain `docker compose up -d --build`) keeps data/app.db and seeds it once,
+# from backend/seed/ alone, so every real user starts with an empty workspace.
+services:
+  app:
+    environment:
+      DATABASE_PATH: /app/data/demo.db
+      SEED_DIRS: /app/seed:/app/seed_demo
+      RESET_DB_ON_START: "1"
+      DEV_USER: alice@ethz.ch
+      DEV_USER_NAME: Alice Example
+    restart: "no"

@@ -39,7 +39,14 @@ def config_from_env():
         "SECRET_KEY": os.environ.get("SECRET_KEY"),
         "DATA_DIR": data_dir,
         "DATABASE_PATH": os.environ.get("DATABASE_PATH", os.path.join(data_dir, "app.db")),
-        "SEED_DIR": os.environ.get("SEED_DIR", os.path.join(BACKEND_DIR, "seed")),
+        # Directories of starting rows, in load order. A later one adds to the earlier
+        # ones, which is how dev mode overlays the demo dataset on the production seed.
+        "SEED_DIRS": [p for p in os.environ.get(
+            "SEED_DIRS", os.path.join(BACKEND_DIR, "seed")).split(os.pathsep) if p],
+        # Reseed on every start. Dev mode sets it; on the VM the data must survive a deploy.
+        "RESET_DB_ON_START": os.environ.get("RESET_DB_ON_START", "").lower() in {"1", "true", "yes"},
+        # Load the seed when there is no database yet, i.e. on the very first start.
+        "SEED_IF_NEW": os.environ.get("SEED_IF_NEW", "1").lower() not in {"0", "false", "no"},
         # Stands in for the proxy's X-User-Id when there is no proxy. Never set on the VM.
         "DEV_USER": os.environ.get("DEV_USER", ""),
         "DEV_USER_NAME": os.environ.get("DEV_USER_NAME", ""),
@@ -60,7 +67,12 @@ def create_app(overrides=None):
 
     db.init_app(app)
     with app.app_context():
+        # Whether this is the first start has to be decided before the file is created.
+        fresh = not db.exists()
         db.init_db()
+        if app.config["RESET_DB_ON_START"] or (fresh and app.config["SEED_IF_NEW"]):
+            db.reset_db()
+            print(f"Loaded the seed from {os.pathsep.join(app.config['SEED_DIRS'])}", flush=True)
 
     app.extensions["learning_jobs"] = StudyJobs(app.config["LEARNING_DIR"])
     auth.init_app(app)
@@ -101,13 +113,13 @@ def create_app(overrides=None):
 
     @app.cli.command("reset-db")
     def reset_db_command():
-        """Delete the database and rebuild it from the seed directory."""
+        """Delete the database and rebuild it from the seed. Discards everything users changed."""
         db.reset_db()
-        click.echo(f"Database reset from {app.config['SEED_DIR']}")
+        click.echo(f"Database reset from {os.pathsep.join(app.config['SEED_DIRS'])}")
 
     @app.cli.command("dump-seed")
     def dump_seed_command():
-        """Write the current database into the seed directory."""
+        """Write the current database into the seed files."""
         for path in db.dump_seed():
             click.echo(f"Wrote {os.path.relpath(path)}")
 
@@ -119,11 +131,9 @@ if __name__ == "__main__":
     app = create_app({"SECRET_KEY": os.environ.get("SECRET_KEY") or "dev-only-secret",
                       "DEV_USER": os.environ.get("DEV_USER") or "alice@ethz.ch",
                       "DEV_USER_NAME": os.environ.get("DEV_USER_NAME") or "Alice Example"})
-    # The debug reloader runs this file twice; only reset in the outer process,
-    # so code reloads keep the data you clicked together.
+    # The debug reloader runs this file twice; only announce from the outer process.
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
-        with app.app_context():
-            db.reset_db()
+        print(f" * Database: {app.config['DATABASE_PATH']}", flush=True)
         key = learning.pdf_study.API_KEY
         print(f" * PDF pipeline: OPENAI_API_KEY {'is set' if key else 'is NOT set (add it to .env)'}, "
               f"model {learning.pdf_study.MODEL}", flush=True)

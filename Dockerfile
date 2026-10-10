@@ -15,5 +15,6 @@ COPY --from=frontend /app/dist ./static
 ENV STATIC_DIR=/app/static \
     DATA_DIR=/app/data
 EXPOSE 8080
-# One worker: the PDF job pool and its in-flight set live in the process.
-CMD ["sh", "-c", "flask --app app reset-db && exec gunicorn -b 0.0.0.0:8080 -w 1 --threads 8 'app:create_app()'"]
+# One worker: the PDF job pool and its in-flight set live in the process. The app loads the
+# seed itself when there is no database yet, so a redeploy keeps what users added.
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "-w", "1", "--threads", "8", "app:create_app()"]

@@ -1,7 +1,8 @@
 """SQLite access, schema creation and the seed loader.
 
-Paths come from the app config: DATABASE_PATH (the file) and SEED_DIR (the starting rows),
-so tests and dev mode can point at a different database and a different dataset.
+Paths come from the app config: DATABASE_PATH (the file) and SEED_DIRS (the directories the
+starting rows are read from, in order), so tests and dev mode can point at a different
+database and a different dataset.
 """
 import glob
 import json
@@ -22,8 +23,8 @@ def db_path():
     return current_app.config["DATABASE_PATH"]
 
 
-def seed_dir():
-    return current_app.config["SEED_DIR"]
+def seed_dirs():
+    return current_app.config["SEED_DIRS"]
 
 
 def connect(path=None):
@@ -46,15 +47,22 @@ def close_db(_exc=None):
 
 
 def init_db():
+    """Create every table the schema declares. Existing tables and rows are left alone."""
     os.makedirs(os.path.dirname(db_path()), exist_ok=True)
     with connect() as db, open(SCHEMA_PATH) as f:
         db.executescript(f.read())
 
 
+def exists():
+    return os.path.exists(db_path())
+
+
 def seed_files():
-    # Files are named NN_<table>.json and loaded in filename order,
-    # so tables that others reference must have a lower number.
-    for path in sorted(glob.glob(os.path.join(seed_dir(), "*.json"))):
+    # Files are named NN_<table>.json and loaded in filename order across every seed
+    # directory, so tables that others reference must have a lower number. A later
+    # directory adds to the earlier ones: production rows plus a demo overlay.
+    paths = [p for directory in seed_dirs() for p in glob.glob(os.path.join(directory, "*.json"))]
+    for path in sorted(paths, key=os.path.basename):
         table = os.path.basename(path).split("_", 1)[1].removesuffix(".json")
         yield path, table
 
@@ -75,8 +83,13 @@ def reset_db():
 
 
 def dump_seed():
-    """Write every table back into the seed directory. Returns the files written."""
-    os.makedirs(seed_dir(), exist_ok=True)
+    """Write every table back into the seed files. Returns the files written.
+
+    A table keeps the file it was loaded from; a table that has none is written into the
+    last seed directory, which is the demo overlay when one is configured.
+    """
+    out_dir = seed_dirs()[-1]
+    os.makedirs(out_dir, exist_ok=True)
     existing = {table: path for path, table in seed_files()}
     next_num = len(existing) + 1
     written = []
@@ -87,7 +100,7 @@ def dump_seed():
         for table in tables:
             path = existing.get(table)
             if path is None:
-                path = os.path.join(seed_dir(), f"{next_num:02d}_{table}.json")
+                path = os.path.join(out_dir, f"{next_num:02d}_{table}.json")
                 next_num += 1
             rows = [dict(r) for r in db.execute(f'SELECT * FROM "{table}" ORDER BY rowid')]
             with open(path, "w") as f:

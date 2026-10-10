@@ -42,20 +42,42 @@ learning view says the model API key is missing.
 
 ## Data
 
-The database is rebuilt from git on every start, both locally and on the server. Whatever users change in the app is gone after the next restart or deploy, and the only way to change the starting data is a commit.
+SQLite, at `data/app.db`. The container bind-mounts `./data`, so the database, uploaded PDFs
+and generated results all survive `docker compose up -d --build`. The seed is loaded once,
+when there is no database file yet — a deploy never discards what users added.
 
-- **`backend/schema.sql`:** all tables. Add new tables here. Currently: `users`, `courses` (shared catalog) with `course_resources`, each user's `semesters`, the courses taken per semester (`semester_courses`, with `desired_grade`), and `statistics` per user and semester.
-- **`backend/seed/NN_<table>.json`:** the starting rows for each table, as a list of `{column: value}` objects. Files load in number order, so a table that others reference needs a lower number. A `password` field is hashed into `password_hash` when loading.
+- **`backend/schema.sql`:** all tables. Add new tables here. Currently: `users` (identified by
+  email, created on first sight), `courses` (shared catalog) with `course_resources`, each
+  user's `semesters`, the courses taken per semester (`semester_courses`, with
+  `desired_grade`), and `statistics` per user and semester.
+- **`backend/seed/NN_<table>.json`:** the starting rows for each table, as a list of
+  `{column: value}` objects. Files load in number order, so a table that others reference
+  needs a lower number.
+- **`backend/seed/`** holds what production starts with: the shared course catalog and no
+  users, so every real visitor gets an empty workspace of their own.
+- **`backend/seed_demo/`** holds the mock dataset (`alice@ethz.ch` and `bob@ethz.ch` with
+  semesters and courses). Dev mode and the tests load it *on top of* `backend/seed/` through
+  `SEED_DIRS`; production never loads it.
 
-The seed knows two users, `alice@ethz.ch` and `bob@ethz.ch` (see `backend/seed/01_users.json`).
+**Dev mode** is a throwaway database with the demo data in it, rebuilt on every start, with
+`DEV_USER` standing in for the proxy:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+It writes `data/demo.db` and cannot touch `data/app.db`. Production is plain
+`docker compose up -d --build`.
 
 ```bash
 cd backend
-../.venv/bin/flask --app app reset-db    # reload the seed without restarting
-../.venv/bin/flask --app app dump-seed   # write the current database back into backend/seed/
+../.venv/bin/flask --app app reset-db    # discard everything and reload the seed
+../.venv/bin/flask --app app dump-seed   # write the current database back into the seed files
 ```
 
-To build test data by hand, click it together in the app, run `dump-seed`, check the diff, and commit. On the server, `docker compose restart` reloads the seed.
+To build demo data by hand, click it together in the app, run `dump-seed`, check the diff, and
+commit. Each table keeps the file it was loaded from; a table that has no file yet is written
+into `backend/seed_demo/`.
 
 ## Who is signed in
 
