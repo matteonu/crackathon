@@ -120,6 +120,10 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(record['requested_sentences'], 1)
             self.assertNotIn('requested_words', record)
             self.assertEqual(len(record['questions']), 5)
+            for card in record['questions']:
+                self.assertEqual(card['source_pdf'], FIXTURE.name)
+                self.assertEqual(card['source_pages'], [1])
+                self.assertTrue(card['evidence'])
             self.assertNotIn('test-only', output.read_text())
             for call in request.call_args_list:
                 self.assertEqual(call.args[2]['requested_sentences'], 1)
@@ -127,6 +131,13 @@ class PipelineTests(unittest.TestCase):
             count = request.call_count
             pdf_study.run(args)
             self.assertEqual(request.call_count, count)
+            # Old final JSON discarded references, but its validated checkpoint has them.
+            saved = json.loads(output.read_text())
+            saved['documents'][0]['questions'] = [{k: c[k] for k in ('question', 'answer')} for c in record['questions']]
+            pdf_study.write_json(output, saved)
+            pdf_study.run(args)
+            self.assertEqual(request.call_count, count)
+            self.assertEqual(json.loads(output.read_text())['documents'][0]['questions'], record['questions'])
 
     def test_upload_http_results_and_idempotency(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(pdf_study, 'API_KEY', 'test-only'), \
@@ -223,6 +234,11 @@ class PipelineTests(unittest.TestCase):
                     self.assertEqual(data['documents'][0]['deep_mode'], mode == 'deep')
                     self.assertEqual(data['documents'][0]['sentence_count'], 1)
                     self.assertEqual(len(data['documents'][0]['questions']), 5)
+                    for card in data['documents'][0]['questions']:
+                        self.assertEqual(card['source_pdf'], 'lecture.pdf')
+                        self.assertEqual(card['source_pdf_id'], document_id)
+                        self.assertEqual(card['source_pages'], [1])
+                        self.assertTrue(card['evidence'])
                     self.assertTrue(list((Path(temp) / document_id / mode / 'result.work').glob('*.json')))
                     self.assertEqual(jobs.submit(document_id, 'lecture.pdf', FIXTURE.read_bytes(), mode), data)
                 self.assertEqual(len(calls), 4)

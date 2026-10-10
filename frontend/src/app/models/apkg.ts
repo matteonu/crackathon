@@ -15,7 +15,7 @@ async function identity(text:string):Promise<{id:number;guid:string}>{
   const hash=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)));
   const hex=Array.from(hash,b=>b.toString(16).padStart(2,'0')).join('');return {id:parseInt(hex.slice(0,12),16)||2,guid:hex.slice(0,20)};
 }
-export async function buildApkg(SQL:SqlJsStatic,cards:readonly FolderCard[],name:string,key:string):Promise<Uint8Array>{
+export async function buildApkg(SQL:SqlJsStatic,cards:readonly FolderCard[],name:string,key:string,baseUrl?:string):Promise<Uint8Array>{
   if(!cards.length)throw new Error('This folder has no flashcards yet.');
   const {zipSync,strToU8}=await import('fflate');const db=new SQL.Database();
   const now=Date.now(),seconds=Math.floor(now/1000),deckId=(await identity('deck:'+key)).id,modelId=1740000000001;
@@ -35,7 +35,12 @@ export async function buildApkg(SQL:SqlJsStatic,cards:readonly FolderCard[],name
       JSON.stringify({[modelId]:model}),JSON.stringify({1:deck(1,'Default'),[deckId]:deck(deckId,name)}),JSON.stringify({1:config}),'{}']);
     for(const [index,card] of cards.entries()){
       const note=await identity('note:'+card.key);const cardId=(await identity('card:'+card.key)).id;
-      db.run('INSERT INTO notes VALUES(?,?,?,?,?,?,?,?,?,?,?)',[note.id,note.guid,modelId,seconds,-1,card.demo?' studyphase demo ':' studyphase ',html(card.question)+'\x1f'+html(card.answer),card.question,0,0,'']);
+      const source=card.source;
+      const citation=source?'<div style="font-size:12px;color:#7d857e;margin-top:10px">Source: '+source.pages.map(page=>{
+        const label=html(`${source.pdfName} page ${page}`);
+        return source.pdfId&&baseUrl?`<a style="color:inherit" href="${html(new URL('/#/pdf/'+encodeURIComponent(source.pdfId)+'?page='+page,baseUrl).href)}" target="_blank" rel="noopener noreferrer">${label}</a>`:label;
+      }).join(' · ')+(source.pdfId?'':' (PDF deleted)')+'</div>':'';
+      db.run('INSERT INTO notes VALUES(?,?,?,?,?,?,?,?,?,?,?)',[note.id,note.guid,modelId,seconds,-1,card.demo?' studyphase demo ':' studyphase ',html(card.question)+citation+'\x1f'+html(card.answer),card.question,0,0,'']);
       db.run('INSERT INTO cards VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[cardId,note.id,deckId,0,seconds,-1,0,0,index+1,0,2500,0,0,0,0,0,0,'']);
     }
     return zipSync({'collection.anki2':db.export(),media:strToU8('{}')});

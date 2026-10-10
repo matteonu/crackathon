@@ -13,7 +13,8 @@ const DOCUMENT_TYPE_LABELS:Record<DocumentType,string> = {
   script:'script', summary:'summary', cards:'flashcards', mcq:'multiple choice'
 };
 export type ToolId = 'summary' | 'flashcards';
-export interface Flashcard { id?:string; question:string; answer:string; demo?:boolean; generated?:boolean; }
+export interface FlashcardSource { pdfId:string|null; pdfName:string; pages:number[]; evidence:string; }
+export interface Flashcard { id?:string; question:string; answer:string; demo?:boolean; generated?:boolean; source?:FlashcardSource; }
 export type LearningMode = 'shallow' | 'deep';
 export type LearningTask = 'summary' | 'flashcards';
 export interface ProcessingState { status:'queued'|'running'|'complete'|'error'; error?:string; mode?:LearningMode; requestedQuestions?:number; task?:LearningTask; }
@@ -44,6 +45,7 @@ export function canGenerateFlashcards(file:Material):boolean { return materialKi
 export function canChatWithDocument(file:Material):boolean { return materialKind(file)==='pdf'&&['slides','exercise_solution','mock_exam','script'].includes(materialType(file)??''); }
 /** Where the server serves this file's bytes: the PDF itself, or a text file's content. */
 export function materialFileUrl(id:string):string { return `/api/materials/${encodeURIComponent(id)}/file`; }
+export function sourcePageUrl(id:string,page:number):string { return `/#/pdf/${encodeURIComponent(id)}?page=${page}`; }
 export function normalizeMaterial(file:Material):Material {
   return {...file,kind:materialKind(file),type:materialType(file),parentId:file.parentId??null,description:file.description??'',
     outputs:{...file.outputs,flashcards:file.outputs?.flashcards?{...file.outputs.flashcards,cards:file.outputs.flashcards.cards?.map((card,i)=>({...card,id:card.id??`${file.id}-${i}`,demo:card.demo??true}))}:undefined}};
@@ -58,8 +60,13 @@ export function descendants(files:readonly Material[],parentId:string|null):Mate
   }
   visit(parentId);return found;
 }
+export function materialCards(file:Material):FolderCard[] {
+  const kind=materialKind(file);
+  if(kind==='folder'||(kind==='pdf'&&!canGenerateFlashcards(file)))return [];
+  return (file.outputs?.flashcards?.cards??[]).map((card,i)=>({...card,key:card.id??`${file.id}-${i}`,fileId:file.sourcePdfId??file.id,fileName:file.name,deckId:kind==='deck'?file.id:undefined}));
+}
 export function folderCards(files:readonly Material[],folderId:string|null):FolderCard[] {
-  return descendants(files,folderId).filter(f=>materialKind(f)!=='folder'&&(materialKind(f)!=='pdf'||canGenerateFlashcards(f))).flatMap(file=>(file.outputs?.flashcards?.cards??[]).map((card,i)=>({...card,key:card.id??`${file.id}-${i}`,fileId:file.sourcePdfId??file.id,fileName:file.name,deckId:materialKind(file)==='deck'?file.id:undefined})));
+  return descendants(files,folderId).flatMap(materialCards);
 }
 export function treeRows(files:readonly Material[],expanded:ReadonlySet<string>,query='',marker=''):TreeRow[] {
   const rows:TreeRow[]=[];const seen=new Set<string>();const filtering=!!query||!!marker;

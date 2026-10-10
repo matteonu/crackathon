@@ -19,6 +19,7 @@ import { visiblePdfPage } from '../models/pdf-context';
 `})
 export class PdfPreviewComponent {
   readonly url=input.required<string>();readonly name=input.required<string>();
+  readonly initialPage=input(1);
   readonly pageChange=output<{page:number;total:number}>();
   private frame=0;
   readonly viewport=viewChild<ElementRef<HTMLElement>>('viewport');
@@ -26,6 +27,17 @@ export class PdfPreviewComponent {
   readonly pages=computed(()=>Array.from({length:this.document()?.numPages??0},(_,index)=>index+1));
   constructor(){
     inject(DestroyRef).onDestroy(()=>cancelAnimationFrame(this.frame));
+    effect(onCleanup=>{
+      const pdf=this.document(),viewport=this.viewport()?.nativeElement,page=this.initialPage();
+      if(!pdf||!viewport)return;
+      const target=Math.min(pdf.numPages,Math.max(1,Math.floor(page)||1));
+      const frame=requestAnimationFrame(()=>{
+        const element=viewport.querySelector<HTMLElement>(`[data-page="${target}"]`);
+        if(element)viewport.scrollTop+=element.getBoundingClientRect().top-viewport.getBoundingClientRect().top;
+        this.trackPage();
+      });
+      onCleanup(()=>cancelAnimationFrame(frame));
+    });
     effect(onCleanup=>{
       const viewport=this.viewport()?.nativeElement;this.document();
       if(!viewport)return;
