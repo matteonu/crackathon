@@ -40,6 +40,7 @@ export function materialTypeLabel(file:Material):string {
   return type?DOCUMENT_TYPE_LABELS[type]:file.category.toLowerCase();
 }
 export function canGenerateFlashcards(file:Material):boolean { return materialKind(file)==='pdf'&&['slides','exercise_solution','script'].includes(materialType(file)??''); }
+export function canChatWithDocument(file:Material):boolean { return materialKind(file)==='pdf'&&['slides','exercise_solution','mock_exam','script'].includes(materialType(file)??''); }
 /** Where the server serves this file's bytes: the PDF itself, or a text file's content. */
 export function materialFileUrl(id:string):string { return `/api/materials/${encodeURIComponent(id)}/file`; }
 export function normalizeMaterial(file:Material):Material {

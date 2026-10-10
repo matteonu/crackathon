@@ -39,6 +39,7 @@ import planner  # noqa: E402
 import tasks  # noqa: E402
 import vvz.sync  # noqa: E402
 from learning import RequestError, StudyJobs  # noqa: E402
+from learning.document_chat import DocumentChat, bp as document_chat_bp  # noqa: E402
 
 
 PUBLIC_URL = "https://13.hackathon.ethz.ch/"
@@ -104,11 +105,16 @@ def create_app(overrides=None):
             print(f"Loaded the seed from {os.pathsep.join(app.config['SEED_DIRS'])}", flush=True)
 
     app.extensions["learning_jobs"] = StudyJobs(app.config["LEARNING_DIR"])
+    app.extensions["document_chat"] = DocumentChat(app.config["DATABASE_PATH"], app.config["LEARNING_DIR"],
+        background=app.config.get("CHAT_BACKGROUND_TASKS", True) and not app.testing)
+    if app.config.get("CHAT_BACKGROUND_TASKS", True) and not app.testing and (not _flask_cli() or "run" in sys.argv[1:]):
+        app.extensions["document_chat"].start()
     auth.init_app(app)
     app.register_blueprint(materials.bp)
     app.register_blueprint(planner.bp)
     app.register_blueprint(tasks.bp)
     app.register_blueprint(learning.bp)
+    app.register_blueprint(document_chat_bp)
     if app.config["VVZ_AUTO_SYNC"] and not app.testing and not _flask_cli():
         vvz.sync.start_background(app.config["DATABASE_PATH"], app.config["DATA_DIR"])
 

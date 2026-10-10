@@ -97,6 +97,55 @@ are available for `slides`, `exercise_solution`, and `script`; all PDFs can get 
 
 ## HTTP API
 
+### Page-aware Q&A
+
+Slides, solutions, exams and scripts offer a Q&A panel beside the PDF. Eligible
+documents have side-by-side Flashcards/Q&A tabs with a sliding active indicator;
+Q&A is the initial panel when there are
+no cards. Exercises retain their summary-only view.
+
+Every new PDF upload queues a persistent OpenAI vector store, isolated to that
+document, and wakes the background worker immediately, including under `flask run`.
+The document does not need to be opened to start indexing. Existing PDFs are queued
+the first time their chat panel opens. SQLite
+`document_indexes` stores remote IDs and progress, so reopening or restarting does
+not re-upload a completed index. Failed indexing can be retried from the panel.
+
+Each question sends a newly constructed PDF containing only the visible page and
+its immediate neighbours, including their images. The Responses API may use
+`file_search` against this document's store only when that window is insufficient.
+Search retrieves textual passages from the indexed PDF; it does not provide visual
+understanding of diagrams on other pages. Open such a page to include its visuals.
+Up to six recent conversation turns are included as dialogue; earlier PDF windows
+are not replayed. The UI shows which pages were sent and whether search was used.
+
+Chat history lives in SQLite `document_chat_turns`; Responses use `store=False`.
+Deleting a file or folder immediately revokes access and cascades chat-history
+deletion. A durable tombstone queues deletion of **both** the OpenAI vector store
+and its uploaded File. Failed cleanup retries in the background, including after
+a restart. Database resets retain this cleanup queue. Keep the database and the
+same API project credentials available until cleanup finishes; manually deleting
+the database bypasses this lifecycle. Indexes have no automatic expiry.
+
+- `GET /api/learning/documents/<id>/chat`: index status and last 50 saved turns.
+- `POST /api/learning/documents/<id>/chat`: `{question, page, requestId}`; `page` is
+  one-based and `requestId` is a UUID reused when retrying a question.
+- `POST /api/learning/documents/<id>/chat/index`: retry failed indexing.
+
+`OPENAI_CHAT_MODEL` defaults to `gpt-6-astra` (vision and file search), with
+`OPENAI_CHAT_REASONING_EFFORT=high`. Chat allows 16,000 output/reasoning tokens and
+up to 180 seconds per response, so difficult questions have room for reasoning.
+It uses the same server-side `OPENAI_API_KEY` and `OPENAI_BASE_URL` as summaries.
+Custom API endpoints must support Files, Vector Stores and Responses with file
+search. The first 1 GB of vector-store storage is free across the project; further
+storage and model/tool usage follow OpenAI pricing.
+
+References: [file search](https://developers.openai.com/api/docs/guides/tools-file-search),
+[PDF inputs](https://developers.openai.com/api/docs/guides/file-inputs),
+[persistent retrieval](https://developers.openai.com/api/docs/guides/retrieval).
+
+### Summary and flashcard jobs
+
 All document routes verify that the material belongs to the current user.
 
 - `POST /api/learning/documents/<file-id>` starts or resumes processing. The PDF normally

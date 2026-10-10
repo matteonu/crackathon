@@ -132,10 +132,20 @@ def seed_files():
 def reset_db():
     """Delete the database and rebuild it from the seed files."""
     close_db()
+    cleanup = []
     if os.path.exists(db_path()):
+        # An explicit reset also deletes documents. Retain their remote cleanup
+        # queue rather than losing the only references to persistent OpenAI files.
+        with closing(connect()) as conn:
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE name='document_indexes'").fetchone():
+                cleanup = [dict(row) for row in conn.execute("SELECT * FROM document_indexes WHERE status<>'deleted'")]
         os.remove(db_path())
     init_db()
     with closing(connect()) as db, db:
+        for row in cleanup:
+            row.update(status='deleting', error=None, attempts=0, next_attempt=0)
+            columns = ','.join(row)
+            db.execute(f"INSERT INTO document_indexes ({columns}) VALUES ({','.join('?' for _ in row)})", list(row.values()))
         for path, table in seed_files():
             with open(path) as f:
                 rows = json.load(f)
@@ -163,7 +173,7 @@ def dump_seed():
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid"
         )]
         for table in tables:
-            if table in VVZ_TABLES:
+            if table in VVZ_TABLES or table in {'document_indexes', 'document_chat_turns'}:
                 continue
             path = existing.get(table)
             if path is None:
