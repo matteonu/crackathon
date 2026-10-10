@@ -2,15 +2,16 @@ import { Component, ElementRef, computed, inject, signal, viewChild } from '@ang
 import { StudyStore } from '../services/study-store';
 import { DayOff, Preferences } from '../models/semester';
 import { IconComponent } from '../shared/icon.component';
+import { validExamTimes } from '../models/study';
 
 /** One course as the form edits it, before anything is sent. */
-interface CourseDraft {courseId:number;name:string;color:string;examDate:string;priority:number;difficulty:number;maxStudyHours:number|null;}
+interface CourseDraft {courseId:number;name:string;color:string;examDate:string;examStart:string|null;examEnd:string|null;priority:number;difficulty:number;maxStudyHours:number|null;}
 
 const PRIORITIES=[{value:1,label:'1 — most important'},{value:2,label:'2'},{value:3,label:'3 — normal'},{value:4,label:'4'},{value:5,label:'5 — least important'}];
 const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,label:'3 — normal'},{value:4,label:'4'},{value:5,label:'5 — hard'}];
 
 /** Everything the scheduler needs from the user: their courses' weights and their habits.
- *  Opened before the first proposal, and from the calendar whenever they want to adjust it. */
+ *  Opened from the calendar whenever they want to adjust it. */
 @Component({selector:'app-schedule-setup',standalone:true,imports:[IconComponent],template:`
   <dialog #dialog class="edit-dialog schedule-setup-dialog" aria-labelledby="setup-title" (close)="error.set('')">
     <div class="dialog-top"><span class="eyebrow">STUDY SETUP</span><button type="button" class="icon-button" aria-label="Close" (click)="dialog.close()"><app-icon name="close" /></button></div>
@@ -20,16 +21,34 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
     <h3 class="setup-heading">Exams</h3>
     @if(!courses().length){<p class="empty-state">No courses yet. Add one with + next to Your subjects.</p>}
     <div class="setup-exams">@for(course of courses();track course.courseId){
-      <label class="setup-exam"><span><span class="subject-dot" [style.background]="course.color"></span>{{course.name}}</span>
-        <input type="date" [min]="store.examSession().start" [max]="store.examSession().end" [value]="course.examDate" (change)="edit(course.courseId,{examDate:$any($event.target).value})"></label>
+      <div class="setup-exam"><span><span class="subject-dot" [style.background]="course.color"></span>{{course.name}}</span>
+        <div class="setup-exam-fields">
+          <label>Date<input type="date" [min]="store.examSession().start" [max]="store.examSession().end" [value]="course.examDate" (change)="edit(course.courseId,{examDate:$any($event.target).value})"></label>
+          <label>From<input type="time" [value]="course.examStart??''" (change)="edit(course.courseId,{examStart:$any($event.target).value||null})"></label>
+          <label>To<input type="time" [value]="course.examEnd??''" (change)="edit(course.courseId,{examEnd:$any($event.target).value||null})"></label>
+        </div></div>
     }</div>
+    <p class="field-hint">Leave both time fields empty if the exam time is unknown.</p>
+
+    <h3 class="setup-heading">Days off</h3>
+    <label class="checkbox-label"><input type="checkbox" [checked]="habits().examDaysOff" (change)="setHabit({examDaysOff:$any($event.target).checked})">Count exam days as days off</label>
+    <p class="field-hint">@if(habits().examDaysOff){Exam dates reserve the whole day.}@else{Other subjects can be planned around any entered exam times.}</p>
+    <div class="setup-days-off">@for(day of habits().daysOff;track $index){
+      <div class="setup-day-off">
+        <label class="sr-only" [attr.for]="'day-off-'+$index">First day off</label>
+        <input [id]="'day-off-'+$index" type="date" [min]="store.examSession().start" [max]="store.examSession().end" [value]="day.startDate" (change)="setDayOff($index,{startDate:$any($event.target).value})">
+        <label>for<input type="number" min="1" max="400" step="1" [value]="day.rangeLength" (change)="setDayOff($index,{rangeLength:+$any($event.target).value})"> day(s)</label>
+        <button type="button" class="icon-button" [attr.aria-label]="'Remove the days off from '+day.startDate" (click)="removeDayOff($index)"><app-icon name="trash" /></button>
+      </div>
+    }@empty{<p class="field-hint">No additional days off. Add other days you will not study at all.</p>}</div>
+    <button type="button" class="text-button" (click)="addDayOff()"><app-icon name="plus" /> Add days off</button>
 
     <h3 class="setup-heading">Days you study</h3>
     <div class="weekday-picker" role="group" aria-label="Days of the week you study on">@for(day of weekdays;track day.value){
       <button type="button" [class.on]="habits().studyDays.includes(day.value)" [attr.aria-pressed]="habits().studyDays.includes(day.value)"
         [disabled]="habits().studyDays.length===1&&habits().studyDays.includes(day.value)" [title]="day.name" (click)="toggleDay(day.value)">{{day.short}}</button>
     }</div>
-    <p class="field-hint">A proposal for the week leaves the other days free. The + on a day in the calendar plans it anyway.</p>
+    <p class="field-hint">Both weekly generation and the + on a day follow these study days and leave the other days free.</p>
 
     <h3 class="setup-heading">Your day</h3>
     <div class="form-grid setup-day">
@@ -61,16 +80,6 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
         </div>
       }</div>
 
-      <h3 class="setup-heading">Days off</h3>
-      <div class="setup-days-off">@for(day of habits().daysOff;track $index){
-        <div class="setup-day-off">
-          <label class="sr-only" [attr.for]="'day-off-'+$index">First day off</label>
-          <input [id]="'day-off-'+$index" type="date" [min]="store.examSession().start" [max]="store.examSession().end" [value]="day.startDate" (change)="setDayOff($index,{startDate:$any($event.target).value})">
-          <label>for<input type="number" min="1" max="400" step="1" [value]="day.rangeLength" (change)="setDayOff($index,{rangeLength:+$any($event.target).value})"> day(s)</label>
-          <button type="button" class="icon-button" [attr.aria-label]="'Remove the days off from '+day.startDate" (click)="removeDayOff($index)"><app-icon name="trash" /></button>
-        </div>
-      }@empty{<p class="field-hint">No days off. Add the days you will not study at all.</p>}</div>
-      <button type="button" class="text-button" (click)="addDayOff()"><app-icon name="plus" /> Add days off</button>
     </details>
 
     @if(error()){<p class="form-error" role="alert">{{error()}}</p>}
@@ -104,7 +113,7 @@ export class ScheduleSetupComponent {
     this.error.set('');
     this.habits.set(structuredClone(this.store.preferences()));
     this.original=this.store.planSubjects().filter(s=>!s.completed).map(s=>({
-      courseId:s.courseId,name:s.name,color:s.color,examDate:s.examDate,
+      courseId:s.courseId,name:s.name,color:s.color,examDate:s.examDate,examStart:s.examStart,examEnd:s.examEnd,
       priority:s.priority,difficulty:s.difficulty,maxStudyHours:s.maxStudyHours}));
     this.courses.set(this.original.map(course=>({...course})));
     this.dialog().nativeElement.showModal();
@@ -126,12 +135,15 @@ export class ScheduleSetupComponent {
   async save(thenGenerate:boolean):Promise<void>{
     this.saving.set(true);this.error.set('');
     try{
+      for(const course of this.courses())if(!validExamTimes(course.examStart,course.examEnd)){
+        this.error.set(`${course.name}: enter both exam times with the end after the start, or leave both empty.`);return;
+      }
       if(!await this.store.savePreferences(this.habits())){this.error.set(this.store.planError());return;}
       for(const course of this.courses()){
         const before=this.original.find(c=>c.courseId===course.courseId);
-        if(!before||(before.examDate===course.examDate&&before.priority===course.priority
+        if(!before||(before.examDate===course.examDate&&before.examStart===course.examStart&&before.examEnd===course.examEnd&&before.priority===course.priority
           &&before.difficulty===course.difficulty&&before.maxStudyHours===course.maxStudyHours))continue;
-        if(!await this.store.updateCoursePlan(course.courseId,{examDate:course.examDate,priority:course.priority,
+        if(!await this.store.updateCoursePlan(course.courseId,{examDate:course.examDate,examStart:course.examStart,examEnd:course.examEnd,priority:course.priority,
           difficulty:course.difficulty,maxStudyHours:course.maxStudyHours})){this.error.set(this.store.planError());return;}
       }
       if(thenGenerate&&!await this.store.generate()){this.error.set(this.store.planError());return;}

@@ -9,6 +9,8 @@ export interface PlanSubject {
   color: string;
   targetHours: number;
   examDate: string;
+  examStart: string | null;
+  examEnd: string | null;
   completed: boolean;
   nextAction: string;
   ects: number | null;
@@ -42,6 +44,19 @@ export interface Preferences {
   daysOff: DayOff[];
   /** Weekdays studied on, 0 = Monday ... 6 = Sunday. The others count as days off. */
   studyDays: number[];
+  /** Reserve the full day of every subject's exam instead of only its known time range. */
+  examDaysOff: boolean;
+}
+
+/** Match the scheduler's days off: exams, unselected study weekdays and explicit date ranges. */
+export function isStudyDayOff(date: string, preferences: Pick<Preferences,'studyDays'|'daysOff'> & Partial<Pick<Preferences,'examDaysOff'>>,
+  subjects: readonly Pick<Subject,'examDate'>[] = []): boolean {
+  const timestamp=Date.parse(date+'T12:00:00Z');
+  const weekday=(new Date(timestamp).getUTCDay()+6)%7;
+  return (preferences.examDaysOff!==false && subjects.some(subject=>subject.examDate===date)) || !preferences.studyDays.includes(weekday) || preferences.daysOff.some(day=>{
+    const offset=(timestamp-Date.parse(day.startDate+'T12:00:00Z'))/86400000;
+    return offset>=0 && offset<day.rangeLength;
+  });
 }
 
 export type BlockType = 'active_learning' | 'recall' | 'meal';
@@ -154,6 +169,7 @@ export function planToData(plan: Plan, today: string): StudyData {
     const subject: Subject = {
       id: s.id, courseId: s.courseId, name: s.name, shortName: s.shortName, color: s.color, targetHours: s.targetHours,
       examDate: s.examDate, completed: s.completed, nextAction: s.nextAction, lectureId: s.lectureId, hours: {...s.hours},
+      examStart: s.examStart ?? null, examEnd: s.examEnd ?? null,
     };
     if (s.ects !== null) subject.ects = s.ects;
     if (s.homepage) subject.homepage = s.homepage;
@@ -182,6 +198,42 @@ export function minutesOf(time: string): number {
 export function studyHours(blocks: readonly PlanBlock[]): number {
   return Math.round(blocks.filter(b => b.type !== 'meal')
     .reduce((sum, b) => sum + blockMinutes(b), 0) / 60 * 100) / 100;
+}
+
+/** A day is fulfilled only when every planned subject's recorded hours meet its own total. */
+export function dayFulfilled(subjects: readonly Pick<Subject,'id'|'hours'>[], blocks: readonly PlanBlock[], date: string): boolean {
+  const minutes = new Map<string,number>();
+  for (const block of blocks) {
+    if (block.date !== date || block.type === 'meal' || block.subjectId === null) continue;
+    minutes.set(block.subjectId, (minutes.get(block.subjectId) ?? 0) + blockMinutes(block));
+  }
+  return minutes.size > 0 && [...minutes].every(([id, total]) => {
+    const recorded = subjects.find(subject => subject.id === id)?.hours[date];
+    return recorded != null && recorded >= Math.round(total / 60 * 100) / 100;
+  });
+}
+
+/** The planned and recorded totals for one subject whose hours differ on a day. */
+export interface HourDifference {
+  subjectId: string;
+  plannedHours: number;
+  recordedHours: number | null;
+}
+
+/** Compare each subject once a day has a record; an unrecorded day is still awaiting study. */
+export function dayHourDifferences(subjects: readonly Pick<Subject,'id'|'hours'>[], blocks: readonly PlanBlock[], date: string): HourDifference[] {
+  if (!subjects.some(subject => subject.hours[date] != null)) return [];
+  const minutes = new Map<string,number>();
+  for (const block of blocks) {
+    if (block.date !== date || block.type === 'meal' || block.subjectId === null) continue;
+    minutes.set(block.subjectId, (minutes.get(block.subjectId) ?? 0) + blockMinutes(block));
+  }
+  return subjects.flatMap(subject => {
+    const plannedHours = Math.round((minutes.get(subject.id) ?? 0) / 60 * 100) / 100;
+    const recordedHours = subject.hours[date] ?? null;
+    return plannedHours === Math.round((recordedHours ?? 0) * 100) / 100 ? []
+      : [{subjectId:subject.id, plannedHours, recordedHours}];
+  });
 }
 
 /** 'active_learning' -> 'Learning'. What the legend and the tooltips say. */

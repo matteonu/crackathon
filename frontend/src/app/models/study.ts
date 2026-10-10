@@ -5,6 +5,8 @@ export interface Subject {
   color: string;
   targetHours: number;
   examDate: string;
+  examStart?: string | null;
+  examEnd?: string | null;
   completed: boolean;
   nextAction: string;
   hours: Record<string, number | null>;
@@ -105,6 +107,12 @@ export function isValidDate(value: unknown): value is string {
     && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value;
 }
 
+/** An exam time is either unknown, or a complete range within its calendar date. */
+export function validExamTimes(start: unknown, end: unknown): boolean {
+  return start == null && end == null || typeof start === 'string' && typeof end === 'string'
+    && /^([01]\d|2[0-3]):[0-5]\d$/.test(start) && /^([01]\d|2[0-3]):[0-5]\d$/.test(end) && start < end;
+}
+
 export function validateData(value: unknown): value is StudyData {
   if (!value || typeof value !== 'object') return false;
   const d = value as StudyData;
@@ -125,7 +133,7 @@ export function validateData(value: unknown): value is StudyData {
     && typeof s.shortName === 'string' && s.shortName.length < 200
     && /^#[0-9a-fA-F]{6}$/.test(s.color)
     && Number.isFinite(s.targetHours) && s.targetHours >= 0 && s.targetHours <= 5000
-    && isValidDate(s.examDate) && typeof s.completed === 'boolean'
+    && isValidDate(s.examDate) && validExamTimes(s.examStart, s.examEnd) && typeof s.completed === 'boolean'
     && typeof s.nextAction === 'string' && s.nextAction.length <= 1000
     && (s.ects === undefined || (Number.isFinite(s.ects) && s.ects >= 0 && s.ects <= 60))
     && (s.lectureId === undefined || (typeof s.lectureId === 'string' && s.lectureId.length <= 100))

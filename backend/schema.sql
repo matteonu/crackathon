@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS semesters (
     alpha REAL NOT NULL DEFAULT 0.3,  -- weight of difficulty against priority
     beta REAL NOT NULL DEFAULT 5,     -- how hard a near exam pulls hours forward
     study_weekdays TEXT NOT NULL DEFAULT '0123456',  -- days studied, 0 = Monday ... 6 = Sunday
+    exam_days_off INTEGER NOT NULL DEFAULT 1 CHECK (exam_days_off IN (0, 1)),
     UNIQUE (user_id, label),
     UNIQUE (id, user_id)              -- target for the statistics foreign key
 );
@@ -178,6 +179,8 @@ CREATE TABLE IF NOT EXISTS semester_courses (
     desired_grade REAL CHECK (desired_grade BETWEEN 1 AND 6),
     target_hours REAL NOT NULL DEFAULT 0,
     exam_date TEXT,                   -- 'YYYY-MM-DD'
+    exam_start TEXT,                  -- optional 'HH:MM', with exam_end on the same date
+    exam_end TEXT,                    -- optional 'HH:MM', after exam_start
     completed INTEGER NOT NULL DEFAULT 0,
     next_action TEXT NOT NULL DEFAULT '',
     color TEXT,                       -- '#2598A2'

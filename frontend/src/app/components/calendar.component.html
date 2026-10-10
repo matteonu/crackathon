@@ -1,14 +1,17 @@
 <section class="panel calendar-panel">
-  <div class="panel-heading"><div><span class="eyebrow">YOUR STUDY PHASE</span><h2>Weekly calendar</h2><p>{{plannedHours()}} h planned this week</p></div><div class="action-buttons"><button class="button secondary" (click)="openSetup()"><app-icon name="settings" /> Study setup</button><button class="button primary" [disabled]="store.generating()" (click)="propose()"><app-icon name="leaf" /> @if(store.generating()){Generating…}@else{Generate schedule proposal}</button></div></div>
+  <div class="panel-heading"><div><span class="eyebrow">YOUR STUDY PHASE</span><h2>Weekly calendar</h2><p>{{plannedHours()}} h planned this week</p></div><div class="action-buttons"><button class="button secondary" (click)="openSetup()"><app-icon name="settings" /> Study setup</button><button class="button primary" [disabled]="store.generating()" (click)="generateWeek()"><app-icon name="leaf" /> @if(store.generating()){Generating…}@else{Generate schedule}</button></div></div>
+  @if(store.planError()){<p class="form-error" role="alert">{{store.planError()}}</p>}
   <div class="week-toolbar"><div class="week-navigation"><button class="icon-button" aria-label="Previous week" [disabled]="!store.canGoBack()" (click)="store.moveWeek(-1)"><app-icon name="left" /></button><span aria-live="polite">{{weekLabel()}}</span><button class="icon-button" aria-label="Next week" [disabled]="!store.canGoNext()" (click)="store.moveWeek(1)"><app-icon name="right" /></button></div><p class="calendar-hint">Drag on empty space to add a slot · drag a slot to move it, its edges to resize · <app-icon name="plus" /> plans a day, <app-icon name="trash" /> clears it</p></div>
   <div class="calendar-scroll" tabindex="0" role="region" aria-label="Weekly study calendar, scroll horizontally">
-    <div class="calendar-grid" [class.dragging]="drag()"><div class="calendar-corner">Time</div>@for(date of store.week();track date){<div class="calendar-day-heading" [class.outside-session]="!allowed(date)"><span>{{weekday(date)}}</span><strong>{{dayLabel(date)}}</strong>
+    <div class="calendar-grid" [class.dragging]="drag()"><div class="calendar-corner">Time</div>@for(date of store.week();track date){<div class="calendar-day-heading" [class.outside-session]="!allowed(date)" [class.day-off]="daysOff().has(date)" [class.exam-day]="store.examDays().has(date)" [style.--exam-colors]="store.examDays().get(date)?.background" [class.has-hours-mismatch]="hoursMismatches().has(date)" [title]="store.examDays().get(date)?.label??(daysOff().has(date)?'Day off':null)"><span>{{weekday(date)}}</span><strong>{{dayLabel(date)}}</strong>
         @if(allowed(date)){<div class="day-actions">
           <button type="button" class="day-action" [disabled]="planningDay()!==null||store.generating()" [attr.aria-label]="'Plan '+dayLabel(date,{weekday:'long',day:'numeric',month:'long'})" [title]="'Plan this day'" (click)="planDay(date)">@if(planningDay()===date){<span class="day-spinner"></span>}@else{<app-icon name="plus" />}</button>
           <button type="button" class="day-action" [disabled]="!hasSlots(date)" [attr.aria-label]="'Clear '+dayLabel(date,{weekday:'long',day:'numeric',month:'long'})" [title]="'Clear this day'" (click)="clearDay(date)"><app-icon name="trash" /></button>
-        </div>}</div>}
+        </div>}
+        @if(allowed(date)&&hoursMismatches().has(date)){<span class="calendar-hours-mismatch" role="img" [attr.aria-label]="hoursMismatchLabel(date)" [title]="hoursMismatchLabel(date)"><app-icon name="flag" /> Hours differ</span>}
+      </div>}
       <div class="calendar-times" [style.height.px]="height()">@for(hour of ticks();track hour){<span [style.top.px]="(hour-firstHour())*56">{{hour.toString().padStart(2,'0')}}:00</span>}</div>
-      @for(date of store.week();track date){<div class="calendar-day" [attr.data-date]="date" [class.outside-session]="!allowed(date)" [style.height.px]="height()" (pointerdown)="startCreate($event,date)">
+      @for(date of store.week();track date){<div class="calendar-day" [attr.data-date]="date" [class.outside-session]="!allowed(date)" [class.day-off]="daysOff().has(date)" [class.exam-day]="store.examDays().has(date)" [style.--exam-colors]="store.examDays().get(date)?.background" [style.height.px]="height()" (pointerdown)="startCreate($event,date)">
         @for(block of slotsOn(date);track block.id){
           <div class="calendar-session calendar-slot" role="button" tabindex="0" [class.is-recall]="block.type==='recall'" [class.is-break]="!block.subjectId" [class.is-meal]="meal(block)" [class.is-short]="minutesOf(block.end)-minutesOf(block.start)<45" [class.is-compact]="minutesOf(block.end)-minutesOf(block.start)<90" [class.is-dragged]="drag()?.id===block.id"
             [style.top.px]="top(minutesOf(block.start))" [style.height.px]="tall(minutesOf(block.start),minutesOf(block.end))" [style.--subject-color]="color(block)"
@@ -20,24 +23,19 @@
             <span class="slot-edge bottom" aria-hidden="true" (pointerdown)="startMove($event,block,'end')"></span>
           </div>
         }
+        @for(exam of examsOn(date);track exam.id){<div class="calendar-session calendar-exam" role="img" [class.is-short]="minutesOf(exam.end)-minutesOf(exam.start)<45" [style.top.px]="top(minutesOf(exam.start))" [style.height.px]="tall(minutesOf(exam.start),minutesOf(exam.end))" [style.--subject-color]="exam.color" [attr.aria-label]="exam.name+' exam, '+dayLabel(date)+', '+exam.start+' to '+exam.end" [title]="exam.name+' exam · '+exam.start+'–'+exam.end"><strong>Exam · {{exam.name}}</strong><span>{{exam.start}}–{{exam.end}}</span></div>}
         @if(ghost(date);as g){<div class="calendar-ghost" [style.top.px]="top(g.start)" [style.height.px]="tall(g.start,g.end)"><span>{{timeOf(g.start)}}–{{timeOf(g.end)}}</span></div>}
       </div>}
     </div>
   </div>
   <div class="calendar-legend"><span class="eyebrow">THIS WEEK</span><div>@for(subject of store.subjects();track subject.id){<span><i class="subject-dot" [style.background]="subject.color"></i>{{subject.shortName}} <strong>{{hoursFor(subject.id)}} h</strong></span>}</div></div>
-  @if(!store.generatedPlan()){<p class="calendar-empty">Your week is open. Generate a schedule proposal, or drag on the calendar to add a slot.</p>}
-  @else if(store.generatedPlan()?.generatedAt;as at){<p class="field-hint">Scheduled on {{at.slice(0,16).replace('T',' at ')}}. Each proposal covers the week you have open, and keeps the slots you placed yourself.</p>}
+  @if(!store.generatedPlan()){<p class="calendar-empty">Generate a study schedule, or drag on the calendar to add a study slot.</p>}
+  @else if(store.generatedPlan()?.generatedAt;as at){<p class="field-hint">Scheduled on {{at.slice(0,16).replace('T',' at ')}}. Generation uses the open week's budget and custom study. The + saves only its day.</p>}
 </section>
 <dialog #chooser class="edit-dialog slot-chooser" aria-labelledby="chooser-title" (close)="pending.set(null)">
   <div class="dialog-top"><span class="eyebrow">NEW SLOT</span><button type="button" class="icon-button" aria-label="Close" (click)="chooser.close()"><app-icon name="close" /></button></div>
   @if(pending();as p){<h2 id="chooser-title">{{dayLabel(p.date,{weekday:'long',day:'numeric',month:'long'})}} · {{timeOf(p.start)}}–{{timeOf(p.end)}}</h2>}
   <div class="slot-choices">@for(subject of store.subjects();track subject.id){@if(subject.courseId!==undefined){<button type="button" (click)="choose('course',subject.courseId)"><span class="subject-dot" [style.background]="subject.color"></span>{{subject.name}}</button>}}
     <button type="button" class="is-break" (click)="choose('break')"><app-icon name="close" /> Break — keep this time free</button></div>
-</dialog>
-<dialog #proposalDialog class="edit-dialog proposal-dialog" aria-labelledby="proposal-title"><div class="dialog-top"><span class="eyebrow">SCHEDULE PROPOSAL</span><button class="icon-button" aria-label="Close proposal" (click)="proposalDialog.close()"><app-icon name="close" /></button></div><h2 id="proposal-title">{{weekLabel()}} · {{draftHours()}} h</h2><p class="muted">A plan for the week you have open: learning grouped together, then one recall block per subject at the end of each day. Slots you placed yourself stay where they are, and other weeks are not touched.</p>
-  <div class="proposal-totals">@for(entry of draftTotals();track entry.subject.id){<span><i class="subject-dot" [style.background]="entry.subject.color"></i>{{entry.subject.shortName}} <strong>{{entry.hours}} h</strong></span>}</div>
-  <div class="proposal-list">@for(block of draftWeek();track $index){<div><span class="subject-dot" [style.background]="color(block)"></span><span><strong>{{name(block)}}</strong><small>{{dayLabel(block.date)}} · {{block.start}}–{{block.end}} · {{blockLabel(block)}}</small></span></div>}@empty{<p class="empty-state">Nothing to plan this week: every exam may be behind it, or your own slots fill it.</p>}</div>
-  <p class="field-hint">Applying replaces this week's generated slots and updates each course's target hours. Your own slots, other weeks and recorded hours stay as they are.</p>
-  @if(proposalError()){<p class="form-error" role="alert">{{proposalError()}}</p>}<div class="dialog-actions"><button class="text-button" (click)="openSetup()">Adjust my setup</button><button class="button secondary" [disabled]="store.generating()" (click)="regenerate()">Regenerate</button><button class="button primary" [disabled]="!draft().length||store.generating()" (click)="apply()">Apply proposal</button></div>
 </dialog>
 <app-schedule-setup #setup />

@@ -145,7 +145,7 @@ class PreferenceTests(ScheduleApiCase):
                          {"dayStart": "08:00", "dayEnd": "20:00", "lunch": ["12:00", "13:00"],
                           "dinner": ["18:00", "19:00"], "studyBlockSize": 60,
                           "studyHoursPerWeek": None, "alpha": .3, "beta": 5, "daysOff": [],
-                          "studyDays": [0, 1, 2, 3, 4, 5, 6]})
+                          "studyDays": [0, 1, 2, 3, 4, 5, 6], "examDaysOff": True})
         self.add(1)      # adding a course creates the row; the defaults must survive it
         self.assertEqual(self.plan()["preferences"]["dayStart"], "08:00")
 
@@ -160,6 +160,19 @@ class PreferenceTests(ScheduleApiCase):
         self.assertEqual(self.plan()["preferences"]["daysOff"],
                          [{"startDate": "2027-02-03", "rangeLength": 1},
                           {"startDate": "2027-02-06", "rangeLength": 2}])
+
+    def test_exam_days_off_preference_persists_and_is_user_scoped(self):
+        self.assertEqual(self.prefs({"examDaysOff": False}).status_code, 200)
+        self.assertFalse(self.plan()["preferences"]["examDaysOff"])
+        self.assertTrue(self.plan(user=BOB)["preferences"]["examDaysOff"])
+        self.prefs({"studyBlockSize": 90})
+        self.assertFalse(self.plan()["preferences"]["examDaysOff"])
+        for invalid in (0, 1, "false", None):
+            with self.subTest(invalid=invalid):
+                self.assertEqual(self.prefs({"examDaysOff": invalid}).status_code, 400)
+                self.assertFalse(self.plan()["preferences"]["examDaysOff"])
+        self.assertEqual(self.prefs({"examDaysOff": True}).status_code, 200)
+        self.assertTrue(self.plan()["preferences"]["examDaysOff"])
 
     def test_bad_preferences_are_refused(self):
         for bad in ({"dayStart": "9am"}, {"dayEnd": "24:00"}, {"dayStart": "20:00", "dayEnd": "08:00"},
@@ -427,6 +440,54 @@ class SlotTests(ScheduleApiCase):
     minutes = GenerateTests.minutes
 
 
+class FixedBlockGenerationTests(ScheduleApiCase):
+    slot = SlotTests.slot
+    minutes = GenerateTests.minutes
+
+    def prepare(self):
+        self.add(1)
+        self.add(2)
+        self.prefs({"studyBlockSize": 60, "studyHoursPerWeek": 35})
+        response = self.slot(date=FROM, start="08:30", end="11:30", kind="course", courseId=1)
+        self.assertEqual(response.status_code, 201)
+        return next(b for b in self.blocks() if b["source"] == "manual")
+
+    def test_preview_includes_extended_custom_slot_without_changing_it(self):
+        original = self.prepare()
+        before = self.blocks()
+        proposal = self.generate(toDate=FROM, dryRun=True).get_json()
+        custom = next(b for b in proposal["blocks"] if b["id"] == original["id"])
+        self.assertEqual((custom["start"], custom["end"], custom["source"]), ("08:00", "12:00", "manual"))
+        self.assertEqual(self.blocks(), before)
+        for entry in proposal["summary"]:
+            self.assertAlmostEqual(entry["scheduledHours"], sum(
+                self.minutes(b) for b in proposal["blocks"] if b["courseId"] == entry["courseId"]) / 60)
+
+    def test_applying_extends_the_same_slot_and_compensates_for_its_hours(self):
+        original = self.prepare()
+        response = self.generate(toDate=FROM)
+        self.assertEqual(response.status_code, 200)
+        first = self.blocks()
+        custom = next(b for b in first if b["id"] == original["id"])
+        self.assertEqual((custom["start"], custom["end"], custom["source"]), ("08:00", "12:00", "manual"))
+        study = [b for b in first if b["type"] != "meal"]
+        self.assertEqual(sum(self.minutes(b) for b in study), 5 * 60)
+        generated = [b for b in study if b["source"] == "generated"]
+        self.assertEqual(sum(self.minutes(b) for b in generated), 60)
+        self.assertEqual({b["courseId"] for b in generated}, {2})
+        self.assertTrue(all(self.minutes(b) >= 60 for b in generated))
+        self.generate(toDate=FROM)
+        self.assertEqual([dict(b, id=None) for b in self.blocks()], [dict(b, id=None) for b in first])
+
+    def test_an_existing_custom_slot_for_a_finished_course_still_uses_the_budget(self):
+        original = self.prepare()
+        self.client.patch("/api/semesters/2026W/courses/1", headers=ALICE, json={"completed": True})
+        self.generate(toDate=FROM)
+        blocks = self.blocks()
+        self.assertIn(original, blocks)
+        self.assertEqual(sum(self.minutes(b) for b in blocks if b["type"] != "meal"), 5 * 60)
+
+
 class SessionTests(ScheduleApiCase):
 
     def test_back_to_back_blocks_of_a_course_are_one_slot(self):
@@ -463,10 +524,15 @@ class WeekTests(ScheduleApiCase):
 
     def test_a_week_past_the_phase_is_cut_at_its_end(self):
         self.add(1)
+        # Leave the exam day available so its meal blocks expose the phase boundary.
+        self.prefs({"examDaysOff": False})
         plan = self.generate(fromDate="2027-02-12").get_json()
         self.assertEqual(max(b["date"] for b in plan["blocks"]), "2027-02-14")   # the phase's last day
         # No study on the exam day itself; lunch and dinner still happen.
         self.assertEqual(max(b["date"] for b in plan["blocks"] if b["type"] != "meal"), "2027-02-13")
+        self.prefs({"examDaysOff": True})
+        plan = self.generate(fromDate="2027-02-12").get_json()
+        self.assertEqual(max(b["date"] for b in plan["blocks"]), "2027-02-13")
 
     def test_planning_one_week_leaves_the_others_alone(self):
         self.add(1)
@@ -536,11 +602,11 @@ class DayTests(ScheduleApiCase):
         self.assertEqual([b for b in self.blocks() if b["date"] != "2027-02-03"], week)   # the rest untouched
         self.assertTrue(self.slots_on("2027-02-03"))
 
-    def test_one_day_is_planned_even_off_the_chosen_weekdays(self):
+    def test_a_single_day_also_follows_the_chosen_weekdays(self):
         self.add(1)
         self.prefs({"studyDays": [0, 1, 2, 3, 4]})
-        self.generate(fromDate="2027-02-06", toDate="2027-02-06")      # a Saturday, asked for
-        self.assertTrue(any(b["type"] != "meal" for b in self.slots_on("2027-02-06")))
+        self.generate(fromDate="2027-02-06", toDate="2027-02-06")      # a Saturday
+        self.assertEqual(self.slots_on("2027-02-06"), [])
 
     def test_a_removed_lunch_stays_removed(self):
         self.add(1)
@@ -578,6 +644,108 @@ class DayTests(ScheduleApiCase):
         self.add(1)
         self.assertEqual(self.clear("2026-01-01").status_code, 400)
         self.assertEqual(self.clear("2027-02-02", user=BOB).status_code, 404)
+
+
+class DayFromWeekTests(ScheduleApiCase):
+    """Plan this day calculates the open week and saves just its selected day."""
+    slot = SlotTests.slot
+    minutes = GenerateTests.minutes
+
+    def test_each_day_is_exactly_its_slice_of_the_week_with_custom_study(self):
+        self.add(1)
+        self.add(2)
+        self.prefs({"studyHoursPerWeek": 35})
+        self.slot(date=FROM, start="08:30", end="11:30", kind="course", courseId=1)
+        self.slot(date="2027-02-04", start="13:00", end="16:00", kind="course", courseId=2)
+        before = self.blocks()
+        week = self.generate(dryRun=True).get_json()
+        for date in (f"2027-02-0{day}" for day in range(1, 8)):
+            with self.subTest(date=date):
+                response = self.generate(onlyDate=date, dryRun=True)
+                self.assertEqual(response.status_code, 200)
+                day = response.get_json()
+                self.assertEqual(day["fromDate"], date)
+                self.assertEqual(day["blocks"], [b for b in week["blocks"] if b["date"] == date])
+                for entry in day["summary"]:
+                    self.assertAlmostEqual(entry["scheduledHours"], sum(
+                        self.minutes(b) for b in day["blocks"] if b["courseId"] == entry["courseId"]) / 60)
+                    self.assertAlmostEqual(entry["activeLearningHours"], sum(
+                        self.minutes(b) for b in day["blocks"] if b["courseId"] == entry["courseId"]
+                        and b["type"] == "active_learning") / 60)
+        self.assertEqual(self.blocks(), before)
+
+    def test_custom_study_on_other_days_uses_the_selected_days_weekly_budget(self):
+        self.add(1)
+        self.prefs({"studyHoursPerWeek": 7})
+        before = self.generate(onlyDate=FROM, dryRun=True).get_json()["blocks"]
+        self.assertTrue(any(b["type"] != "meal" for b in before))
+        self.slot(date="2027-02-03", start="08:00", end="12:00", kind="course", courseId=1)
+        self.slot(date="2027-02-03", start="13:00", end="16:00", kind="course", courseId=1)
+        response = self.generate(onlyDate=FROM)
+        self.assertEqual(response.status_code, 200)
+        blocks = response.get_json()["blocks"]
+        self.assertFalse(any(b["source"] == "generated" and b["type"] != "meal" for b in blocks))
+        self.assertEqual(sum(self.minutes(b) for b in blocks if b["type"] != "meal"), 7 * 60)
+
+    def test_saving_the_day_keeps_other_days_and_only_extends_its_own_custom_blocks(self):
+        self.add(1)
+        self.add(2)
+        self.prefs({"studyHoursPerWeek": 35})
+        self.generate(fromDate="2027-01-25", toDate="2027-01-31")
+        self.generate()
+        self.slot(date=FROM, start="08:30", end="11:30", kind="course", courseId=1)
+        self.slot(date="2027-02-03", start="08:30", end="11:30", kind="course", courseId=2)
+        before = self.blocks()
+        custom = next(b for b in before if b["date"] == FROM and b["source"] == "manual")
+        other_custom = next(b for b in before if b["date"] == "2027-02-03" and b["source"] == "manual")
+        proposal = self.generate(dryRun=True).get_json()["blocks"]
+        # Both custom blocks would expand if the whole week were saved.
+        self.assertEqual(next(b for b in proposal if b["id"] == other_custom["id"])["start"], "08:00")
+        response = self.generate(onlyDate=FROM)
+        self.assertEqual(response.status_code, 200)
+        after = self.blocks()
+        self.assertEqual([b for b in after if b["date"] != FROM], [b for b in before if b["date"] != FROM])
+        self.assertEqual([dict(b, id=None) for b in after if b["date"] == FROM],
+                         [dict(b, id=None) for b in proposal if b["date"] == FROM])
+        extended = next(b for b in after if b["id"] == custom["id"])
+        self.assertEqual((extended["start"], extended["end"], extended["source"]), ("08:00", "12:00", "manual"))
+        self.assertEqual(self.plan()["plan"]["fromDate"], FROM)
+
+    def test_selected_day_follows_weekdays_and_explicit_days_off(self):
+        self.add(1)
+        self.generate()
+        self.prefs({"studyDays": [0, 1, 2, 3, 4], "daysOff": [{"startDate": "2027-02-03"}]})
+        for date in ("2027-02-03", "2027-02-06"):
+            with self.subTest(date=date):
+                before = self.blocks()
+                week = self.generate(dryRun=True).get_json()["blocks"]
+                response = self.generate(onlyDate=date)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual([b for b in week if b["date"] == date], [])
+                self.assertEqual([b for b in self.blocks() if b["date"] == date], [])
+                self.assertEqual([b for b in self.blocks() if b["date"] != date],
+                                 [b for b in before if b["date"] != date])
+
+    def test_day_at_the_phase_boundary_uses_the_same_partial_week(self):
+        self.add(1)
+        window = {"fromDate": "2027-02-12", "toDate": "2027-02-14"}
+        proposal = self.generate(**window, dryRun=True).get_json()["blocks"]
+        response = self.generate(**window, onlyDate="2027-02-13")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([dict(b, id=None) for b in self.blocks()],
+                         [b for b in proposal if b["date"] == "2027-02-13"])
+        self.assertEqual(response.get_json()["fromDate"], "2027-02-13")
+
+    def test_selected_day_must_be_inside_the_calculation_window(self):
+        self.add(1)
+        self.generate()
+        before = self.plan()["plan"]
+        for bad in ("2027-01-31", "2027-02-08", "2027-02-30", "tomorrow", 5, [FROM]):
+            with self.subTest(date=bad):
+                response = self.generate(toDate="2027-02-07", onlyDate=bad)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("onlyDate", response.get_json()["error"])
+        self.assertEqual(self.plan()["plan"], before)
 
 
 class SessionBridgeTests(ScheduleApiCase):

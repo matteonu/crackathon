@@ -8,8 +8,9 @@
     GET    /api/courses?q=&semkez=&limit=              search the courses offered in a semester
 
     GET    /api/semesters/<semkez>/plan                the whole study plan of that semester
-    PATCH  /api/semesters/<semkez>/courses/<courseId>  target hours, exam date, done, next action, colour
+    PATCH  /api/semesters/<semkez>/courses/<courseId>  target hours, exam date/times, done, next action, colour
     PUT    /api/semesters/<semkez>/courses/<courseId>/hours/<date>  {hours} recorded on a day (null clears)
+    DELETE /api/semesters/<semkez>/hours/weeks/<date> clear recorded hours for the week starting on this Monday
     PUT    /api/semesters/<semkez>/sessions            [{id, subjectId, date, start, hours}] replaces them all
 
     PUT    /api/semesters/<semkez>/preferences         study habits and days off
@@ -18,6 +19,7 @@
     PATCH  /api/semesters/<semkez>/plan/blocks/<id>    move or resize one; it becomes yours
     DELETE /api/semesters/<semkez>/plan/blocks/<id>    remove one
     DELETE /api/semesters/<semkez>/plan/days/<date>    clear a day
+    PUT    /api/semesters/<semkez>/plan/days/<date>/fulfill  record the day's planned study hours
 
 In the app each course is a subject with id 'course-<courseId>'. A semester's study phase -- the
 days hours can be recorded and sessions planned for -- is its Lernphase before the exams.
@@ -56,7 +58,7 @@ DEFAULT_DIFFICULTY = 3
 DEFAULT_PREFERENCES = {"dayStart": "08:00", "dayEnd": "20:00", "lunch": ["12:00", "13:00"],
                        "dinner": ["18:00", "19:00"], "studyBlockSize": 60,
                        "studyHoursPerWeek": None, "alpha": .3, "beta": 5, "daysOff": [],
-                       "studyDays": [0, 1, 2, 3, 4, 5, 6]}
+                       "studyDays": [0, 1, 2, 3, 4, 5, 6], "examDaysOff": True}
 # A slot the user draws: a course, or a break that keeps the scheduler away.
 SLOT_KINDS = ("course", "break")
 # A generated plan covers one week, the one open in the calendar, unless asked for more.
@@ -287,7 +289,8 @@ def subjects(sid, semkez, course_id=None):
     for r in conn.execute("SELECT course_id, date, hours FROM study_hours WHERE semester_id = ? ORDER BY date", (sid,)):
         hours.setdefault(r["course_id"], {})[r["date"]] = r["hours"]
     sql = """SELECT c.id, c.code, coalesce(c.title_english, o.title, c.title) AS title, coalesce(o.ects, c.ects) AS ects,
-                    o.id AS offering_id, sc.target_hours, sc.exam_date, sc.completed, sc.next_action, sc.color,
+                    o.id AS offering_id, sc.target_hours, sc.exam_date, sc.exam_start, sc.exam_end,
+                    sc.completed, sc.next_action, sc.color,
                     sc.desired_grade, sc.priority, sc.max_study_hours,
                     -- What the scheduler will use: the user's value, else the scraped rating, else the middle.
                     coalesce(sc.difficulty, cast(round(r.difficulty) AS INTEGER), ?) AS difficulty,
@@ -306,6 +309,7 @@ def subjects(sid, semkez, course_id=None):
             "id": f"course-{r['id']}", "courseId": r["id"], "name": r["title"], "shortName": r["title"],
             "color": r["color"] or COLORS[i % len(COLORS)], "targetHours": r["target_hours"],
             "examDate": r["exam_date"] or phase(semkez)[1], "completed": bool(r["completed"]),
+            "examStart": r["exam_start"], "examEnd": r["exam_end"],
             "nextAction": r["next_action"], "ects": r["ects"], "lectureId": r["code"],
             "homepage": vvz_url(semkez, r["offering_id"]), "desiredGrade": r["desired_grade"],
             "hours": hours.get(r["id"], {}),
@@ -364,6 +368,16 @@ def update_course(semkez, course_id):
         if not iso_date(body["examDate"]):
             raise RequestError(400, "Enter a valid exam date.")
         fields["exam_date"] = body["examDate"]
+    if "examStart" in body or "examEnd" in body:
+        saved = db.get_db().execute(
+            "SELECT exam_start, exam_end FROM semester_courses WHERE semester_id = ? AND course_id = ?",
+            (sid, course_id)).fetchone()
+        start, end = body.get("examStart", saved["exam_start"]), body.get("examEnd", saved["exam_end"])
+        if not (start is None and end is None) and not (
+                isinstance(start, str) and isinstance(end, str) and START.fullmatch(start)
+                and START.fullmatch(end) and start < end):
+            raise RequestError(400, "Enter both exam times as HH:MM, with the end after the start, or clear both.")
+        fields["exam_start"], fields["exam_end"] = start, end
     if "completed" in body:
         if not isinstance(body["completed"], bool):
             raise RequestError(400, "completed must be true or false.")
@@ -436,6 +450,24 @@ def record_hours(semkez, course_id, date):
     return jsonify(date=date, hours=hours)
 
 
+@bp.delete("/semesters/<semkez>/hours/weeks/<date>")
+def clear_week_hours(semkez, date):
+    """Clear the caller's recorded hours for this Monday-Sunday week, keeping the plan."""
+    semkez = checked(semkez)
+    if not iso_date(date) or dt.date.fromisoformat(date).weekday() != 0:
+        raise RequestError(400, "Choose the Monday of the week to clear.")
+    phase_start, phase_end = phase(semkez)
+    if date > phase_end or dt.date.fromisoformat(date) < dt.date.fromisoformat(phase_start) - dt.timedelta(days=6):
+        raise RequestError(400, "Choose a week within this study phase.")
+    end = (dt.date.fromisoformat(date) + dt.timedelta(days=6)).isoformat()
+    sid = semester_id(current_user()["id"], semkez)
+    conn = db.get_db()
+    with conn:
+        cleared = conn.execute("DELETE FROM study_hours WHERE semester_id = ? AND date BETWEEN ? AND ?",
+                               (sid, date, end)).rowcount
+    return jsonify(cleared=cleared)
+
+
 @bp.put("/semesters/<semkez>/sessions")
 def save_sessions(semkez):
     semkez = checked(semkez)
@@ -498,6 +530,7 @@ def preferences(sid):
             "studyHoursPerWeek": row["study_hours_per_week"],
             "alpha": row["alpha"], "beta": row["beta"],
             "studyDays": [int(day) for day in row["study_weekdays"]],
+            "examDaysOff": bool(row["exam_days_off"]),
             "daysOff": [{"startDate": r["start_date"], "rangeLength": r["range_length"]}
                         for r in db.get_db().execute(
                             """SELECT start_date, range_length FROM semester_days_off
@@ -544,27 +577,38 @@ def scheduler_request(sid, semkez, from_date, to_date):
                    (sid, from_date))
                if r["course_id"] in codes]
     # The user's own slots in the planned days stay where they are; the scheduler plans around them.
-    busy = [{"date": r["date"], "start_time": r["start_time"], "end_time": r["end_time"],
+    busy = [{"id": r["id"], "date": r["date"], "start_time": r["start_time"], "end_time": r["end_time"],
+             "type": r["type"],
              "subject": codes.get(r["course_id"]) if r["type"] != "meal" else None}
             for r in conn.execute(
-                """SELECT course_id, date, start_time, end_time, type FROM plan_blocks
+                """SELECT id, course_id, date, start_time, end_time, type FROM plan_blocks
                    WHERE semester_id = ? AND date BETWEEN ? AND ? AND source = 'manual' ORDER BY date, start_time""",
                 (sid, from_date, to_date))]
     first, length = dt.date.fromisoformat(from_date), (dt.date.fromisoformat(to_date) - dt.date.fromisoformat(from_date)).days + 1
     days_off = [{"start_date": day["startDate"], "range_length": day["rangeLength"]}
                 for day in preferences(sid)["daysOff"]]
-    # Weekdays the user does not study are days off. Asking for one day plans it regardless:
-    # the per-day button is an explicit request.
-    if length > 1:
-        days_off += [{"start_date": day.isoformat(), "range_length": 1}
-                     for day in (first + dt.timedelta(days=i) for i in range(length))
-                     if str(day.weekday()) not in row["study_weekdays"]]
+    exams = conn.execute("""SELECT coalesce(exam_date, ?) AS date, exam_start, exam_end
+                            FROM semester_courses WHERE semester_id = ?""", (end, sid)).fetchall()
+    if row["exam_days_off"]:
+        # Completed courses' exams still reserve the whole day when the preference is on.
+        days_off += [{"start_date": exam["date"], "range_length": 1} for exam in exams]
+    else:
+        # Only the exam itself is unavailable. These entries are fixed, non-study busy time.
+        busy += [{"date": exam["date"], "start_time": exam["exam_start"], "end_time": exam["exam_end"],
+                  "type": "meal", "subject": None}
+                 for exam in exams if exam["exam_start"] and exam["exam_end"]
+                 and from_date <= exam["date"] <= to_date]
+    # Every generation follows the same study weekdays, including a day taken from a week.
+    days_off += [{"start_date": day.isoformat(), "range_length": 1}
+                 for day in (first + dt.timedelta(days=i) for i in range(length))
+                 if str(day.weekday()) not in row["study_weekdays"]]
     return {
         "subjects": subjects_input,
         "history": history,
         "busy": busy,
         "exam_session": {"start_date": from_date, "range_length": length},
         "days_off": days_off,
+        "exam_days_off": bool(row["exam_days_off"]),
         "day_start": row["day_start"], "day_end": row["day_end"],
         "lunch_time": [row["lunch_start"], row["lunch_end"]],
         "dinner_time": [row["dinner_start"], row["dinner_end"]],
@@ -623,13 +667,16 @@ def refresh_targets(conn, sid):
 
 def store_plan(sid, from_date, to_date, payload, result):
     """Replace the generated slots from `from_date` to `to_date`. Every other week stays as it
-    is, and the user's own slots stay everywhere: the run planned around them."""
+    is; custom slots retain their identity and take the expanded times in the proposal."""
     conn = db.get_db()
+    custom = {block["id"]: block for block in result["blocks"] if block["source"] == "manual"}
     mine, skip = {}, set()
-    for r in conn.execute("""SELECT date, start_time, end_time, type, label FROM plan_blocks
+    for r in conn.execute("""SELECT id, date, start_time, end_time, type, label FROM plan_blocks
                              WHERE semester_id = ? AND date BETWEEN ? AND ? AND source = 'manual'""",
                           (sid, from_date, to_date)):
-        mine.setdefault(r["date"], []).append((r["start_time"], r["end_time"]))
+        block = custom.get(r["id"])
+        mine.setdefault(r["date"], []).append((block["start"], block["end"]) if block
+                                             else (r["start_time"], r["end_time"]))
         if r["type"] == "meal":
             skip.add((r["date"], r["label"]))           # a meal the user moved is already there
     skip |= {(r["date"], r["label"]) for r in conn.execute(
@@ -642,8 +689,14 @@ def store_plan(sid, from_date, to_date, payload, result):
             return False
         return not any(block["start"] < end and block["end"] > start for start, end in mine.get(block["date"], []))
     rows = [(sid, block["courseId"], block["date"], block["start"], block["end"],
-             block["type"], block["label"]) for block in result["blocks"] if keep(block)]
+             block["type"], block["label"]) for block in result["blocks"]
+            if block["source"] == "generated" and keep(block)]
     with conn:
+        conn.executemany("""UPDATE plan_blocks SET start_time = ?, end_time = ?
+                            WHERE semester_id = ? AND id = ? AND source = 'manual'
+                              AND date BETWEEN ? AND ?""",
+                         [(block["start"], block["end"], sid, block["id"], from_date, to_date)
+                          for block in custom.values()])
         conn.execute("""DELETE FROM plan_blocks WHERE semester_id = ? AND date BETWEEN ? AND ?
                         AND source = 'generated'""", (sid, from_date, to_date))
         conn.executemany("""INSERT INTO plan_blocks (semester_id, course_id, date, start_time, end_time, type, label, source)
@@ -664,6 +717,27 @@ def block_json(r):
             "type": r["type"], "label": r["label"], "source": r["source"]}
 
 
+def block_summary(blocks, course_ids=()):
+    """Hours in the actual blocks, including custom study and any selected-day slice."""
+    totals = {course_id: {"subjectId": f"course-{course_id}", "courseId": course_id,
+                          "scheduledHours": 0.0, "activeLearningHours": 0.0}
+              for course_id in course_ids}
+    for block in blocks:
+        if block["courseId"] is None:
+            continue
+        entry = totals.setdefault(block["courseId"], {"subjectId": block["subjectId"],
+                                                      "courseId": block["courseId"],
+                                                      "scheduledHours": 0.0, "activeLearningHours": 0.0})
+        hours = (minutes_of(block["end"]) - minutes_of(block["start"])) / 60
+        entry["scheduledHours"] += hours
+        if block["type"] == "active_learning":
+            entry["activeLearningHours"] += hours
+    for entry in totals.values():
+        entry["scheduledHours"] = round(entry["scheduledHours"], 2)
+        entry["activeLearningHours"] = round(entry["activeLearningHours"], 2)
+    return [totals[course_id] for course_id in sorted(totals)]
+
+
 def stored_plan(sid):
     """The slots held for a semester, or None while there are none.
 
@@ -678,23 +752,9 @@ def stored_plan(sid):
                        (sid,)).fetchone()
     if row is None and not blocks:
         return None
-    totals = {}
-    for block in blocks:
-        if block["courseId"] is None:
-            continue
-        entry = totals.setdefault(block["courseId"], {"subjectId": block["subjectId"],
-                                                      "courseId": block["courseId"],
-                                                      "scheduledHours": 0.0, "activeLearningHours": 0.0})
-        hours = (minutes_of(block["end"]) - minutes_of(block["start"])) / 60
-        entry["scheduledHours"] += hours
-        if block["type"] == "active_learning":
-            entry["activeLearningHours"] += hours
-    for entry in totals.values():
-        entry["scheduledHours"] = round(entry["scheduledHours"], 2)
-        entry["activeLearningHours"] = round(entry["activeLearningHours"], 2)
     return {"generatedAt": row["generated_at"] if row else None,
             "fromDate": row["from_date"] if row else None, "blocks": blocks,
-            "summary": [totals[course_id] for course_id in sorted(totals)]}
+            "summary": block_summary(blocks)}
 
 
 @bp.put("/semesters/<semkez>/preferences")
@@ -730,6 +790,10 @@ def save_preferences(semkez):
                 or not all(isinstance(d, int) and not isinstance(d, bool) and 0 <= d <= 6 for d in days)):
             raise RequestError(400, "Choose at least one day of the week to study on.")
         fields["study_weekdays"] = "".join(str(d) for d in sorted(days))
+    if "examDaysOff" in body:
+        if not isinstance(body["examDaysOff"], bool):
+            raise RequestError(400, "examDaysOff must be true or false.")
+        fields["exam_days_off"] = int(body["examDaysOff"])
     if "studyBlockSize" in body:
         size = body["studyBlockSize"]
         if not isinstance(size, int) or isinstance(size, bool) or not 15 <= size <= 240:
@@ -780,12 +844,12 @@ def save_preferences(semkez):
 
 @bp.post("/semesters/<semkez>/plan/generate")
 def generate_plan(semkez):
-    """Build a schedule proposal for one week: the one open in the calendar.
+    """Build a schedule for the open week, optionally saving only one of its days.
 
-    `fromDate` and `toDate` are the first and last day to plan. `fromDate` defaults to today
-    clamped into the study phase, `toDate` to a week after it; only generated slots in those
-    days are replaced, so the rest of the phase and the user's own slots stay as they are.
-    `dryRun` returns the proposal without storing it, which is what the preview dialog asks for.
+    `fromDate`/`toDate` set the calculation window (default: today clamped into the study
+    phase through six days later). `onlyDate` takes one day from that full calculation;
+    only its generated slots and custom time adjustments are saved. `dryRun` returns
+    the candidate without storing it.
     """
     semkez = checked(semkez)
     body = request.get_json(silent=True) or {}
@@ -805,6 +869,9 @@ def generate_plan(semkez):
         to_date = min((dt.date.fromisoformat(from_date) + dt.timedelta(days=PLAN_DAYS - 1)).isoformat(), end)
     elif not iso_date(to_date) or not from_date <= to_date <= end:
         raise RequestError(400, f"toDate must be a date from fromDate to the end of the study phase, {end}.")
+    only_date = body.get("onlyDate")
+    if only_date is not None and (not iso_date(only_date) or not from_date <= only_date <= to_date):
+        raise RequestError(400, "onlyDate must be a date within fromDate and toDate.")
 
     payload, ids = scheduler_request(sid, semkez, from_date, to_date)
     try:
@@ -813,8 +880,25 @@ def generate_plan(semkez):
         # Every rejection from the scheduler is already a sentence a user can act on.
         raise RequestError(400, str(exc)) from None
     plan = plan_payload(from_date, dt.datetime.now().astimezone().isoformat(timespec="seconds"), result, ids)
+    # Include custom slots in the preview too; applying updates their times in the
+    # same transaction as the generated plan, preserving their IDs and source.
+    custom = {r["id"]: block_json(r) for r in db.get_db().execute(
+        """SELECT * FROM plan_blocks WHERE semester_id = ? AND source = 'manual'
+           AND date BETWEEN ? AND ? ORDER BY date, start_time""", (sid, from_date, to_date))}
+    for adjustment in result["busy_adjustments"]:
+        block = custom[payload["busy"][adjustment["index"]]["id"]]
+        block.update(start=adjustment["start_time"], end=adjustment["end_time"])
+    plan["blocks"].extend(custom.values())
+    plan["blocks"].sort(key=lambda block: (block["date"], block["start"], block["end"]))
+    if only_date is not None:
+        # Slice after allocation and custom extensions: the calculation still sees every
+        # custom block in the week, but saving a day never changes the other days.
+        plan["blocks"] = [block for block in plan["blocks"] if block["date"] == only_date]
+        plan["fromDate"] = only_date
+        payload["only_date"] = only_date
+    plan["summary"] = block_summary(plan["blocks"], ids.values())
     if not body.get("dryRun"):
-        store_plan(sid, from_date, to_date, payload, plan)
+        store_plan(sid, only_date or from_date, only_date or to_date, payload, plan)
         plan = stored_plan(sid)
     return jsonify(plan)
 
@@ -940,3 +1024,39 @@ def clear_day(semkez, date):
         conn.execute("DELETE FROM plan_meal_skips WHERE semester_id = ? AND date = ?", (sid, date))
         refresh_targets(conn, sid)
     return jsonify(stored_plan(sid))
+
+
+@bp.put("/semesters/<semkez>/plan/days/<date>/fulfill")
+def fulfill_day(semkez, date):
+    """Record each planned course's daily total together; leave other records and slots alone."""
+    semkez = checked(semkez)
+    start, end = phase(semkez)
+    if not iso_date(date) or not start <= date <= end:
+        raise RequestError(400, f"Choose a day in the study phase, {start} to {end}.")
+    sid = semester_id(current_user()["id"], semkez)
+    if sid is None:
+        raise RequestError(404, f"You have no plan for {label_of(semkez)} yet.")
+    conn = db.get_db()
+    # Read the saved plan instead of trusting hours supplied by the browser. Holding the
+    # write transaction also prevents a concurrent slot edit from changing this snapshot.
+    conn.execute("BEGIN IMMEDIATE")
+    with conn:
+        totals = {}
+        for block in conn.execute("""SELECT course_id, start_time, end_time FROM plan_blocks
+                                     WHERE semester_id = ? AND date = ?
+                                       AND course_id IS NOT NULL AND type <> 'meal'""", (sid, date)):
+            course_id = block["course_id"]
+            totals[course_id] = totals.get(course_id, 0) + minutes_of(block["end_time"]) - minutes_of(block["start_time"])
+        hours = {course_id: round(minutes / 60, 2) for course_id, minutes in totals.items()}
+        if not hours:
+            raise RequestError(400, "There is no planned study to fulfill on this day.")
+        others = sum(row["hours"] for row in conn.execute(
+            "SELECT course_id, hours FROM study_hours WHERE semester_id = ? AND date = ?", (sid, date))
+                     if row["course_id"] not in hours)
+        if round(others + sum(hours.values()), 2) > 24:
+            raise RequestError(400, "The combined study time for this day cannot exceed 24 hours. Adjust the recorded hours first.")
+        conn.executemany("""INSERT INTO study_hours (semester_id, course_id, date, hours) VALUES (?, ?, ?, ?)
+                            ON CONFLICT (semester_id, course_id, date) DO UPDATE SET hours = excluded.hours""",
+                         [(sid, course_id, date, value) for course_id, value in hours.items()])
+    return jsonify(date=date, hours=[{"subjectId": f"course-{course_id}", "hours": value}
+                                    for course_id, value in sorted(hours.items())])

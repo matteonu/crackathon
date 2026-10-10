@@ -58,7 +58,9 @@ export class HoursEditorComponent {
     const date=this.date();
     const valid=date && date>=this.store.examSession().start && date<=this.store.examSession().end && this.store.dates().includes(date);
     this.dateError.set(!date?'Enter a complete, valid date as DD/MM/YYYY.':!valid?'Choose a date within the exam session.':'');
-    this.form.controls.hours.setValue(valid?this.store.subjects().find(s=>s.id===this.form.controls.subject.value)?.hours[date]??null:null,{emitEvent:false});
+    const subject=this.store.subjects().find(s=>s.id===this.form.controls.subject.value);
+    const planned=valid?this.store.planHoursFor(this.form.controls.subject.value,[date]):0;
+    this.form.controls.hours.setValue(valid?(planned>0?planned:subject?.hours[date]??null):null,{emitEvent:false});
     this.error.set('');
   }
   save():void {const hours=this.form.controls.hours.value;if(hours===null){this.error.set('Enter hours, or use Clear entry.');return;}this.commit(hours);}

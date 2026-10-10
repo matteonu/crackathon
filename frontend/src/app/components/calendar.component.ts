@@ -2,11 +2,12 @@ import { Component, ElementRef, HostListener, computed, inject, signal, viewChil
 import { Router } from '@angular/router';
 import { StudyStore } from '../services/study-store';
 import { dayLabel } from '../models/study';
-import { PlanBlock, blockLabel, mealBlock, minutesOf, studyHours, timeOf } from '../models/semester';
+import { PlanBlock, blockLabel, dayHourDifferences, isStudyDayOff, mealBlock, minutesOf, studyHours, timeOf } from '../models/semester';
+import type { HourDifference } from '../models/semester';
 import { IconComponent } from '../shared/icon.component';
 import { ScheduleSetupComponent } from './schedule-setup.component';
 
-const HOUR=56;const SNAP=15;const MIN_SLOT=15;
+const HOUR=56;const SNAP=15;const MIN_SLOT=15;const BLOCK_GAP=6;
 /** A gesture in progress: moving a slot, dragging one of its edges, or drawing a new one. */
 interface Drag{mode:'move'|'start'|'end'|'create';id:number|null;date:string;start:number;end:number;
   originY:number;originDate:string;grab:number;moved:boolean;}
@@ -14,29 +15,35 @@ interface Drag{mode:'move'|'start'|'end'|'create';id:number|null;date:string;sta
 @Component({selector:'app-calendar',standalone:true,imports:[IconComponent,ScheduleSetupComponent],templateUrl:'./calendar.component.html'})
 export class CalendarComponent {
   readonly store=inject(StudyStore);private readonly router=inject(Router);
-  readonly proposalDialog=viewChild<ElementRef<HTMLDialogElement>>('proposalDialog');
   readonly chooser=viewChild<ElementRef<HTMLDialogElement>>('chooser');
   readonly setup=viewChild.required<ScheduleSetupComponent>('setup');
-  readonly proposalError=signal('');readonly draft=signal<PlanBlock[]>([]);
   readonly drag=signal<Drag|null>(null);
   /** The slot drawn on empty space, waiting for a course or a break to be chosen. */
   readonly pending=signal<{date:string;start:number;end:number}|null>(null);
   readonly weekLabel=computed(()=>`${dayLabel(this.store.week()[0])} – ${dayLabel(this.store.week()[6],{day:'numeric',month:'short',year:'numeric'})}`);
   readonly planned=computed(()=>this.store.week().flatMap(date=>this.store.planOn(date)));
   readonly plannedHours=computed(()=>studyHours(this.planned()));
+  readonly daysOff=computed(()=>new Set(this.store.week().filter(date=>isStudyDayOff(date,this.store.preferences(),this.store.subjects()))));
+  readonly timedExams=computed(()=>this.store.subjects().flatMap(subject=>
+    this.store.week().includes(subject.examDate)&&subject.examStart&&subject.examEnd
+      ? [{id:subject.id,name:subject.shortName,color:subject.color,date:subject.examDate,start:subject.examStart,end:subject.examEnd}]:[]));
+  readonly hoursMismatches=computed(()=>{
+    const result=new Map<string,HourDifference[]>();
+    const subjects=this.store.subjects(), blocks=this.planned();
+    for(const date of this.store.week()){
+      const differences=dayHourDifferences(subjects,blocks,date);
+      if(differences.length)result.set(date,differences);
+    }
+    return result;
+  });
   /** The grid spans the user's day, and stretches for any slot outside it. */
-  readonly firstHour=computed(()=>Math.min(Math.floor(minutesOf(this.store.preferences().dayStart)/60),...this.planned().map(b=>Math.floor(minutesOf(b.start)/60))));
-  readonly lastHour=computed(()=>Math.max(Math.ceil(minutesOf(this.store.preferences().dayEnd)/60),...this.planned().map(b=>Math.ceil(minutesOf(b.end)/60))));
+  readonly firstHour=computed(()=>Math.min(Math.floor(minutesOf(this.store.preferences().dayStart)/60),...this.planned().map(b=>Math.floor(minutesOf(b.start)/60)),...this.timedExams().map(exam=>Math.floor(minutesOf(exam.start)/60))));
+  readonly lastHour=computed(()=>Math.max(Math.ceil(minutesOf(this.store.preferences().dayEnd)/60),...this.planned().map(b=>Math.ceil(minutesOf(b.end)/60)),...this.timedExams().map(exam=>Math.ceil(minutesOf(exam.end)/60))));
   readonly ticks=computed(()=>Array.from({length:this.lastHour()-this.firstHour()},(_,i)=>this.firstHour()+i));
   readonly height=computed(()=>(this.lastHour()-this.firstHour())*HOUR);
-  readonly draftWeek=computed(()=>this.draft().filter(b=>this.store.week().includes(b.date)&&b.type!=='meal'));
-  readonly draftHours=computed(()=>studyHours(this.draft()));
-  readonly draftDays=computed(()=>new Set(this.draft().filter(b=>b.type!=='meal').map(b=>b.date)).size);
-  readonly draftTotals=computed(()=>this.store.subjects().map(subject=>({subject,
-    hours:studyHours(this.draft().filter(b=>b.subjectId===subject.id))})).filter(entry=>entry.hours>0));
   readonly dayLabel=dayLabel;readonly weekday=(date:string)=>dayLabel(date,{weekday:'short'});
   readonly blockLabel=blockLabel;readonly timeOf=timeOf;readonly minutesOf=minutesOf;readonly meal=mealBlock;
-  /** The open week, cut to the study phase: what a proposal covers. */
+  /** Both generation actions compute the open week, cut to the study phase. */
   readonly planWeek=computed(()=>{const days=this.store.week().filter(d=>this.allowed(d));return days.length?{fromDate:days[0],toDate:days.at(-1)!}:null;});
 
   subject(id:string|null){return id?this.store.subjects().find(s=>s.id===id):undefined;}
@@ -49,10 +56,17 @@ export class CalendarComponent {
   }
   ghost(date:string){const d=this.drag();return d?.mode==='create'&&d.date===date&&d.end>d.start?d:null;}
   top(minutes:number):number{return (minutes/60-this.firstHour())*HOUR;}
-  tall(start:number,end:number):number{return Math.max(14,(end-start)/60*HOUR-2);}
+  /** Keep a visual gap between adjoining blocks without changing their clock times. */
+  tall(start:number,end:number):number{return Math.max(8,(end-start)/60*HOUR-BLOCK_GAP);}
   color(block:PlanBlock):string{return this.subject(block.subjectId)?.color??'#9aa39b';}
   name(block:PlanBlock):string{return this.subject(block.subjectId)?.shortName??block.label??'Break';}
   hoursFor(id:string):number{return this.store.planHoursFor(id,this.store.week());}
+  examsOn(date:string){return this.timedExams().filter(exam=>exam.date===date);}
+  hoursMismatchLabel(date:string):string{
+    const details=(this.hoursMismatches().get(date)??[]).map(difference=>
+      `${this.subject(difference.subjectId)?.shortName??difference.subjectId}: ${difference.plannedHours} h planned, ${difference.recordedHours===null?'no hours recorded':difference.recordedHours+' h recorded'}`);
+    return `Hours differ from the calendar on ${dayLabel(date)}.\n${details.join('\n')}`;
+  }
 
   // ---- pointer geometry
   private minutesAt(clientY:number,date:string):number{
@@ -117,8 +131,9 @@ export class CalendarComponent {
   hasSlots(date:string):boolean{return this.store.planOn(date).length>0;}
   async planDay(date:string):Promise<void>{
     if(!this.store.subjects().length){this.store.announce('Add a course first, with + next to Your subjects.');return;}
+    const week=this.planWeek();if(!week||!this.allowed(date))return;
     this.planningDay.set(date);
-    try{if(await this.store.planDay(date))this.store.announce(`${dayLabel(date,{weekday:'long',day:'numeric',month:'short'})} is planned.`);}
+    try{if(await this.store.planDay(date,week))this.store.announce(`${dayLabel(date,{weekday:'long',day:'numeric',month:'short'})} is planned.`);}
     finally{this.planningDay.set(null);}
   }
   clearDay(date:string):void{void this.store.clearDay(date);}
@@ -128,23 +143,12 @@ export class CalendarComponent {
     await this.store.createSlot({date:p.date,start:timeOf(p.start),end:timeOf(p.end),kind,...(courseId!==undefined?{courseId}:{})});
   }
 
-  // ---- proposal
-  openSetup():void{this.proposalDialog()?.nativeElement.close();this.setup().open();}
-  async propose():Promise<void>{
+  // ---- generation
+  openSetup():void{this.setup().open();}
+  async generateWeek():Promise<void>{
     if(!this.store.subjects().length){this.store.announce('Add a course first, with + next to Your subjects.');return;}
-    if(!this.planWeek()){this.store.announce('This week is outside the study phase. Pick a week inside it.');return;}
-    await this.regenerate();
-    if(this.draft().length||this.proposalError())this.proposalDialog()?.nativeElement.showModal();
-  }
-  async regenerate():Promise<void>{
-    this.proposalError.set('');
-    const plan=await this.store.generate({...this.planWeek()!,dryRun:true});
-    this.draft.set(plan?.blocks??[]);
-    if(!plan)this.proposalError.set(this.store.planError());
-  }
-  async apply():Promise<void>{
-    this.proposalError.set('');
-    if(await this.store.generate(this.planWeek()!)){this.draft.set([]);this.proposalDialog()?.nativeElement.close();await this.store.load();}
-    else this.proposalError.set(this.store.planError());
+    const week=this.planWeek();
+    if(!week){this.store.announce('This week is outside the study phase. Pick a week inside it.');return;}
+    if(await this.store.generate(week))await this.store.load();
   }
 }

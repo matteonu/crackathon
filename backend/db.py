@@ -67,6 +67,7 @@ ADDED_COLUMNS = {
     "users": (("selected_semkez", "TEXT"),),
     "semester_courses": (
         ("target_hours", "REAL NOT NULL DEFAULT 0"), ("exam_date", "TEXT"),
+        ("exam_start", "TEXT"), ("exam_end", "TEXT"),
         ("completed", "INTEGER NOT NULL DEFAULT 0"), ("next_action", "TEXT NOT NULL DEFAULT ''"),
         ("color", "TEXT"), ("priority", "INTEGER NOT NULL DEFAULT 3"), ("difficulty", "INTEGER"),
         ("max_study_hours", "REAL"), ("lecture_per_week", "REAL"),
@@ -77,6 +78,7 @@ ADDED_COLUMNS = {
         ("dinner_start", "TEXT NOT NULL DEFAULT '18:00'"), ("dinner_end", "TEXT NOT NULL DEFAULT '19:00'"),
         ("study_block_size", "INTEGER NOT NULL DEFAULT 60"), ("alpha", "REAL NOT NULL DEFAULT 0.3"),
         ("beta", "REAL NOT NULL DEFAULT 5"), ("study_weekdays", "TEXT NOT NULL DEFAULT '0123456'"),
+        ("exam_days_off", "INTEGER NOT NULL DEFAULT 1 CHECK (exam_days_off IN (0, 1))"),
     ),
     "plan_blocks": (("source", "TEXT NOT NULL DEFAULT 'generated'"),),
     "mcq_sets": (("requested_count", "INTEGER CHECK (requested_count BETWEEN 1 AND 60)"),),
