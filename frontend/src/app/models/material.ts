@@ -1,30 +1,53 @@
-export const MATERIAL_CATEGORIES = ['Slides','Notes','Transcripts','Books','Exams','Exercises'] as const;
+export const MATERIAL_CATEGORIES = ['Slides','Solutions','Scripts','Notes','Transcripts','Books','Exams','Exercises'] as const;
+export const UPLOAD_CATEGORIES = ['Slides','Exercises','Solutions','Exams','Scripts'] as const;
 export const MATERIAL_MARKERS = ['To read','Done','Revisit','Ignore'] as const;
 export type MaterialCategory = typeof MATERIAL_CATEGORIES[number];
 export type MaterialMarker = typeof MATERIAL_MARKERS[number];
-export type MaterialKind = 'folder' | 'pdf' | 'md' | 'txt';
+export type MaterialKind = 'folder' | 'pdf' | 'md' | 'txt' | 'deck';
+export type DocumentType = 'slides' | 'mock_exam' | 'exercise' | 'exercise_solution' | 'script' | 'summary' | 'cards' | 'mcq';
+export const CATEGORY_DOCUMENT_TYPES:Partial<Record<MaterialCategory,DocumentType>> = {
+  Slides:'slides', Exams:'mock_exam', Exercises:'exercise', Solutions:'exercise_solution', Scripts:'script'
+};
+const DOCUMENT_TYPE_LABELS:Record<DocumentType,string> = {
+  slides:'slides', mock_exam:'exam', exercise:'exercise', exercise_solution:'exercise solution',
+  script:'script', summary:'summary', cards:'flashcards', mcq:'multiple choice'
+};
 export type ToolId = 'summary' | 'flashcards';
-export interface Flashcard { id?:string; question:string; answer:string; demo?:boolean; generated?:boolean; }
+export interface FlashcardSource { pdfId:string|null; pdfName:string; pages:number[]; evidence:string; }
+export interface Flashcard { id?:string; question:string; answer:string; demo?:boolean; generated?:boolean; source?:FlashcardSource; }
 export type LearningMode = 'shallow' | 'deep';
-export interface ProcessingState { status:'queued'|'running'|'complete'|'error'; error?:string; mode?:LearningMode; requestedQuestions?:number; }
+export type LearningTask = 'summary' | 'flashcards';
+export interface ProcessingState { status:'queued'|'running'|'complete'|'error'; error?:string; mode?:LearningMode; requestedQuestions?:number; task?:LearningTask; }
 export interface ToolResult { text?: string; cards?: Flashcard[]; }
 export interface Material {
   id:string; subjectId:string; name:string; size:number; category:MaterialCategory;
   marker:MaterialMarker; added:number;
   /** Only while a newly chosen file is still being uploaded; the server is the source. */
   blob?:Blob;
-  kind?:MaterialKind; parentId?:string|null; description?:string; content?:string;
+  kind?:MaterialKind; type?:DocumentType|null; parentId?:string|null; description?:string; content?:string;
+  sourcePdfId?:string|null;generationMode?:LearningMode|null;folderWeight?:number;
   outputs?:Partial<Record<ToolId,ToolResult>>;
   processing?:ProcessingState;
 }
-export interface FolderCard extends Flashcard { key:string; fileId:string; fileName:string; }
+export interface FolderCard extends Flashcard { key:string; fileId:string; fileName:string; deckId?:string; }
 export interface TreeRow { material:Material; depth:number; }
 
 export function materialKind(file:Material):MaterialKind { return file.kind??'pdf'; }
+export function materialType(file:Material):DocumentType|null {
+  if(materialKind(file)==='folder')return null;
+  return file.type===undefined?(CATEGORY_DOCUMENT_TYPES[file.category]??null):file.type;
+}
+export function materialTypeLabel(file:Material):string {
+  const type=materialType(file);
+  return type?DOCUMENT_TYPE_LABELS[type]:file.category.toLowerCase();
+}
+export function canGenerateFlashcards(file:Material):boolean { return materialKind(file)==='pdf'&&['slides','exercise_solution','script'].includes(materialType(file)??''); }
+export function canChatWithDocument(file:Material):boolean { return materialKind(file)==='pdf'&&['slides','exercise_solution','mock_exam','script'].includes(materialType(file)??''); }
 /** Where the server serves this file's bytes: the PDF itself, or a text file's content. */
 export function materialFileUrl(id:string):string { return `/api/materials/${encodeURIComponent(id)}/file`; }
+export function sourcePageUrl(id:string,page:number):string { return `/#/pdf/${encodeURIComponent(id)}?page=${page}`; }
 export function normalizeMaterial(file:Material):Material {
-  return {...file,kind:materialKind(file),parentId:file.parentId??null,description:file.description??'',
+  return {...file,kind:materialKind(file),type:materialType(file),parentId:file.parentId??null,description:file.description??'',
     outputs:{...file.outputs,flashcards:file.outputs?.flashcards?{...file.outputs.flashcards,cards:file.outputs.flashcards.cards?.map((card,i)=>({...card,id:card.id??`${file.id}-${i}`,demo:card.demo??true}))}:undefined}};
 }
 export function descendants(files:readonly Material[],parentId:string|null):Material[] {
@@ -37,8 +60,13 @@ export function descendants(files:readonly Material[],parentId:string|null):Mate
   }
   visit(parentId);return found;
 }
+export function materialCards(file:Material):FolderCard[] {
+  const kind=materialKind(file);
+  if(kind==='folder'||(kind==='pdf'&&!canGenerateFlashcards(file)))return [];
+  return (file.outputs?.flashcards?.cards??[]).map((card,i)=>({...card,key:card.id??`${file.id}-${i}`,fileId:file.sourcePdfId??file.id,fileName:file.name,deckId:kind==='deck'?file.id:undefined}));
+}
 export function folderCards(files:readonly Material[],folderId:string|null):FolderCard[] {
-  return descendants(files,folderId).filter(f=>materialKind(f)!=='folder').flatMap(file=>(file.outputs?.flashcards?.cards??[]).map((card,i)=>({...card,key:card.id??`${file.id}-${i}`,fileId:file.id,fileName:file.name})));
+  return descendants(files,folderId).flatMap(materialCards);
 }
 export function treeRows(files:readonly Material[],expanded:ReadonlySet<string>,query='',marker=''):TreeRow[] {
   const rows:TreeRow[]=[];const seen=new Set<string>();const filtering=!!query||!!marker;
@@ -62,6 +90,6 @@ export function validParent(files:readonly Material[],subjectId:string,parentId:
 }
 export function materialName(name:string,kind:MaterialKind):string {
   let value=name.trim();if(!value||value.length>180||/[\\/\x00-\x1f]/.test(value)||value==='.'||value==='..')throw new Error('Use a name of 1–180 characters, without slashes.');
-  if(kind!=='folder'&&!value.toLowerCase().endsWith('.'+kind))value+='.'+kind;
+  if(!['folder','deck'].includes(kind)&&!value.toLowerCase().endsWith('.'+kind))value+='.'+kind;
   return value;
 }

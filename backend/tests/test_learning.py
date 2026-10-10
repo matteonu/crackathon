@@ -1,6 +1,7 @@
 import argparse
 import contextlib
 import io
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -34,6 +35,23 @@ def fake_model(client, model, data, schema, label, file_input=None):
 
 
 class PipelineTests(unittest.TestCase):
+    def test_result_polling_retries_a_windows_sharing_violation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result = Path(temp) / 'result.json'
+            result.write_text('{"status":"complete","documents":[]}', encoding='utf-8')
+            original = Path.read_text
+            attempts = []
+
+            def temporary_lock(path, *args, **kwargs):
+                attempts.append(path)
+                if len(attempts) == 1:
+                    raise PermissionError('A worker is replacing the result file')
+                return original(path, *args, **kwargs)
+
+            with patch.object(Path, 'read_text', autospec=True, side_effect=temporary_lock):
+                self.assertEqual(StudyJobs.read(result)['status'], 'complete')
+            self.assertEqual(len(attempts), 2)
+
     def test_json_write_retries_a_windows_sharing_violation(self):
         original = Path.replace
         attempts = []
@@ -66,9 +84,14 @@ class PipelineTests(unittest.TestCase):
             partial = json.loads(output.read_text())['documents'][0]
             self.assertEqual(partial['sentence_count'], 1)
             self.assertFalse(partial['complete'])
+            # Checkpoints from before per-file card counts used a key without the count.
+            state_path = next(output.with_suffix('.work').glob('*.json'))
+            legacy_key = hashlib.sha256((str(FIXTURE.resolve()) + 'False').encode('utf-8')).hexdigest()[:24]
+            state_path.rename(state_path.with_name(legacy_key + '.json'))
             pdf_study.run(args)
             self.assertTrue(json.loads(output.read_text())['documents'][0]['complete'])
             self.assertEqual(stages.count('preview_and_abstract'), 1)
+            self.assertEqual(stages.count('preview'), 0)
             self.assertEqual(stages.count('questions'), 2)
 
     def test_sentence_counts_and_correction(self):
@@ -97,6 +120,10 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(record['requested_sentences'], 1)
             self.assertNotIn('requested_words', record)
             self.assertEqual(len(record['questions']), 5)
+            for card in record['questions']:
+                self.assertEqual(card['source_pdf'], FIXTURE.name)
+                self.assertEqual(card['source_pages'], [1])
+                self.assertTrue(card['evidence'])
             self.assertNotIn('test-only', output.read_text())
             for call in request.call_args_list:
                 self.assertEqual(call.args[2]['requested_sentences'], 1)
@@ -104,6 +131,13 @@ class PipelineTests(unittest.TestCase):
             count = request.call_count
             pdf_study.run(args)
             self.assertEqual(request.call_count, count)
+            # Old final JSON discarded references, but its validated checkpoint has them.
+            saved = json.loads(output.read_text())
+            saved['documents'][0]['questions'] = [{k: c[k] for k in ('question', 'answer')} for c in record['questions']]
+            pdf_study.write_json(output, saved)
+            pdf_study.run(args)
+            self.assertEqual(request.call_count, count)
+            self.assertEqual(json.loads(output.read_text())['documents'][0]['questions'], record['questions'])
 
     def test_upload_http_results_and_idempotency(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(pdf_study, 'API_KEY', 'test-only'), \
@@ -157,7 +191,6 @@ class PipelineTests(unittest.TestCase):
                 self.assertEqual((unknown.status_code, unknown.get_json()['error']), (404, 'Unknown endpoint.'))
                 for count in ('0', '4', '301', '5.5', 'abc'):
                     self.assertEqual(upload(**{'X-Flashcard-Count': count}).status_code, 400, count)
-                self.assertEqual(upload(**{'X-Flashcard-Count': '8'}).status_code, 409)
                 with self.assertRaises(RequestError) as conflict:
                     jobs.submit(document_id, 'other.pdf', b'%PDF-different file')
                 self.assertEqual(conflict.exception.status, 409)
@@ -201,6 +234,11 @@ class PipelineTests(unittest.TestCase):
                     self.assertEqual(data['documents'][0]['deep_mode'], mode == 'deep')
                     self.assertEqual(data['documents'][0]['sentence_count'], 1)
                     self.assertEqual(len(data['documents'][0]['questions']), 5)
+                    for card in data['documents'][0]['questions']:
+                        self.assertEqual(card['source_pdf'], 'lecture.pdf')
+                        self.assertEqual(card['source_pdf_id'], document_id)
+                        self.assertEqual(card['source_pages'], [1])
+                        self.assertTrue(card['evidence'])
                     self.assertTrue(list((Path(temp) / document_id / mode / 'result.work').glob('*.json')))
                     self.assertEqual(jobs.submit(document_id, 'lecture.pdf', FIXTURE.read_bytes(), mode), data)
                 self.assertEqual(len(calls), 4)

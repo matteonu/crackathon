@@ -1,33 +1,59 @@
-import { Injectable, inject, signal } from '@angular/core';
-import { Material, MaterialCategory, MaterialKind, Flashcard, LearningMode, normalizeMaterial, materialKind, materialName, validParent } from '../models/material';
+import { DestroyRef, Injectable, inject, signal } from '@angular/core';
+import { Material, MaterialCategory, MaterialKind, Flashcard, LearningMode, LearningTask, CATEGORY_DOCUMENT_TYPES, descendants, canGenerateFlashcards, normalizeMaterial, materialKind, materialName, validParent } from '../models/material';
 import { learningPatch } from '../models/learning';
 import { LearningPipelineService } from './learning-pipeline.service';
 
-type MaterialPatch=Partial<Pick<Material,'category'|'marker'|'outputs'|'name'|'description'|'parentId'|'content'|'processing'>>;
+type MaterialPatch=Partial<Pick<Material,'category'|'type'|'marker'|'outputs'|'name'|'description'|'parentId'|'content'|'processing'|'folderWeight'>>;
+class MaterialRequestError extends Error {
+  constructor(readonly status:number,message:string){super(message);}
+}
 /** The file library, stored on the server: metadata in SQLite, PDFs and generated JSON on disk. */
 @Injectable({providedIn:'root'})
 export class MaterialStore {
   readonly files=signal<Material[]>([]);readonly loading=signal(true);readonly error=signal('');readonly busy=signal(false);
   private mutations:Promise<unknown>=Promise.resolve();
   private readonly pipeline=inject(LearningPipelineService);private readonly activeJobs=new Set<string>();
-  constructor(){void this.load();}
+  constructor(){
+    void this.queue(()=>this.load());
+    const refresh=()=>{void this.refresh();};
+    window.addEventListener('focus',refresh);
+    inject(DestroyRef).onDestroy(()=>window.removeEventListener('focus',refresh));
+  }
   private async request<T>(url:string,init?:RequestInit):Promise<T>{
     let response:Response;
     try{response=await fetch(url,{cache:'no-store',...init});}
     catch{throw new Error('Cannot reach the server. Check your connection and retry.');}
     let data:unknown=null;
     try{data=await response.json();}catch{/* 204 and non-JSON errors have no body. */}
-    if(!response.ok)throw new Error(typeof (data as {error?:unknown})?.error==='string'?(data as {error:string}).error:'The server could not save that change. Please retry.');
+    if(!response.ok)throw new MaterialRequestError(response.status,typeof (data as {error?:unknown})?.error==='string'?(data as {error:string}).error:'The server could not save that change. Please retry.');
     return data as T;
   }
   private async load():Promise<void>{
     try{
       this.files.set((await this.request<Material[]>('/api/materials')).map(normalizeMaterial));
-      for(const file of this.files())if(materialKind(file)==='pdf'&&file.processing)void this.process(file.id,true);
+      // Completed results already live in the deck. Replaying cached JSON would
+      // restore cards that the user deleted since generation finished.
+      for(const file of this.files())if(materialKind(file)==='pdf'&&['queued','running'].includes(file.processing?.status??''))void this.process(file.id,true);
       this.error.set('');
     }
     catch(e){this.error.set(e instanceof Error?e.message:'Could not load your files.');}finally{this.loading.set(false);}
   }
+  refresh():Promise<void>{return this.queue(async()=>{
+    try{this.files.set((await this.request<Material[]>('/api/materials')).map(normalizeMaterial));}
+    catch{/* A failed background refresh must not remove files or interrupt editing. */}
+  });}
+  private forget(id:string,removed:string[]=[]):void{
+    const ids=new Set([id,...removed,...descendants(this.files(),id).map(file=>file.id)]);
+    this.files.update(files=>files.filter(file=>!ids.has(file.id)));
+  }
+  ensureAvailable(id:string):Promise<boolean>{return this.queue(async()=>{
+    try{this.store(await this.request<Material>(`/api/materials/${id}`));this.error.set('');return true;}
+    catch(e){
+      if(e instanceof MaterialRequestError&&e.status===404){this.forget(id);this.error.set('This item was already deleted. The list has been updated.');}
+      else this.error.set(e instanceof Error?e.message:'Could not open this file. Please retry.');
+      return false;
+    }
+  });}
   private assertParent(subjectId:string,parentId:string|null,id?:string):void {
     if(!validParent(this.files(),subjectId,parentId,id))throw new Error('Choose a folder in this subject. A folder cannot contain itself.');
   }
@@ -38,9 +64,15 @@ export class MaterialStore {
   private store(file:Material):Material{
     const saved=normalizeMaterial(file);
     this.files.update(values=>values.some(f=>f.id===saved.id)?values.map(f=>f.id===saved.id?saved:f):[...values,saved]);
+    if(materialKind(saved)==='pdf')this.files.update(values=>values.map(item=>{
+      const cards=item.outputs?.flashcards?.cards;
+      if(!cards?.some(card=>card.source?.pdfId===saved.id&&card.source.pdfName!==saved.name))return item;
+      return {...item,outputs:{...item.outputs,flashcards:{...item.outputs?.flashcards,cards:cards.map(card=>
+        card.source?.pdfId===saved.id?{...card,source:{...card.source,pdfName:saved.name}}:card)}}};
+    }));
     return saved;
   }
-  async create(subjectId:string,parentId:string|null,kind:Exclude<MaterialKind,'pdf'>,name:string):Promise<Material>{
+  async create(subjectId:string,parentId:string|null,kind:Exclude<MaterialKind,'pdf'|'deck'>,name:string):Promise<Material>{
     return this.queue(async()=>{
       this.assertParent(subjectId,parentId);
       const content=kind==='md'?'# New note\n\nStart writing here.\n':'';
@@ -50,11 +82,11 @@ export class MaterialStore {
       this.error.set('');return saved;
     });
   }
-  async add(subjectId:string,files:File[],category:MaterialCategory,parentId:string|null=null,mode:LearningMode='shallow',requestedQuestions=60):Promise<void>{
+  async add(subjectId:string,files:File[],category:MaterialCategory,parentId:string|null=null):Promise<void>{
     if(this.loading()||this.busy())return;this.busy.set(true);this.error.set('');
-    try{const added=await this.queue(async()=>{
-      if(!Number.isInteger(requestedQuestions)||requestedQuestions<5||requestedQuestions>300)throw new Error('Enter a whole number of flashcards from 5 to 300.');
-      this.assertParent(subjectId,parentId);const saved:Material[]=[];
+    const added:Material[]=[];
+    try{await this.queue(async()=>{
+      this.assertParent(subjectId,parentId);const saved=added;
       for(const file of files){
         if(file.size>=50_000_000)throw new Error(`${file.name} must be smaller than 50 MB.`);
         if(!/\.pdf$/i.test(file.name)||!(await file.slice(0,1024).text()).includes('%PDF-'))throw new Error(`${file.name} is not a PDF.`);
@@ -64,32 +96,47 @@ export class MaterialStore {
         // The row comes first so the id exists; then the bytes are uploaded once, and
         // processing reads them from the server instead of sending them again.
         const created=await this.request<Material>('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({id:crypto.randomUUID(),subjectId,parentId,kind:'pdf',name,category,size:file.size,processing:{status:'queued',mode,requestedQuestions}})});
+          body:JSON.stringify({id:crypto.randomUUID(),subjectId,parentId,kind:'pdf',name,category,type:CATEGORY_DOCUMENT_TYPES[category]??null,size:file.size,processing:{status:'queued',mode:'deep',task:'summary',requestedQuestions:60}})});
         try{saved.push(this.store(await this.request<Material>(`/api/materials/${created.id}/file`,{method:'PUT',headers:{'Content-Type':'application/pdf'},body:file})));}
         catch(e){await this.request(`/api/materials/${created.id}`,{method:'DELETE'}).catch(()=>undefined);throw e;}
       }
       return saved;
-    });for(const file of added)void this.process(file.id);}catch(e){this.error.set(e instanceof Error?e.message:'Could not save PDFs. Please retry.');}finally{this.busy.set(false);}
+    });}catch(e){this.error.set(e instanceof Error?e.message:'Could not save PDFs. Please retry.');}finally{this.busy.set(false);for(const file of added)void this.process(file.id,false,'deep',60,'summary');}
   }
   remove(id:string):Promise<boolean>{return this.queue(async()=>{
-    const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)!=='pdf')return false;
+    const file=this.files().find(f=>f.id===id);if(!file)return true;
     try{
-      // The server deletes the row, the stored PDF and every generated result together.
-      await this.request(`/api/materials/${id}`,{method:'DELETE'});
-      this.files.update(files=>files.filter(f=>f.id!==id));this.error.set('');return true;
-    }catch(e){this.error.set(e instanceof Error?e.message:'Could not delete this PDF. Please retry.');return false;}
+      // The response includes every row removed from this folder's subtree.
+      const result=await this.request<{deleted:string[]}>(`/api/materials/${id}`,{method:'DELETE'});
+      this.forget(id,result.deleted);
+      // Independent decks survive source deletion with their PDF reference cleared.
+      try{this.files.set((await this.request<Material[]>('/api/materials')).map(normalizeMaterial));}
+      catch{/* Keep the known committed deletion if a background refresh fails. */}
+      this.error.set('');return true;
+    }catch(e){
+      if(e instanceof MaterialRequestError&&e.status===404){this.forget(id);this.error.set('');return true;}
+      // A server error or lost response can happen after the deletion committed.
+      try{this.files.set((await this.request<Material[]>('/api/materials')).map(normalizeMaterial));
+        if(!this.files().some(file=>file.id===id)){this.error.set('');return true;}}
+      catch{/* Keep the last known list when the server cannot be reached. */}
+      this.error.set(e instanceof Error?e.message:'Could not delete this item. Please retry.');return false;
+    }
   });}
-  async process(id:string,resume=false,selectedMode?:LearningMode):Promise<void>{
+  async process(id:string,resume=false,selectedMode?:LearningMode,count?:number,selectedTask?:LearningTask,regenerate=false):Promise<void>{
     const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)!=='pdf'||this.activeJobs.has(id))return;
     const mode=selectedMode??file.processing?.mode??'shallow';
-    const requestedQuestions=file.processing?.requestedQuestions??60;
+    const task=selectedTask??file.processing?.task??'flashcards';
+    if(task==='flashcards'&&!canGenerateFlashcards(file))return;
+    const requestedQuestions=count??file.processing?.requestedQuestions??60;
+    if(task==='flashcards'&&(!Number.isInteger(requestedQuestions)||requestedQuestions<5||requestedQuestions>300)){this.error.set('Enter a whole number of flashcards from 5 to 300.');return;}
     this.activeJobs.add(id);
     try{
-      if(!resume&&!await this.update(id,current=>(current.processing?.mode??'shallow')===mode?{processing:{status:'queued',mode,requestedQuestions}}:learningPatch(current,{id,mode,requested_questions:requestedQuestions,status:'queued',documents:[]})))throw new Error(this.error());
+      if(!resume&&!await this.update(id,{processing:{status:'queued',mode,task,requestedQuestions}}))throw new Error(this.error());
       await this.pipeline.process(file,async result=>{
         if(!await this.update(id,current=>learningPatch(current,result)))throw new Error(this.error()||'Could not save generated results.');
-      },resume,mode);
-    }catch(e){await this.update(id,{processing:{status:'error',mode,requestedQuestions,error:e instanceof Error?e.message:'Processing failed. Retry this file.'}});}
+        if(result.status==='complete')await this.refresh();
+      },resume,mode,task,requestedQuestions,regenerate);
+    }catch(e){await this.update(id,{processing:{status:'error',mode,task,requestedQuestions,error:e instanceof Error?e.message:'Processing failed. Retry this file.'}});}
     finally{this.activeJobs.delete(id);}
   }
   update(id:string,change:MaterialPatch|((file:Material)=>MaterialPatch)):Promise<boolean>{return this.queue(async()=>{
@@ -102,12 +149,20 @@ export class MaterialStore {
       this.store(await this.request<Material>(`/api/materials/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({...patch,name:next.name,outputs:next.outputs})}));
       this.error.set('');return true;
-    }catch(e){this.error.set(e instanceof Error?e.message:'Could not save changes. Please retry.');return false;}
+    }catch(e){if(e instanceof MaterialRequestError&&e.status===404)this.forget(id);this.error.set(e instanceof Error?e.message:'Could not save changes. Please retry.');return false;}
   });}
   appendCards(id:string,cards:Flashcard[]):Promise<boolean>{return this.queue(async()=>{
     const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)==='folder')return false;
-    const outputs={...file.outputs,flashcards:{cards:[...file.outputs?.flashcards?.cards??[],...cards.map(c=>({...c,id:crypto.randomUUID()}))]}};
-    try{this.store(await this.request<Material>(`/api/materials/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({outputs})}));return true;}
-    catch(e){this.error.set(e instanceof Error?e.message:'Could not save flashcards. Please retry.');return false;}
+    try{this.store(await this.request<Material>(`/api/materials/${id}/cards`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cards})}));return true;}
+    catch(e){if(e instanceof MaterialRequestError&&e.status===404)this.forget(id);this.error.set(e instanceof Error?e.message:'Could not save flashcards. Please retry.');return false;}
+  });}
+  removeCard(deckId:string,cardId:string):Promise<boolean>{return this.queue(async()=>{
+    try{
+      this.store(await this.request<Material>(`/api/materials/${encodeURIComponent(deckId)}/cards/${encodeURIComponent(cardId)}`,{method:'DELETE'}));
+      this.error.set('');return true;
+    }catch(e){
+      if(e instanceof MaterialRequestError&&e.status===404){this.forget(deckId);this.error.set('');return true;}
+      this.error.set(e instanceof Error?e.message:'Could not delete this flashcard. Please retry.');return false;
+    }
   });}
 }

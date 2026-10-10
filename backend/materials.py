@@ -1,10 +1,4 @@
-"""The subject file library: folders, lecture PDFs and text notes, scoped to the caller.
-
-Metadata is in SQLite, PDF bytes are on disk in the pipeline's folder for the same id, so
-an upload is stored once and processing reads it from there. `outputs` and `processing` are
-kept as the JSON the frontend sends; the server does not read inside them, so the card
-shape can change without a migration here.
-"""
+"""User-scoped file library and independent decks; PDF bytes stay in pipeline storage."""
 import json
 import sqlite3
 import time
@@ -14,17 +8,19 @@ from flask import Blueprint, Response, current_app, jsonify, request, send_file
 
 from auth import current_user
 import db
+import decks
 from errors import RequestError
+from material_types import CATEGORY_TYPES, DOCUMENT_TYPES, TYPE_CATEGORIES
 
 bp = Blueprint("materials", __name__, url_prefix="/api/materials")
 
-KINDS = {"folder", "pdf", "md", "txt"}
-CATEGORIES = {"Slides", "Notes", "Transcripts", "Books", "Exams", "Exercises"}
+KINDS = {"folder", "pdf", "md", "txt", "deck"}
+CATEGORIES = {"Slides", "Solutions", "Scripts", "Notes", "Transcripts", "Books", "Exams", "Exercises"}
 MARKERS = {"To read", "Done", "Revisit", "Ignore"}
 MAX_TEXT = 200_000      # a note's content
 MAX_JSON = 1_000_000    # outputs or processing, serialised
-COLUMNS = ("id, subject_id, parent_id, kind, name, description, category, marker, size, "
-           "content, added_at, outputs, processing")
+COLUMNS = ("id, subject_id, parent_id, kind, name, description, category, type, marker, size, "
+           "content, added_at, outputs, processing, source_pdf_id, generation_mode, folder_weight")
 
 
 def jobs():
@@ -35,14 +31,37 @@ def jobs():
 def to_json(row):
     data = {"id": row["id"], "subjectId": row["subject_id"], "parentId": row["parent_id"],
             "kind": row["kind"], "name": row["name"], "description": row["description"],
-            "category": row["category"], "marker": row["marker"], "size": row["size"],
-            "added": row["added_at"]}
+            "category": row["category"], "type": row["type"], "marker": row["marker"], "size": row["size"],
+            "added": row["added_at"], "sourcePdfId": row["source_pdf_id"],
+            "generationMode": row["generation_mode"], "folderWeight": row["folder_weight"]}
     if row["content"] is not None:
         data["content"] = row["content"]
     for key in ("outputs", "processing"):
         if row[key]:
             data[key] = json.loads(row[key])
+    if row["kind"] == "deck":
+        data["outputs"] = {"flashcards": {"cards": decks.deck_cards(db.get_db(), row["id"])}}
     return data
+
+
+def classification(body, kind, existing_category=None):
+    """Accept stable types or older category-only requests without conflicting flags."""
+    document_type = body.get("type")
+    if document_type is not None and (not isinstance(document_type, str) or document_type not in DOCUMENT_TYPES):
+        raise RequestError(400, "Choose a document type the app offers.")
+    category = body.get("category", TYPE_CATEGORIES.get(document_type, existing_category))
+    if not isinstance(category, str) or category not in CATEGORIES:
+        raise RequestError(400, "Choose a category the app offers.")
+    if kind == "folder":
+        if document_type is not None:
+            raise RequestError(400, "Folders do not have a document type.")
+        return category, None
+    if "type" not in body:
+        document_type = CATEGORY_TYPES.get(category)
+    elif (document_type is not None and TYPE_CATEGORIES[document_type] != category
+          or document_type is None and category in CATEGORY_TYPES):
+        raise RequestError(400, "The document type must match its category.")
+    return category, document_type
 
 
 def valid_name(name, kind):
@@ -50,7 +69,7 @@ def valid_name(name, kind):
         return False
     if any(c in name for c in "\\/") or any(ord(c) < 32 for c in name):
         return False
-    return kind == "folder" or name.lower().endswith("." + kind)
+    return kind in {"folder", "deck"} or name.lower().endswith("." + kind)
 
 
 def as_json_text(value, field):
@@ -144,10 +163,11 @@ def create():
     subject_id = body.get("subjectId")
     if not isinstance(subject_id, str) or not subject_id or len(subject_id) > 100:
         raise RequestError(400, "This file needs a subject.")
-    if body.get("category") not in CATEGORIES or body.get("marker", "To read") not in MARKERS:
-        raise RequestError(400, "Choose a category and a marker the app offers.")
+    category, document_type = classification(body, kind)
+    if body.get("marker", "To read") not in MARKERS:
+        raise RequestError(400, "Choose a marker the app offers.")
     content = body.get("content")
-    if kind in {"folder", "pdf"}:
+    if kind in {"folder", "pdf", "deck"}:
         content = None
     elif not isinstance(content, str) or len(content) > MAX_TEXT:
         raise RequestError(400, "This note is too long to save.")
@@ -161,12 +181,17 @@ def create():
     check_parent(conn, user["id"], subject_id, parent_id)
     size = len(content.encode()) if content is not None else int(body.get("size") or 0)
     write(conn, """INSERT INTO materials (id, user_id, subject_id, parent_id, kind, name, description,
-                                          category, marker, size, content, added_at, processing)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                          category, type, marker, size, content, added_at, processing)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
           (material_id, user["id"], subject_id, parent_id, kind, name, body.get("description") or "",
-           body["category"], body.get("marker", "To read"), size, content,
+           category, document_type, body.get("marker", "To read"), size, content,
            int(time.time() * 1000), as_json_text(body.get("processing"), "processing")))
     return jsonify(to_json(row(material_id))), 201
+
+
+@bp.get("/<uuid:material_id>")
+def detail(material_id):
+    return jsonify(to_json(row(str(material_id))))
 
 
 @bp.patch("/<uuid:material_id>")
@@ -189,11 +214,10 @@ def update(material_id):
             raise RequestError(400, "This description is too long.")
         sets.append("description = ?")
         values.append(description)
-    if "category" in body:
-        if body["category"] not in CATEGORIES:
-            raise RequestError(400, "Choose a category the app offers.")
-        sets.append("category = ?")
-        values.append(body["category"])
+    if "category" in body or "type" in body:
+        category, document_type = classification(body, existing["kind"], existing["category"])
+        sets += ["category = ?", "type = ?"]
+        values += [category, document_type]
     if "marker" in body:
         if body["marker"] not in MARKERS:
             raise RequestError(400, "Choose a marker the app offers.")
@@ -204,6 +228,14 @@ def update(material_id):
         check_parent(conn, user["id"], existing["subject_id"], parent_id, material_id)
         sets.append("parent_id = ?")
         values.append(parent_id)
+    if "folderWeight" in body:
+        import math
+        weight = body["folderWeight"]
+        if (existing["kind"] != "folder" or isinstance(weight, bool) or not isinstance(weight, (float, int))
+                or not math.isfinite(weight) or weight <= 0):
+            raise RequestError(400, "Folder weights must be finite positive numbers.")
+        sets.append("folder_weight = ?")
+        values.append(weight)
     if "content" in body:
         if existing["kind"] not in {"md", "txt"}:
             raise RequestError(400, "Only text files can be edited.")
@@ -212,15 +244,77 @@ def update(material_id):
             raise RequestError(400, "This note is too long to save.")
         sets += ["content = ?", "size = ?"]
         values += [content, len(content.encode())]
+    outputs = body.get("outputs")
+    if outputs is not None and (not isinstance(outputs, dict)
+                               or ("flashcards" in outputs and not isinstance(outputs["flashcards"], dict))):
+        raise RequestError(400, "Invalid material outputs.")
     for field in ("outputs", "processing"):
         if field in body:
+            value = body[field]
+            if field == "outputs" and existing["kind"] in {"pdf", "deck"} and value is not None:
+                value = {key: val for key, val in value.items() if key != "flashcards"}
             sets.append(f"{field} = ?")
-            values.append(as_json_text(body[field], field))
+            values.append(as_json_text(value, field))
 
-    if sets:
-        write(conn, f"UPDATE materials SET {', '.join(sets)} WHERE id = ? AND user_id = ?",
-              values + [material_id, user["id"]])
+    with conn:
+        if outputs and "flashcards" in outputs:
+            cards = outputs["flashcards"].get("cards", [])
+            decks.validate_cards(cards)
+            if existing["kind"] == "deck":
+                decks.replace_cards(conn, material_id, cards)
+            elif existing["kind"] == "pdf":
+                # Legacy clients can still submit card outputs; content lives only in the deck.
+                processing = body.get("processing") or json.loads(existing["processing"] or "{}")
+                if processing.get("status") == "complete" and processing.get("task", "flashcards") == "flashcards":
+                    generated = [c for c in cards if c.get("generated") or c.get("demo")]
+                    deck_id = decks.sync_generated(conn, existing, generated, processing.get("mode", "shallow"))
+                    manual = [c for c in cards if not c.get("generated") and not c.get("demo")]
+                    saved = decks.deck_cards(conn, deck_id)
+                    ids = {c['id'] for c in saved}
+                    decks.replace_cards(conn, deck_id, saved + [c for c in manual if c.get('id') not in ids])
+        if sets:
+            try:
+                conn.execute(f"UPDATE materials SET {', '.join(sets)} WHERE id = ? AND user_id = ?",
+                             values + [material_id, user["id"]])
+                if existing["kind"] == "pdf" and "name" in body:
+                    conn.execute("UPDATE flashcards SET source_pdf_name=? WHERE source_pdf_id=?",
+                                 (body["name"], material_id))
+            except sqlite3.IntegrityError:
+                raise RequestError(409, "That material name or relationship is already in use.") from None
     return jsonify(to_json(row(material_id)))
+
+
+@bp.post("/<uuid:material_id>/cards")
+def append_cards(material_id):
+    existing = row(str(material_id))
+    body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict):
+        raise RequestError(400, "Provide an object containing the cards.")
+    cards = body.get("cards")
+    decks.validate_cards(cards)
+    if existing["kind"] not in {"deck", "pdf"}:
+        raise RequestError(400, "Add cards to a deck or its source PDF.")
+    conn = db.get_db()
+    with conn:
+        deck_id = existing["id"] if existing["kind"] == "deck" else decks.ensure_deck(conn, existing)
+        # IDs are assigned by the server for additions.
+        decks.replace_cards(conn, deck_id, decks.deck_cards(conn, deck_id) +
+                            [{**c, "id": str(uuid.uuid4()), "generated": False, "demo": False} for c in cards])
+    return jsonify(to_json(row(deck_id))), 201
+
+
+@bp.delete("/<uuid:material_id>/cards/<card_id>")
+def delete_card(material_id, card_id):
+    conn = db.get_db()
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        deck = row(str(material_id))
+        if deck["kind"] != "deck":
+            raise RequestError(400, "Delete cards from their deck.")
+        # Delete only this card, preserving concurrent additions and other progress.
+        # An already-removed card is a successful retry; return the current deck.
+        conn.execute("DELETE FROM flashcards WHERE deck_id = ? AND id = ?", (deck["id"], card_id))
+    return jsonify(to_json(row(deck["id"])))
 
 
 @bp.delete("/<uuid:material_id>")
@@ -233,10 +327,16 @@ def delete(material_id):
         raise RequestError(404, "This file does not exist.")
     with conn:
         conn.execute("DELETE FROM materials WHERE id = ? AND user_id = ?", (material_id, user["id"]))
+    current_app.extensions["document_chat"].wake.set()
     # The rows are gone either way; the PDFs and generated results follow.
     for removed_id, kind in removed:
         if kind == "pdf":
-            jobs().delete(removed_id)
+            try:
+                jobs().delete(removed_id)
+            except OSError:
+                # Never report a failed logical deletion after committing it, or
+                # skip the rest of a deleted folder when one PDF is locked.
+                current_app.logger.warning("File cleanup deferred for deleted material %s", removed_id)
     return jsonify(deleted=[removed_id for removed_id, _ in removed])
 
 
@@ -258,6 +358,7 @@ def upload(material_id):
     with conn:
         conn.execute("UPDATE materials SET size = ?, sha256 = ? WHERE id = ? AND user_id = ?",
                      (len(pdf), digest, material_id, current_user()["id"]))
+    current_app.extensions["document_chat"].ensure_index(material_id)
     return jsonify(to_json(row(material_id)))
 
 

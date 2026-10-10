@@ -1,8 +1,7 @@
 <section class="panel schedule-panel" [class.expanded]="expanded()" aria-labelledby="schedule-title">
   <div class="panel-heading">
     <div><div class="section-label"><span class="tiny-square"></span> YOUR STUDY PHASE</div><h2 id="schedule-title">{{expanded() ? 'Hours overview' : 'Full schedule'}}</h2><p>{{expanded() ? weekLabel() : phaseLabel()}}</p></div>
-    @if(expanded()) {<a class="button secondary" routerLink="/" aria-label="Close hours overview"><app-icon name="close" /> Close</a>}
-    @else {<a class="button primary" routerLink="/schedule">Full detail <app-icon name="expand" /></a>}
+    @if(!expanded()) {<a class="button primary" routerLink="/schedule" [queryParams]="{view:'hours'}">Full detail <app-icon name="expand" /></a>}
   </div>
   @if(expanded()) {
     <div class="week-toolbar">
@@ -20,15 +19,15 @@
           <th class="subject-col" scope="row"><a [routerLink]="['/subject-tab',subject.id]"><span class="subject-dot" [style.background]="subject.color"></span><span>{{subject.shortName}}</span></a></th>
           <td class="remaining-col" [class.over-target]="!expanded()&&store.remaining(subject)<0">{{expanded()?store.hours(subject,store.week()):store.remaining(subject)}}</td>
           @for(date of visibleDates();track date){<td [class.weekend]="weekday(date)==='Sat'||weekday(date)==='Sun'">
-            @if(store.dates().includes(date)){<button class="hour-cell" [class.recorded]="subject.hours[date]!=null" [style.background]="subject.hours[date]!=null ? subject.color+'28' : null" [attr.aria-label]="subject.name+', '+dateLabel(date)+': '+(subject.hours[date]??'unrecorded')+' hours. Edit.'" (click)="store.openEditor(subject.id,date)">{{subject.hours[date]??'—'}}</button>}
+            @if(store.dates().includes(date)){<button class="hour-cell" [class.recorded]="subject.hours[date]!=null" [class.planned]="subject.hours[date]==null&&planned(subject.id,date)>0" [style.background]="cellColor(subject,date)" [attr.aria-label]="cellLabel(subject,date)" (click)="store.openEditor(subject.id,date)">@if(subject.hours[date]!=null){{{subject.hours[date]}}}@else if(planned(subject.id,date)){<span class="planned-hint">{{planned(subject.id,date)}}</span>}@else{—}</button>}
             @else {<span class="outside-phase" title="Outside the study phase">—</span>}
           </td>}
         </tr>
       }</tbody>
-      <tfoot><tr><th scope="row" class="subject-col">Daily total <span>hours</span></th><td class="remaining-col">{{expanded()?store.weekHours():store.totalHours()}}</td>@for(date of visibleDates();track date){<td>{{store.daily(date)}}</td>}</tr></tfoot>
+      <tfoot><tr><th scope="row" class="subject-col">Daily total <span>hours</span></th><td class="remaining-col">{{expanded()?store.weekHours():store.totalHours()}}</td>@for(date of visibleDates();track date){<td>{{store.daily(date)}}</td>}</tr>
+        @if(store.generatedPlan()){<tr class="planned-row"><th scope="row" class="subject-col">Planned <span>by the scheduler</span></th><td class="remaining-col">{{expanded()?plannedWeek():store.planHours()}}</td>@for(date of visibleDates();track date){<td>{{store.plannedDaily(date)||'—'}}</td>}</tr>}</tfoot>
     </table>
   </div>
-  <div class="panel-foot"><span>Scroll sideways to explore <span class="optional-text">· Select any cell to edit</span></span><app-scroll-buttons [target]="scheduleViewport" label="schedule" /></div>
   @if(expanded()) {
     <div class="week-insights">
       <div><span class="eyebrow">AT A GLANCE</span><h3>Your week, by subject.</h3><p class="muted">Recorded study time across these seven days.</p></div>

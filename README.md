@@ -72,7 +72,8 @@ noon and only revert after that. Never `ssh` in and edit files on the VM -- the 
 
 Flask (`backend/`) serves the API under `/api` and the built Angular app (`frontend/`) for every
 other path — one process, one port. The PDF pipeline (lecture PDF → summary → flashcards → Anki
-deck) lives in `backend/learning/`; see [LEARNING_VIEW.md](LEARNING_VIEW.md) for how it works.
+deck) lives in `backend/learning/`; see its [module README](backend/learning/README.md) for how
+it works.
 
 **Deploy:** every push to `main` runs the frontend and backend checks, then deploys to the VM
 (`.github/workflows/deploy.yml`): `git reset --hard origin/main` and
@@ -98,6 +99,17 @@ cd frontend && npm install && npm start
 
 Serving the built frontend instead of the dev server: `cd frontend && npm run build`, then open
 <http://localhost:8080>.
+
+**Or run it in Docker, in dev mode:**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build   # :8080 as alice@ethz.ch
+```
+
+Plain `docker compose up -d --build` is the production setup: it expects the reverse proxy to
+say who is calling, and locally there is none, so every `/api` route answers 401 and the file
+library, the TODO list and the dashboard show "unauthorized". That is not a bug. Use the dev
+override locally (it also loads the demo data and sets `DEV_USER`); see "Who is signed in".
 
 **Checks:**
 
@@ -151,20 +163,55 @@ into `backend/seed_demo/`.
 
 ## Files and materials
 
-A material is a folder, a lecture PDF or a small text note, and belongs to one user and one
+A material is a folder, a lecture PDF, a text note or a flashcard deck, and belongs to one user and one
 subject (`backend/materials.py`, `/api/materials`). The metadata is in SQLite; a PDF's bytes
 are written once to `data/learning/<id>/source.pdf`, which is also where the pipeline reads
 them, so nothing is stored twice and `POST /api/learning/documents/<id>` needs no body.
 
-`outputs` (summary and flashcards) and `processing` (the last run's state) are stored as the
-JSON the frontend sends. The server never reads inside them, so the card shape can change
-without a migration. Everything else -- names, parents, categories, uniqueness within a
-folder -- is validated server-side, and every row is scoped to the caller: another user's id
-is a 404, not a peek.
+Each document also has a validated `type` flag (`slides`, `mock_exam`, `exercise`,
+`exercise_solution`, or `script`) separate from its file format. Existing libraries are
+migrated in place from their categories at startup. See the [learning pipeline documentation](backend/learning/README.md)
+for compatibility rules and the independent fast-summary model configuration.
 
-The study plan itself (subjects, hours, sessions) is still kept in the browser by
-`StudyStore`. Moving it to the server is the next step, and the shape to aim for is in
-CLAUDE.md.
+PDF summaries remain in `outputs`; `processing` stores the last pipeline run's state.
+Each PDF has one independent deck material, linked by nullable `source_pdf_id`.
+Generation replaces the deck's generated cards when its mode changes, preserves manual
+cards, and retains IDs and progress for unchanged question/answer pairs. Decks can move or
+be renamed independently. Deleting the PDF clears the source reference and retains its deck.
+
+`backend/schema.sql` declares `flashcards` (stable IDs and deck content),
+`flashcard_progress` (per-user, per-deck, per-card scheduler fields), and
+`flashcard_reviews` (rating history). Startup transactionally migrates old material schemas
+and embedded cards without resetting the database. Existing cards start as new cards.
+Changing card content resets its progress and increments its version; deck moves retain it.
+All materials, sessions, ratings and analytics are scoped to the signed-in user.
+
+The Python scheduler in `backend/learning/scheduler.py` is extracted from
+`anki_flashcard_scheduler.ipynb`. Its Anki-like SM-2 rules use Again/Hard/Good/Easy,
+1/10-minute learning steps, 1-day graduation (Easy: 4 days), ease-based reviews,
+relearning after lapses, and a 21-day maturity threshold. This is not Anki FSRS.
+`GET /api/practice/session` takes `subject`, optional `folder` or `deck`, `limit` (default 20),
+and `newCardLimit` (default 5). Eligible cards are interleaved recursively using positive
+folder weights (default 1). Limits apply per call; selection neither reserves cards nor
+changes progress. `POST /api/practice/review` atomically checks the card version, applies
+the notebook's transition, and records response timing and history. Duplicate or stale
+ratings receive a conflict. `GET /api/practice/analytics` aggregates scheduler statistics
+for the selected scope and every descendant folder/deck.
+
+The learning UI finishes each selected batch, shows the next due time, and enables another
+batch when due. The Analytics page shows expandable folder progress and detailed recall
+statistics. Space reveals answers and rates Good; 1/2/3/4 rate Again/Hard/Good/Easy on the back.
+`.apkg` exports still contain fresh cards, without this app's review progress.
+
+**Tasks.** Each subject has a TODO list (`backend/tasks.py`, `/api/tasks`, table `tasks`),
+one row per task with title, notes, due date, done flag and a manual position; new tasks go
+to the top, done ones are listed separately and can be cleared per subject. Same rules as
+materials: validated server-side and scoped to the caller. The frontend side is
+`TaskStore` and `TaskListComponent` in the subject sidebar.
+
+The study plan -- subjects, recorded hours, planned sessions and the generated schedule --
+lives on the server too, in `backend/planner.py`; see "Study plan and schedule" below.
+`StudyStore` is the in-memory copy the pages read, and nothing is kept in browser storage.
 
 ## Who is signed in
 
@@ -205,6 +252,109 @@ So: to use the app as somebody else, **open it in a private window**. If a real 
 matters for a demo, ask the organizers whether the proxy can send `prompt=login` instead of
 `approval_prompt=force` -- that is their config, and it would force a fresh login for every
 team's app. Set `SIGN_OUT_URL` empty in `.env` to hide the button entirely.
+
+## Course catalogue (VVZ)
+
+The `courses` table is the ETH course catalogue. The seed puts a few rows in it; the VVZ sync (`backend/vvz/sync.py`) fills and refreshes it from the database dump of the community project [vvzapi.ch](https://vvzapi.ch) ([markbeep/vvzapi](https://github.com/markbeep/vvzapi), GPLv3; we use its data, not its code, and credit it here). Every course gets ECTS, exam mode, the Basisprüfung block, lecturers, programme sections and student ratings, and per semester an offering with the lecture/exercise parts, their weekly hours and room timeslots.
+
+- **Schema:** in `backend/schema.sql`. `courses` is upserted by `code`, so ids survive and `semester_courses` keeps pointing at the right rows; `course_offerings` (one per course and semester, id = VVZ lerneinheitId) with `course_lectures`, `course_timeslots`, `course_lecturers`/`lecturers`, `course_sections`, plus `course_ratings` and `vvz_meta`.
+- **Which semesters:** previous, current and the next two by default; override with `VVZ_SEMESTERS=2025W,2026S`.
+- **When it runs:** nobody triggers it by hand. Every app start (so every deploy and every restart) launches a background thread that syncs about ten seconds after boot and then every 24 h (`VVZ_REFRESH_SECONDS`); `VVZ_AUTO_SYNC=0` turns that off. A sync asks vvzapi.ch whether the dump changed, downloads it only then, and imports only when the database does not already hold that dump for these semesters, so a redeploy with up-to-date data is a no-op. The import is one transaction, so requests see either the old or the new catalogue. To force one: `docker compose exec app python -m vvz.sync --force`.
+- **Cache:** the downloaded dump is cached as `data/vvz-dump.zip`, which is how `reset-db` and `wipe` refill the catalogue in a second without the network, and how a sync still imports when vvzapi.ch is down. A fresh deployment with an empty `data/` downloads it on first start (about 70 MB, ten seconds); until then the catalogue holds only the seed.
+- **On the VM:** `data/` is a bind mount, so the database and the cache survive `docker compose up --build`. The GitHub Actions deploy (`.github/workflows/deploy.yml`) runs the backend tests, which never touch the network, then restarts the container; the sync thread then does its start-up check as described above.
+- **dump-seed** skips the synced tables and writes only the courses the demo data references, so the seed files stay small.
+- **Known gap:** upstream has no timeslots for autumn 2026 yet, although VVZ itself lists them. An offering without slots gets the slots of the same course one year earlier, marked with `inherited_from`, so treat those as "probably" and show the flag in the UI.
+
+```bash
+cd backend
+../.venv/bin/python -m vvz.sync                   # download the dump (~70 MB) if it changed, then import
+../.venv/bin/python -m vvz.sync --force           # import again even if nothing changed
+../.venv/bin/python -m vvz.sync --offline         # import from the cached dump, no network
+../.venv/bin/python -m unittest tests.test_vvz tests.test_vvz_app
+```
+
+No endpoints yet: read the tables directly (`courses`, `course_offerings`, `course_lectures`, `course_timeslots`, ...) from whatever backend code needs them.
+
+## Study plan and schedule
+
+A semester holds the courses you take, what you recorded, what you planned yourself, and a
+generated schedule. `backend/planner.py` owns the endpoints, `backend/schedule_planner/` the
+algorithm.
+
+- **The scheduler** (`backend/schedule_planner/`) is plain Python: a JSON request in, a
+  week-by-week plan out, no Flask, no database, no clock. It fills each day with blocks of
+  `studyBlockSize` minutes around fixed meals, groups a subject's learning blocks together,
+  and ends each day with one short recall block per subject studied. Hours go where the exam
+  is closest and the remaining workload (`30 x ECTS` minus lectures attended minus hours
+  already planned) is largest, tilted by difficulty against priority. Try it by hand:
+
+  ```bash
+  cd backend
+  ../.venv/bin/python -m schedule_planner.main < tests/example_input.json
+  ```
+
+- **Generating** is `POST /api/semesters/<semkez>/plan/generate`, and it plans **one week**:
+  the one open in the calendar, which the frontend sends as `fromDate`/`toDate` (defaults:
+  today clamped into the study phase, and a week after it). Only generated slots in those days
+  are replaced; other weeks and your own slots stay. Blocks before `fromDate` go to the
+  scheduler as history, so the hours they used still count against a course's cap.
+  `dryRun: true` returns the proposal without storing it, which is what the preview shows.
+- **Reading** is `GET /api/semesters/<semkez>/plan`, which carries the subjects, your own
+  sessions, the habits the plan was built from, and `plan: null` until one has been generated.
+  Its totals are added up from the stored blocks, not from the last run, because earlier weeks
+  outlive the run that made them.
+- **Storage:** `study_plans` holds one row per semester (the run, and the request that produced
+  it, so a plan can be reproduced), `plan_blocks` one row per block with its type
+  (`active_learning`, `recall`, `meal`). A meal block has no course, which the composite
+  foreign key tolerates because SQLite does not enforce one when a column is NULL -- so
+  deleting a course still takes its blocks with it. Generated blocks are kept apart from
+  `study_sessions`, which is yours: regenerating never touches what you typed.
+- **Preferences** are split in two. How a day is laid out belongs to the semester
+  (`day_start`, `day_end`, meals, `study_block_size`, `study_hours_per_week`, `alpha`, `beta`)
+  and is saved with `PUT /api/semesters/<semkez>/preferences`, along with `semester_days_off`.
+  What the scheduler needs per course (`priority`, `difficulty`, `max_study_hours`,
+  `lecture_per_week`) goes on `semester_courses` and is saved with the existing
+  `PATCH .../courses/<id>`. Every column has a default, so a semester can be planned the
+  moment you add a course -- the form only refines it.
+- **Where the numbers come from:** ECTS and weekly contact hours from the VVZ offering,
+  difficulty from the scraped `course_ratings` rounded to 1-5, and the rest from you. Exam
+  dates are not in the VVZ, so they default to the end of the study phase until you set them.
+  A course marked finished is left out of the plan.
+- **Defaults:** a study block is 60 minutes, and `study_hours_per_week` left empty means
+  every free hour between day start and end, lunch and dinner excluded (70 h a week at
+  08:00-20:00). Set it to study less; each week stops at the budget, pro-rated over a part week.
+  Recall blocks are placed either way, the same exemption `max_study_hours` has.
+- **The calendar is one layer of slots.** Drag on empty space to draw one (a course, or a
+  break that keeps the time free), drag a slot to move it, its edges to resize it, × to delete
+  it; a click opens the course. `POST/PATCH/DELETE /api/semesters/<semkez>/plan/blocks`. A slot
+  you drew or touched is `source = 'manual'`: regenerating keeps it and passes it to the
+  scheduler as busy time, so nothing is planned on top of it and a course slot counts towards
+  that course's share and cap. Drawing over a generated slot replaces it; overlapping one of
+  your own is refused. Back-to-back blocks of one course are stored as one session, so a
+  morning of study is one slot to drag, not three. Lunch and dinner are slots too, placed
+  from the habits, and move or delete like any other; one you moved, deleted (remembered in
+  `plan_meal_skips`) or drew over is left out of that day when it is generated again.
+- **Per day:** the + over a day plans just that day around what is on it (generate with
+  `fromDate = toDate`), and the bin empties it, your own slots and meals included
+  (`DELETE /api/semesters/<semkez>/plan/days/<date>`), so generating it again starts over.
+- **Study days** (`semesters.study_weekdays`, Mon-Sun in the setup) apply to every week: a
+  week's proposal treats the other weekdays as days off. The + on a single day plans it anyway.
+- **The hours overview** colours each cell by its hours: recorded hours in the course colour,
+  deeper the more there are, and hours only planned as a light wash with the number shown.
+- **Targets:** a course whose `target_hours` is still 0 gets the scheduler's workload estimate
+  (30 h per ECTS, less 13 weeks of its lecture hours) the first time slots are planned. A target
+  you set, or the seed set, is never overwritten -- it is a semester goal, not what one week holds.
+- **One source for "planned":** the plan's `sessions` (what the analytics reads) are the
+  calendar's course slots. Old hand-planned `study_sessions` rows, including the demo seed's,
+  are moved into the calendar as your own slots on every start and reseed
+  (`db.migrate_sessions_to_slots`).
+- **The study phase itself** is fixed per semester in `planner.phase()`: HS runs 21 Dec to
+  14 Feb, FS 1 Jun to 31 Aug. It is not user-settable yet; the VVZ API would be the place to
+  get the real session dates from.
+
+```bash
+cd backend && ../.venv/bin/python -m unittest tests.test_schedule tests.test_schedule_api
+```
 
 ## Deadlines
 

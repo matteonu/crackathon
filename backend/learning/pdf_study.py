@@ -12,6 +12,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+try:
+    from .config import model_for, reasoning_for
+except ImportError:  # Direct execution: python learning/pdf_study.py ...
+    from config import model_for, reasoning_for
+
 
 def configured_api_key() -> str:
     value = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -28,7 +33,8 @@ def configured_api_key() -> str:
 # Server-side settings. Never embed API credentials in source code.
 API_KEY = configured_api_key()
 API_BASE_URL = os.environ.get('OPENAI_BASE_URL', 'https://api.openai.com/v1')
-MODEL = os.environ.get('OPENAI_MODEL', 'gpt-6-astra')
+MODEL = model_for("flashcards")
+SUMMARY_MODEL = model_for("summary")
 MAX_OUTPUT_TOKENS = 16000
 DEEP_MODE = os.environ.get('PDF_DEEP_MODE', 'false').lower() == 'true'
 
@@ -65,6 +71,7 @@ class WorkflowError(Exception):
 
 
 _cancelled = ContextVar('study_cancelled', default=lambda: False)
+_reasoning_effort = ContextVar('study_reasoning_effort', default=None)
 
 
 def check_cancelled() -> None:
@@ -206,10 +213,10 @@ def allocate_counts(chunks: list[list[dict]], total: int) -> list[int]:
 def card_schema(include_answers: bool = True) -> dict:
     properties = {
         "category": {"type": "string", "enum": list(CATEGORIES)},
-        "question": {"type": "string"},
-        "answer": {"type": "string"},
         "source_pages": {"type": "array", "items": {"type": "integer"}},
         "evidence": {"type": "string"},
+        "question": {"type": "string"},
+        "answer": {"type": "string"},
     }
     if not include_answers:
         del properties["answer"]
@@ -403,7 +410,10 @@ For preview_and_abstract, return BOTH an abstract and exactly four example cards
 For preview, return four example cards. For questions, return requested_count cards.
 Every card must include a specific, self-contained question, a concise complete answer,
 and the metadata in the schema. Test one learning objective per card. Answers must be
-grounded in the source. Meet category_counts exactly and avoid existing questions.
+grounded in the source. First locate the supporting passage or visual and record its
+source_pages and evidence, then write the question and answer supported by that reference.
+Do not produce a card without a specific reference supporting its entire answer.
+Meet category_counts exactly and avoid existing questions.
 The five categories mean:
 Definition: meaning of a term.
 High level concept: a broad idea, purpose, relationship, or organizing principle.
@@ -413,6 +423,8 @@ Extrapolation/conclusion from concept: a defensible inference from source premis
 start its answer with 'Inference:' and state assumptions and reasoning.
 Use physical PDF page numbers from valid_source_pages for source_pages metadata.
 Evidence must briefly paraphrase the source supporting the answer.
+For visual evidence, identify the relevant diagram, table, or figure and what it shows.
+Page numbers are one-based PDF viewer pages, not printed slide labels or section numbers.
 Apply feedback_history to questions and answers; it takes precedence over examples.
 Cover important material across the supplied content, beyond the preview topics.
 If the source cannot support the requested count, return fewer items; validation will
@@ -422,7 +434,8 @@ Return only the JSON object specified by the response schema.
 
 
 def request_json(client, model: str, data: dict, schema: dict, label: str,
-                 file_input: dict | None = None) -> dict:
+                 file_input: dict | None = None, instructions: str = STUDY_INSTRUCTIONS,
+                 reasoning_effort: str | None = None) -> dict:
     import openai
 
     check_cancelled()
@@ -431,12 +444,17 @@ def request_json(client, model: str, data: dict, schema: dict, label: str,
         content = [{"role": "user", "content": [file_input, {"type": "input_text", "text": content}]}]
     print(f"  {label}...", flush=True)
     started = time.perf_counter()
+    # Job-local settings keep concurrent card generation on its own model defaults.
+    options = {"reasoning": {"effort": _reasoning_effort.get()}} if _reasoning_effort.get() else {}
     try:
-        response = client.responses.create(
-            model=model, instructions=STUDY_INSTRUCTIONS, input=content,
+        request_options = dict(
+            model=model, instructions=instructions, input=content,
             text={"format": {"type": "json_schema", "name": "study_material", "strict": True, "schema": schema}},
-            max_output_tokens=MAX_OUTPUT_TOKENS, store=False,
+            max_output_tokens=MAX_OUTPUT_TOKENS, store=False, **options,
         )
+        if reasoning_effort:
+            request_options["reasoning"] = {"effort": reasoning_effort}
+        response = client.responses.create(**request_options)
     except openai.AuthenticationError:
         raise WorkflowError("API key rejected. Set a valid OPENAI_API_KEY in the server environment and restart.") from None
     except openai.RateLimitError:
@@ -557,14 +575,28 @@ def question_plans(source: dict, count: int, deep_mode: bool = False) -> list[tu
             for start in range(0, count, BATCH_SIZE)]
 
 
+def has_card_sources(cards) -> bool:
+    return isinstance(cards, list) and bool(cards) and all(
+        isinstance(card, dict) and isinstance(card.get("source_pages"), list) and card["source_pages"]
+        and all(type(page) is int and page > 0 for page in card["source_pages"])
+        and isinstance(card.get("evidence"), str) and card["evidence"].strip()
+        for card in cards)
+
+
 def process_document(client, pdf: Path, source: dict, args: argparse.Namespace,
                      record: dict, output: Path, data: dict) -> None:
     identity = {"pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest(), "questions": args.questions,
                 "sentences": args.sentences, "language": args.language, "deep_mode": args.deep_mode,
                 "allow_empty_pages": args.allow_empty_pages}
-    key = hashlib.sha256((str(pdf) + str(args.deep_mode)).encode("utf-8")).hexdigest()[:24]
+    key = hashlib.sha256((str(pdf) + str(args.deep_mode) + str(args.questions)).encode("utf-8")).hexdigest()[:24]
     state_path = output.parent / (output.stem + ".work") / (key + ".json")
     state_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_key = hashlib.sha256((str(pdf) + str(args.deep_mode)).encode("utf-8")).hexdigest()[:24]
+    legacy_path = state_path.with_name(legacy_key + ".json")
+    if not state_path.exists() and legacy_path.exists():
+        legacy_state = json.loads(legacy_path.read_text(encoding="utf-8"))
+        if legacy_state.get("identity") == identity:
+            write_json(state_path, legacy_state)
     if state_path.exists():
         state = json.loads(state_path.read_text(encoding="utf-8"))
         if state.get("identity") != identity:
@@ -615,6 +647,10 @@ def process_document(client, pdf: Path, source: dict, args: argparse.Namespace,
     if len(state["batches"]) > len(plans):
         raise WorkflowError("Saved question batches do not match this run.")
     cards = []
+    def saved_cards():
+        return [{**card, "source_pdf": getattr(args, "source_pdf_name", pdf.name),
+                 **({"source_pdf_id": args.source_pdf_id} if getattr(args, "source_pdf_id", None) else {})}
+                for card in cards]
     print(f"Generating {args.questions} questions with answers ({len(plans)} request(s) before corrections).", flush=True)
     for index, (_, pages, categories) in enumerate(plans):
         if index < len(state["batches"]):
@@ -625,21 +661,23 @@ def process_document(client, pdf: Path, source: dict, args: argparse.Namespace,
             state["batches"].append(batch)
             save()
         cards.extend(batch)
-        record.update(questions=[{"question": card["question"], "answer": card["answer"]} for card in cards],
+        record.update(questions=saved_cards(),
                       requested_questions=args.questions)
         save()
         print(f"  Saved {len(cards)}/{args.questions} questions.", flush=True)
-    record.update(questions=[{"question": card["question"], "answer": card["answer"]} for card in cards],
+    record.update(questions=saved_cards(),
                   requested_questions=args.questions, complete=True)
     save()
 
 
 def run(args: argparse.Namespace) -> Path:
     token = _cancelled.set(getattr(args, 'cancelled', lambda: False))
+    reasoning_token = _reasoning_effort.set(getattr(args, 'reasoning_effort', None))
     try:
         check_cancelled()
         return _run(args)
     finally:
+        _reasoning_effort.reset(reasoning_token)
         _cancelled.reset(token)
 
 
@@ -647,6 +685,7 @@ def _run(args: argparse.Namespace) -> Path:
     import openai
 
     args.deep_mode = getattr(args, "deep_mode", DEEP_MODE)
+    summary_only = getattr(args, "task", "flashcards") == "summary"
     files = collect_pdfs(args.pdfs)
     output = Path(args.output).expanduser().resolve()
     if output.suffix.lower() != ".json":
@@ -656,7 +695,7 @@ def _run(args: argparse.Namespace) -> Path:
     pending = []
     for pdf in files:
         record = records.get((pdf, args.deep_mode))
-        if record and record.get("complete") and record.get("abstract") and record.get("questions"):
+        if record and record.get("complete") and record.get("abstract") and (summary_only or has_card_sources(record.get("questions"))):
             print(f"Skipping {pdf.name}: summary and questions already exist for this mode.", flush=True)
         else:
             pending.append((pdf, record))
@@ -675,8 +714,17 @@ def _run(args: argparse.Namespace) -> Path:
                 record = {"file": pdf.name, "path": str(pdf), "deep_mode": args.deep_mode,
                           "model": args.model, "language": args.language, "complete": False}
                 data[field].append(record)
-            process_document(client, pdf, source, args, record, output, data)
-            print(f"Completed summary and questions: {pdf.name}", flush=True)
+            record["model"] = args.model
+            if summary_only:
+                abstract = (summarize_full_pdf(client, source["file_input"], args.sentences, args.language, args.model)
+                            if args.deep_mode else summarize_pdf(client, source["pages"], args.sentences, args.language, args.model))
+                check_cancelled()
+                record.update(abstract=abstract, sentence_count=count_sentences(abstract),
+                              requested_sentences=args.sentences, questions=[], requested_questions=0, complete=True)
+                write_json(output, data)
+            else:
+                process_document(client, pdf, source, args, record, output, data)
+            print(f"Completed {'summary' if summary_only else 'summary and questions'}: {pdf.name}", flush=True)
     print(f"\nSaved combined study material: {output}")
     return output
 
@@ -689,6 +737,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", default="study_materials.json", help="Combined JSON to create, append to, or resume.")
     parser.add_argument("--language", default="same language as the PDF")
     parser.add_argument("--model", default=MODEL)
+    parser.add_argument("--reasoning-effort", default=reasoning_for("flashcards"))
     parser.add_argument("--mode", choices=("shallow", "deep"), default="deep" if DEEP_MODE else "shallow",
                         help="Shallow extracts text; deep reads full PDF pages including visuals.")
     parser.add_argument("--timeout", type=int, default=600)

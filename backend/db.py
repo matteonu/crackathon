@@ -5,14 +5,26 @@ starting rows are read from, in order), so tests and dev mode can point at a dif
 database and a different dataset.
 """
 import glob
+from contextlib import closing
 import json
 import os
+import shutil
 import sqlite3
 
 from flask import current_app, g
 
+from material_types import migrate_material_types
+
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_PATH = os.path.join(BACKEND_DIR, "schema.sql")
+
+# Filled by the VVZ sync (backend/vvz/), never by the seed, so dump-seed leaves them out.
+VVZ_TABLES = {"course_offerings", "course_lectures", "course_timeslots", "lecturers",
+              "course_lecturers", "course_sections", "course_ratings", "vvz_meta"}
+# The sync also adds thousands of rows to `courses`; the seed only needs the ones the
+# demo data points at, everything else comes back from VVZ.
+SEED_COURSES_SQL = """SELECT * FROM courses WHERE id IN (SELECT course_id FROM semester_courses)
+                      OR id IN (SELECT course_id FROM course_resources) ORDER BY rowid"""
 
 
 def init_app(app):
@@ -46,11 +58,97 @@ def close_db(_exc=None):
         db.close()
 
 
+# Columns added to a table after it first shipped. CREATE TABLE IF NOT EXISTS leaves an existing
+# table as it is, so init_db() adds these with ALTER TABLE (the courses columns the VVZ sync
+# adds are handled by vvz.sync.upgrade_schema()).
+ADDED_COLUMNS = {
+    "flashcards": (("source_pdf_id", "TEXT REFERENCES materials(id) ON DELETE SET NULL"),
+                   ("source_pdf_name", "TEXT"), ("source_pages", "TEXT"), ("source_evidence", "TEXT")),
+    "users": (("selected_semkez", "TEXT"),),
+    "semester_courses": (
+        ("target_hours", "REAL NOT NULL DEFAULT 0"), ("exam_date", "TEXT"),
+        ("completed", "INTEGER NOT NULL DEFAULT 0"), ("next_action", "TEXT NOT NULL DEFAULT ''"),
+        ("color", "TEXT"), ("priority", "INTEGER NOT NULL DEFAULT 3"), ("difficulty", "INTEGER"),
+        ("max_study_hours", "REAL"), ("lecture_per_week", "REAL"),
+    ),
+    "semesters": (
+        ("day_start", "TEXT NOT NULL DEFAULT '08:00'"), ("day_end", "TEXT NOT NULL DEFAULT '20:00'"),
+        ("lunch_start", "TEXT NOT NULL DEFAULT '12:00'"), ("lunch_end", "TEXT NOT NULL DEFAULT '13:00'"),
+        ("dinner_start", "TEXT NOT NULL DEFAULT '18:00'"), ("dinner_end", "TEXT NOT NULL DEFAULT '19:00'"),
+        ("study_block_size", "INTEGER NOT NULL DEFAULT 60"), ("alpha", "REAL NOT NULL DEFAULT 0.3"),
+        ("beta", "REAL NOT NULL DEFAULT 5"), ("study_weekdays", "TEXT NOT NULL DEFAULT '0123456'"),
+    ),
+    "plan_blocks": (("source", "TEXT NOT NULL DEFAULT 'generated'"),),
+    "mcq_sets": (("requested_count", "INTEGER CHECK (requested_count BETWEEN 1 AND 60)"),),
+    "tasks": (("priority", "TEXT NOT NULL DEFAULT 'medium'"),),
+}
+
+
+def migrate_sessions_to_slots(conn):
+    """Hand-planned study_sessions become the user's own calendar slots (plan_blocks with
+    source 'manual'), so the calendar and the analytics read one thing. Covers sessions from
+    before the calendar had slots, and the demo seed, which still writes study_sessions.
+    Generated slots under a moved-in session give way, as they do when one is drawn."""
+    rows = conn.execute("SELECT semester_id, id, course_id, date, start, hours FROM study_sessions").fetchall()
+    for r in rows:
+        begin = int(r["start"][:2]) * 60 + int(r["start"][3:])
+        finish = min(begin + round(r["hours"] * 60), 24 * 60 - 1)
+        end = f"{finish // 60:02d}:{finish % 60:02d}"
+        conn.execute("""DELETE FROM plan_blocks WHERE semester_id = ? AND date = ? AND source = 'generated'
+                        AND start_time < ? AND end_time > ?""", (r["semester_id"], r["date"], end, r["start"]))
+        conn.execute("""INSERT INTO plan_blocks (semester_id, course_id, date, start_time, end_time, type, label, source)
+                        VALUES (?, ?, ?, ?, ?, 'active_learning', NULL, 'manual')""",
+                     (r["semester_id"], r["course_id"], r["date"], r["start"], end))
+    conn.execute("DELETE FROM study_sessions")
+
+
 def init_db():
-    """Create every table the schema declares. Existing tables and rows are left alone."""
+    """Apply schema and migrate the legacy material table in one transaction."""
     os.makedirs(os.path.dirname(db_path()), exist_ok=True)
-    with connect() as db, open(SCHEMA_PATH) as f:
-        db.executescript(f.read())
+    with closing(connect()) as db, open(SCHEMA_PATH) as f:
+        schema = f.read()
+        # executescript commits implicitly, so execute complete statements individually.
+        statements, pending = [], ''
+        for line in schema.splitlines(keepends=True):
+            pending += line
+            if sqlite3.complete_statement(pending):
+                statements.append(pending)
+                pending = ''
+        db.execute('PRAGMA foreign_keys = OFF')
+        db.execute('BEGIN IMMEDIATE')
+        try:
+            columns = {r['name'] for r in db.execute('PRAGMA table_info(materials)')}
+            if columns and 'source_pdf_id' not in columns:
+                material_sql = next(s for s in statements if 'CREATE TABLE IF NOT EXISTS materials (' in s)
+                db.execute(material_sql.replace('CREATE TABLE IF NOT EXISTS materials (',
+                                               'CREATE TABLE materials_new ('))
+                names = ','.join('"' + name + '"' for name in sorted(columns))
+                db.execute(f'INSERT INTO materials_new ({names}) SELECT {names} FROM materials')
+                db.execute('DROP TABLE materials')
+                db.execute('ALTER TABLE materials_new RENAME TO materials')
+            for statement in statements:
+                db.execute(statement)
+            for table, added_columns in ADDED_COLUMNS.items():
+                present = {row["name"] for row in db.execute(f'PRAGMA table_info("{table}")')}
+                for column, definition in added_columns:
+                    if column not in present:
+                        db.execute(f'ALTER TABLE "{table}" ADD COLUMN {column} {definition}')
+            migrate_material_types(db)
+            from decks import migrate_embedded_cards
+            migrate_embedded_cards(db)
+            migrate_sessions_to_slots(db)
+            violation = db.execute('PRAGMA foreign_key_check').fetchone()
+            if violation:
+                raise sqlite3.IntegrityError(
+                    'Foreign key check failed during deck migration: '
+                    f'table={violation["table"]}, rowid={violation["rowid"]}, '
+                    f'parent={violation["parent"]}, foreign_key={violation["fkid"]}')
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.execute('PRAGMA foreign_keys = ON')
 
 
 def exists():
@@ -67,12 +165,39 @@ def seed_files():
         yield path, table
 
 
+def restore_seed_assets():
+    """Copy seeded PDFs into the same document store used by normal uploads."""
+    learning_dir = current_app.config["LEARNING_DIR"]
+    for directory in seed_dirs():
+        assets = os.path.join(directory, "learning")
+        if not os.path.isdir(assets):
+            continue
+        for material_id in os.listdir(assets):
+            source = os.path.join(assets, material_id, "source.pdf")
+            if not os.path.isfile(source):
+                continue
+            target_dir = os.path.join(learning_dir, material_id)
+            os.makedirs(target_dir, exist_ok=True)
+            shutil.copy2(source, os.path.join(target_dir, "source.pdf"))
+
+
 def reset_db():
     """Delete the database and rebuild it from the seed files."""
+    close_db()
+    cleanup = []
     if os.path.exists(db_path()):
+        # An explicit reset also deletes documents. Retain their remote cleanup
+        # queue rather than losing the only references to persistent OpenAI files.
+        with closing(connect()) as conn:
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE name='document_indexes'").fetchone():
+                cleanup = [dict(row) for row in conn.execute("SELECT * FROM document_indexes WHERE status<>'deleted'")]
         os.remove(db_path())
     init_db()
-    with connect() as db:
+    with closing(connect()) as db, db:
+        for row in cleanup:
+            row.update(status='deleting', error=None, attempts=0, next_attempt=0)
+            columns = ','.join(row)
+            db.execute(f"INSERT INTO document_indexes ({columns}) VALUES ({','.join('?' for _ in row)})", list(row.values()))
         for path, table in seed_files():
             with open(path) as f:
                 rows = json.load(f)
@@ -80,6 +205,11 @@ def reset_db():
                 cols = ", ".join(f'"{c}"' for c in row)
                 marks = ", ".join("?" for _ in row)
                 db.execute(f'INSERT INTO "{table}" ({cols}) VALUES ({marks})', list(row.values()))
+        migrate_material_types(db)
+        from decks import migrate_embedded_cards
+        migrate_embedded_cards(db)
+        migrate_sessions_to_slots(db)
+    restore_seed_assets()
 
 
 def dump_seed():
@@ -93,16 +223,19 @@ def dump_seed():
     existing = {table: path for path, table in seed_files()}
     next_num = len(existing) + 1
     written = []
-    with connect() as db:
+    with closing(connect()) as db, db:
         tables = [r["name"] for r in db.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid"
         )]
         for table in tables:
+            if table in VVZ_TABLES or table in {'document_indexes', 'document_chat_turns'}:
+                continue
             path = existing.get(table)
             if path is None:
                 path = os.path.join(out_dir, f"{next_num:02d}_{table}.json")
                 next_num += 1
-            rows = [dict(r) for r in db.execute(f'SELECT * FROM "{table}" ORDER BY rowid')]
+            query = SEED_COURSES_SQL if table == "courses" else f'SELECT * FROM "{table}" ORDER BY rowid'
+            rows = [dict(r) for r in db.execute(query)]
             with open(path, "w") as f:
                 json.dump(rows, f, indent=2, ensure_ascii=False)
                 f.write("\n")

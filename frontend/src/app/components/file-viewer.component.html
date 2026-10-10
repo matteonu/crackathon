@@ -1,22 +1,34 @@
 @if(file();as file){
 <div class="file-viewer" (click)="surfaceClick($event)" (keydown.escape)="escape($event)">
-  <form class="file-details" [formGroup]="details" (ngSubmit)="saveDetails()">
+  <form class="file-details" novalidate [formGroup]="details" (ngSubmit)="saveDetails()">
     <label class="sr-only" for="file-title">File title</label><input id="file-title" class="editable-file-title" formControlName="name" maxlength="180" required (blur)="kind()==='pdf'&&saveDetails()">
     @if(kind()==='pdf'){
-      <p class="generated-file-description" aria-label="Generated file summary" aria-live="polite">@if(file.outputs?.summary?.text){ {{file.outputs.summary.text}} }@else if(generating()){<app-loading-dots label="Generating a one-sentence summary" />}@else{ {{file.processing?.status==='error'?'Summary generation could not finish. Retry processing below.':'Process this PDF to generate its summary and flashcards.'}} }</p>
+      <div class="summary-heading">
+        <button type="button" class="summary-toggle" [attr.aria-expanded]="summaryExpanded()" aria-controls="file-summary" (click)="summaryExpanded.set(!summaryExpanded())"><app-icon name="down" /><span class="eyebrow">{{file.category}} · Summary</span></button>
+        <button type="button" class="text-button" [disabled]="generating()" (click)="summarize()">@if(summaryRunning()){Regenerating…}@else if(file.outputs?.summary?.text){Regenerate summary}@else{ {{file.processing?.status==='error'?'Retry summary':'Generate summary'}} }</button>
+      </div>
+      @if(summaryExpanded()){<p id="file-summary" class="generated-file-description" aria-label="Generated file summary" aria-live="polite">@if(summaryRunning()){<app-loading-dots label="Generating a one-sentence summary" />}@else if(file.outputs?.summary?.text){ {{file.outputs.summary.text}} }@else{ {{file.processing?.status==='error'?'Summary generation could not finish. Retry above.':'Your summary will appear here.'}} }</p>}
     }@else{
       <label class="sr-only" for="file-description">File description</label><textarea id="file-description" class="editable-file-description" formControlName="description" rows="2" maxlength="2000" placeholder="Add a short description of this file…"></textarea>
     }
     @if(kind()!=='pdf'){<div class="file-detail-actions"><button class="button secondary" type="submit" [disabled]="saving()">{{saving()?'Saving…':'Save details'}}</button></div>}
   </form>
-  <div class="file-meta-bar"><button type="button" class="file-kind source-file-button" [attr.aria-label]="kind()==='pdf'?'Back to PDF':'Back to file'" [attr.aria-pressed]="!card()" (click)="returnToFile()">{{kind().toUpperCase()}}</button><a class="text-button" [href]="fileUrl()" [download]="file.name"><app-icon name="download" />Download file</a></div>
-  @if(error()||materials.error()){<p class="form-error" role="alert">{{error()||materials.error()}}</p>}<p class="viewer-notice" aria-live="polite">{{notice()}}</p>
+  @if(error()||materials.error()){<p class="form-error" role="alert">{{error()||materials.error()}}</p>}@if(notice()){<p class="viewer-notice" aria-live="polite">{{notice()}}</p>}
   @if(file.processing?.error){<p class="form-error" role="alert">{{file.processing!.error}}</p>}
-  <div class="file-viewer-columns">
+  @if(kind()==='deck'){
+    <div class="file-meta-bar"><span class="file-kind">DECK</span><label>Folder <select [ngModel]="file.parentId??null" (ngModelChange)="moveDeck($event)"><option [ngValue]="null">Materials</option>@for(folder of folders();track folder.id){<option [ngValue]="folder.id">{{folder.name}}</option>}</select></label>@if(file.sourcePdfId){<button class="text-button" (click)="openFile.emit(file.sourcePdfId)">Open source PDF</button>}@else{<span class="muted">Source PDF removed · deck retained</span>}</div>
+    <app-folder-flashcards [cards]="deckCards()" [name]="file.name" [subjectId]="file.subjectId" [deckId]="file.id" (openFile)="openFile.emit($event)" (startLearning)="startLearning.emit(file.id)" />
+    <button class="text-button" (click)="addingCard.set(!addingCard())">Add a flashcard</button>
+    @if(addingCard()){<form class="add-card-form" [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><button class="button secondary" type="submit">Save flashcard</button></form>}
+  }@else{
+  <div class="file-viewer-columns" [class.summary-only]="!allowsCards()&&!allowsMcq()&&!allowsChat()">
     <section #stage class="file-stage" aria-label="File and flashcard viewer">
-      <div class="file-stage-toolbar"><span>{{card()?'FLASHCARD PREVIEW':'SOURCE FILE'}}</span>@if(!card()&&kind()!=='pdf'){<button class="text-button" (click)="editing.set(!editing())">{{editing()?'Preview':'Edit file'}}</button>}</div>
-      <div [hidden]="!!card()" class="source-pane">
-        @if(kind()==='pdf'){<app-pdf-preview [url]="fileUrl()" [name]="file.name" />}
+      <div class="file-stage-toolbar">
+        <div class="source-toolbar-label"><button type="button" class="source-file-button" [attr.aria-label]="kind()==='pdf'?'Back to PDF':'Back to file'" [attr.aria-pressed]="!card()&&!mcqSession()" (click)="returnToFile()"><app-icon name="file" />{{card()||mcqSession()?'Back to '+kind().toUpperCase():kind().toUpperCase()}}</button><span>{{file.category}}</span></div>
+        <div class="source-toolbar-actions">@if(!card()&&kind()!=='pdf'){<button class="text-button" (click)="editing.set(!editing())">{{editing()?'Preview':'Edit file'}}</button>}<a class="text-button" [href]="fileUrl()" [download]="file.name"><app-icon name="download" />Download</a></div>
+      </div>
+      <div [hidden]="!!card()||!!mcqSession()" class="source-pane">
+        @if(kind()==='pdf'){<app-pdf-preview [url]="fileUrl()" [name]="file.name" (pageChange)="pageContext.set($event)" />}
         @else if(editing()){
           <label class="sr-only" for="text-content">File content</label><textarea id="text-content" class="text-file-editor" [formControl]="content" spellcheck="false"></textarea><div class="action-buttons"><button class="button primary" (click)="saveContent()">Save file</button><button class="text-button" (click)="cancelContent()">Discard changes</button></div>
         }@else{
@@ -27,19 +39,63 @@
           </article>
         }
       </div>
-      @if(card();as card){<article class="flashcard-stage" aria-label="Selected flashcard"><div class="flashcard-stage-top"><span class="eyebrow">QUESTION</span>@if(card.demo){<span class="demo-badge">Demo card</span>}</div><h2>{{card.question}}</h2>@if(revealed()){<div class="flashcard-answer"><span class="eyebrow">ANSWER</span><p>{{card.answer}}</p></div>}@else{<button class="button primary" (click)="revealed.set(true)">Reveal answer</button>}<p class="field-hint">Click outside this card, press Escape, or click the file badge above to return to your source.</p></article>}
-    </section>
-    <aside class="flashcard-panel" aria-label="File flashcards"><div class="tool-heading"><div><span class="eyebrow">ACTIVE RECALL</span><h3>Flashcards <span class="card-count">{{cards().length}}</span></h3></div><app-icon name="book" /></div>
-      @if(kind()==='pdf'){
-        <app-learning-mode [mode]="selectedMode()" [disabled]="generating()" (modeChange)="selectedMode.set($event)" />
-        @if(file.processing?.status!=='complete'||modeChanged()){<button class="button primary generate-cards" [disabled]="generating()" (click)="generate()">@if(generating()){<app-loading-dots label="Generating summary and flashcards" />}@else{ {{modeChanged()?'Generate in '+selectedMode()+' mode':file.processing?.status==='error'?'Retry processing':'Generate summary and flashcards'}} }</button>}
-        <p class="field-hint" aria-live="polite">@if(generating()){<app-loading-dots [label]="selectedMode()==='deep'?'Reading text and visuals':'Reading extracted text'" />}@else if(file.processing?.status==='complete'){Generated in {{file.processing.mode??'shallow'}} mode.}@else{Processing uses the PDF contents to create your summary and flashcards.}</p>
+      @if(card();as card){<article class="flashcard-stage" aria-label="Selected flashcard"><div class="flashcard-stage-top"><span class="eyebrow">QUESTION</span>@if(card.demo){<span class="demo-badge">Demo card</span>}</div><h2>{{card.question}}</h2><app-card-source [card]="card" />@if(revealed()){<div class="flashcard-answer"><span class="eyebrow">ANSWER</span><p>{{card.answer}}</p></div>}@else{<button class="button primary" (click)="revealed.set(true)">Reveal answer</button>}<p class="field-hint">Click outside this card, press Escape, or click Back to PDF above to return to your source.</p></article>}
+      @if(mcqSession();as session){
+        @if(session.status==='completed'&&!mcqFeedback()&&mcqReviewIndex()===null){
+          <article class="mcq-complete" aria-label="Practice complete"><span>{{session.score}} / {{session.total}}</span><h2>Practice complete</h2><p>You answered {{session.score}} of {{session.total}} questions correctly.</p><button class="button secondary" (click)="returnToFile()">Back to PDF</button></article>
+        }@else if(displayedMcq();as question){
+          <article class="mcq-stage" aria-label="MC question"><div class="mcq-progress"><span>Question {{mcqReviewIndex()===null?(mcqFeedback()?session.position:session.position+1):mcqReviewIndex()!+1}} of {{session.total}}</span><strong>{{session.score}} correct</strong></div><h2>{{question.prompt}}</h2>
+            <fieldset [disabled]="!!mcqFeedback()||mcqReviewIndex()!==null"><legend class="sr-only">{{question.selectionMode==='single'?'Choose one answer':'Choose all correct answers'}}</legend>@for(option of question.options;track option.id){<label class="mcq-option" [class.selected]="selectedOptions().has(option.id)||reviewedAnswer()?.selectedOptionIds?.includes(option.id)" [class.correct-answer]="mcqFeedback()?.correctOptionIds?.includes(option.id)||reviewedAnswer()?.correctOptionIds?.includes(option.id)"><input [type]="question.selectionMode==='single'?'radio':'checkbox'" name="mcq-answer" [checked]="selectedOptions().has(option.id)||reviewedAnswer()?.selectedOptionIds?.includes(option.id)" (change)="toggleOption(option.id,$any($event.target).checked)"><span>{{option.text}}</span></label>}</fieldset>
+            @if(reviewedAnswer();as review){<div class="mcq-feedback" [class.correct]="review.correct"><strong>{{review.correct?'Correct':'Not quite'}}</strong><p>{{review.explanation}}</p><p class="field-hint">Source {{review.sourcePages.length===1?'page':'pages'}} {{review.sourcePages.join(', ')}}</p></div><div class="mcq-review-actions"><button class="button secondary" [disabled]="mcqReviewIndex()===0" (click)="moveMcqReview(-1)">Previous</button><button class="button secondary" [disabled]="mcqReviewIndex()===session.total-1" (click)="moveMcqReview(1)">Next</button><button class="text-button" (click)="returnToFile()">Back to PDF</button></div>}
+            @else if(mcqFeedback();as feedback){<div class="mcq-feedback" [class.correct]="feedback.correct" role="status" aria-live="polite"><strong>{{feedback.correct?'Correct':'Not quite'}}</strong><p>{{feedback.explanation}}</p><p class="field-hint">Source {{feedback.sourcePages.length===1?'page':'pages'}} {{feedback.sourcePages.join(', ')}}</p></div><button class="button primary" (click)="nextMcq()">{{session.status==='completed'?'View summary':'Next question'}}</button>}
+            @else{<button class="button primary" [disabled]="!selectedOptions().size" (click)="checkMcq()">Check answer</button>}
+          </article>
+        }
       }
-      <div class="flashcard-list">@for(card of cards();track card.id){<button class="flashcard-choice" [class.selected]="selectedCard()===card.id" [attr.aria-pressed]="selectedCard()===card.id" (click)="selectCard(card.id!)"><span class="flashcard-number">{{ $index+1 }}</span><span><strong>{{card.question}}</strong><small>{{card.generated?'Generated from PDF':card.demo?'Demo card':'Your card'}} · Click to review</small></span><app-icon name="right" /></button>}@empty{<div class="empty-state">@if(generating()){<app-loading-dots label="Preparing your flashcards" />}@else{No flashcards yet.}</div>}</div>
-      <button class="text-button" (click)="addingCard.set(!addingCard())"><app-icon name="plus" /> Add a flashcard</button>
-      @if(addingCard()){<form class="add-card-form" [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><button class="button secondary" type="submit">Save flashcard</button></form>}
-    </aside>
+    </section>
+    @if(allowsCards()||allowsMcq()||allowsChat()){<aside class="flashcard-panel" aria-label="Document study tools">
+      <div class="tool-switch" role="tablist" aria-label="Document study tools">
+        @if(allowsCards()){<button type="button" role="tab" [attr.aria-selected]="tool()==='flashcards'" [class.active]="tool()==='flashcards'" (click)="chooseTool('flashcards')">Flashcards</button>}
+        @if(allowsMcq()){<button type="button" role="tab" [attr.aria-selected]="tool()==='mcq'" [class.active]="tool()==='mcq'" (click)="chooseTool('mcq')">MC questions</button>}
+        @if(allowsChat()){<button type="button" role="tab" [attr.aria-selected]="tool()==='chat'" [class.active]="tool()==='chat'" (click)="chooseTool('chat')">Q&amp;A chat</button>}
+      </div>
+      @if(allowsChat()){
+        <div role="tabpanel" [hidden]="tool()!=='chat'"><app-document-chat [documentId]="fileId()" [page]="pageContext().page" [totalPages]="pageContext().total" /></div>
+      }
+      @if(tool()==='flashcards'&&allowsCards()){
+      <div class="tool-heading"><div><span class="eyebrow">ACTIVE RECALL</span><h3>Flashcards <span class="card-count">{{cards().length}}</span></h3></div><app-icon name="book" /></div>
+      @if(linkedDeck();as deck){<button class="button primary" [disabled]="!cards().length" (click)="startLearning.emit(deck.id)">Start learning</button>}
+      @if(kind()==='pdf'){
+        <div class="generation-settings">
+          <app-learning-mode label="Mode" [mode]="selectedMode()" [disabled]="generating()" (modeChange)="selectedMode.set($event)" />
+          <div class="viewer-card-count-field">
+            <label class="viewer-card-count">Anki cards<input type="number" min="5" max="300" step="1" required [ngModel]="requestedCount()" (ngModelChange)="requestedCount.set($event)" [disabled]="generating()" [attr.aria-invalid]="!validCount()" aria-describedby="viewer-count-hint"></label>
+            <p id="viewer-count-hint" class="field-hint" [class.form-error]="!validCount()">{{validCount()?'Choose 5–300 cards.':'Enter a whole number from 5 to 300.'}}</p>
+          </div>
+        </div>
+        <button class="button primary generate-cards" [disabled]="generating()||!validCount()||cardsReady()" (click)="generate()">@if(generating()){<app-loading-dots [label]="summaryRunning()?'Preparing summary':'Generating flashcards'" />}@else{ {{cardsReady()?'Flashcards ready':file.processing?.status==='error'&&file.processing.task!=='summary'?'Retry flashcards':'Generate flashcards'}} }</button>
+        <p class="field-hint" aria-live="polite">@if(summaryRunning()){Your summary is being prepared. Generate cards when it is ready.}@else if(generating()){<app-loading-dots [label]="selectedMode()==='deep'?'Reading text and visuals':'Reading extracted text'" />}@else{Flashcards are generated only when you press the button.}</p>
+      }
+      <div class="flashcard-list">@for(card of cards();track card.id){
+        <div class="flashcard-row">
+          <button class="flashcard-choice" [class.selected]="selectedCard()===card.id" [attr.aria-pressed]="selectedCard()===card.id" (click)="selectCard(card.id!)"><span class="flashcard-number">{{ $index+1 }}</span><span><strong>{{card.question}}</strong></span><app-icon name="right" /></button>
+          <button type="button" class="icon-button small delete-material delete-flashcard" [attr.aria-label]="'Delete flashcard: '+card.question" title="Delete flashcard" [disabled]="!!deletingCard()||!linkedDeck()||!card.id" [attr.aria-busy]="deletingCard()===card.id" (click)="$event.stopPropagation();removeCard(card.id!)"><app-icon name="minus" /></button>
+        </div>
+      }@empty{<div class="empty-state">@if(generating()&&!summaryRunning()){<app-loading-dots label="Preparing your flashcards" />}@else{No flashcards yet.}</div>}</div>
+      @if(kind()==='pdf'){<button class="text-button" (click)="addingCard.set(!addingCard())"><app-icon name="plus" /> Add a flashcard</button>}
+      @if(addingCard()){<form class="add-card-form" novalidate [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><button class="button secondary" type="submit">Save flashcard</button></form>}
+      }@else if(tool()==='mcq'&&allowsMcq()){
+        <div class="tool-heading"><div><span class="eyebrow">PRACTICE</span><h3>MC questions</h3></div><app-icon name="book" /></div>
+        <app-learning-mode label="Mode" [mode]="selectedMode()" [disabled]="mcqBusy()" (modeChange)="selectedMode.set($event)" />
+        <div class="viewer-card-count-field"><label class="viewer-card-count">Questions (optional)<input type="number" min="1" max="60" step="1" placeholder="Model decides" [ngModel]="requestedMcqCount()" (ngModelChange)="requestedMcqCount.set($event===''?null:$event)" [disabled]="mcqBusy()" [attr.aria-invalid]="!validMcqCount()" aria-describedby="mcq-count-hint"></label><p id="mcq-count-hint" class="field-hint" [class.form-error]="!validMcqCount()">{{validMcqCount()?'Leave empty to let the model decide, or choose 1–60.':'Enter a whole number from 1 to 60.'}}</p></div>
+        @if(!mcqSets().length&&!mcqLoading()){<button class="button primary generate-cards" [disabled]="mcqBusy()||!validMcqCount()" (click)="generateMcq('initial')">{{mcqBusy()?'Starting…':'Generate questions'}}</button>}
+        @else{<button class="button secondary generate-cards" [disabled]="mcqBusy()||mcqGenerating()||!validMcqCount()" (click)="generateMcq('additional')">Generate additional set</button>}
+        @if(mcqLoading()){<div class="empty-state"><app-loading-dots label="Loading question sets" /></div>}
+        <div class="mcq-set-list">@for(set of mcqSets();track set.id){<article class="mcq-set"><div class="mcq-set-heading"><div><strong>Set {{set.seriesId.slice(0,4)}} · v{{set.version}}</strong><small>{{set.mode}} · {{set.status==='complete'?set.questionCount+' questions':set.status}}</small></div><div class="mcq-set-actions">@if(set.status==='complete'){<button class="button secondary" [disabled]="mcqBusy()" (click)="startMcq(set)">New attempt</button><button class="text-button" [disabled]="mcqBusy()" (click)="generateMcq('regenerate',set)">Regenerate</button>}@else if(set.status==='error'){<span class="form-error">{{set.error}}</span><button class="text-button" [disabled]="mcqBusy()" (click)="retryMcq(set)">Retry</button>}@else{<app-loading-dots label="Generating questions" />}</div></div>@if(set.status==='complete'){<div class="mcq-attempt-list" aria-label="Past attempts">@for(session of mcqSessions()[set.id]??[];track session.id){<button class="mcq-attempt" [disabled]="mcqBusy()" (click)="resumeMcq(session)"><span><strong>{{session.status==='active'?'In progress':'Completed'}}</strong><small>{{formatSessionDate(session.createdAt)}}</small></span><span>{{session.status==='active'?(session.position+' / '+session.total):(session.score+' / '+session.total)}} · {{session.status==='active'?'Resume':'Review'}}</span></button>}@empty{<p class="field-hint">No attempts yet.</p>}</div>}</article>}@empty{@if(!mcqLoading()){<div class="empty-state">No question sets yet.</div>}}</div>
+        @if(mcq.error()){<p class="form-error" role="alert">{{mcq.error()}}</p>}
+      }
+    </aside>}
   </div>
+  }
 </div>
 }
-

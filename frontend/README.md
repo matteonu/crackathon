@@ -11,7 +11,9 @@ npm ci
 npm start
 ```
 
-Open http://127.0.0.1:4300. This integrated branch uses the Python learning server on port 8010 for automatic PDF summaries and flashcards. Run `bash start-learning.sh` from the repository root for the complete app, or see [LEARNING_VIEW.md](../LEARNING_VIEW.md) for separate development servers and API-key setup.
+Open http://127.0.0.1:4300. The development server proxies `/api` to Flask on port 8080; see
+the root [README](../README.md) for full-stack setup and the learning
+[module README](../backend/learning/README.md) for pipeline behavior.
 
 ```bash
 npm test       # data, dates, totals, and import validation
@@ -19,7 +21,8 @@ npm run check # TypeScript check
 npm run build # production Angular build, including strict template checking
 ```
 
-The production files are written directly to `dist/` and served by the Python learning server. Hash-based routes keep navigation and refresh working without server rewrite rules.
+The production files are written directly to `dist/` and served by Flask. Hash-based routes
+keep navigation and refresh working without server rewrite rules.
 
 ## What works
 
@@ -31,7 +34,7 @@ The production files are written directly to `dist/` and served by the Python le
 - Totals, hours remaining, subject progress, and weekly summaries recalculate immediately.
 - Exam view supports All, Still to do, and Completed filters. Click a status to change it.
 - Subject pages let you edit a target, exam date, next action, and completion status.
-- PDF uploads generate a one-sentence summary and flashcards from Python JSON. Choose Shallow for faster text extraction or Deep for complete PDF pages including visuals, then set the number of cards (5–300) for new uploads; both modes keep their own saved results.
+- PDF uploads generate a one-sentence summary from Python JSON. Choose Slides, Exercises, Solutions, Exams, or Scripts in the upload dropdown. Slides, Solutions, and Scripts offer optional flashcards: open the PDF, choose Shallow or Deep and 5–300 cards, then click Generate flashcards.
 - Generation labels animate through one, two, and three dots, respecting reduced-motion preferences.
 - Changes persist in this browser’s local storage. Data & settings includes JSON export/import and restoring the original sample after confirmation.
 - Responsive layout for desktop and mobile. Dense tables scroll inside their panels.
@@ -91,10 +94,13 @@ Validation for the first workspace update: 12 model tests cover date parsing, se
 ## Materials explorer and file viewer
 
 - Materials is each subject’s root. Each folder row offers **New folder** and **Upload PDF** icons immediately before **View all flashcards**; these actions create or upload directly into that folder. Folders expand independently, and search preserves matching files’ ancestors. Existing PDFs migrate to the root without losing their markers or demo results.
-- Click a file to open its viewer. PDF descriptions are generated automatically as one sentence. PDF titles save when the input loses focus; existing text and Markdown files also support local content and description edits. The viewer toolbar contains the source badge and **Download file**, with no folder/status dropdowns or JSON link.
+- Click a file to open its viewer. PDF descriptions are generated automatically as one sentence. PDF titles save when the input loses focus; existing text and Markdown files also support local content and description edits. The PDF/text viewer toolbar contains the source badge and **Download file**. Deck viewers offer independent folder movement and a source-PDF link when available.
 - The left pane shows every PDF page in a scrollable document; the right pane lists saved flashcards. Selecting a card replaces the source with a question and revealable answer. Click outside the card, press Escape, or use the **PDF** badge to restore the source without resetting its scroll position. Pages render near the viewport to limit canvas memory.
-- Generation loads question/answer pairs from the Python result JSON and replaces old generated/demo cards. You can also write your own cards, which are preserved. File content, metadata, folders, and cards persist in IndexedDB in this browser; Python results and checkpoints are also saved under `learning_backend/data/`. They remain separate from the study-data JSON export.
-- Every folder, including Materials, offers **View all cards**, **Start learning**, and **Export .apkg**. Folder collections include all nested files. Practice supports reveal, review again, got it, and completion; review progress lasts for that practice session.
+- Generation loads question/answer pairs from the Python result JSON and replaces old generated/demo cards. You can also write your own cards, which are preserved. File content, metadata, folders, deck cards and review progress persist in backend SQLite; PDF bytes and pipeline checkpoints live under the backend learning data directory. They remain separate from the study-data JSON export.
+- Every folder, including Materials, offers **View all cards**, **Start learning**, and **Export .apkg**. Folder collections include all nested files. Folder, deck, and PDF Start learning actions open the same focused dialog. Practice uses the provided Python notebook scheduler with colored Again/Hard/Good/Easy ratings, saved per-card progress and response timing, predicted intervals, and editable limits defaulting to 20 total and 5 new cards per session. Folder weights default to 1 and are hidden under **Deck preferences** in the card browser. Export stays in Materials. After each batch, the next scheduled due time controls availability.
+- Session limits can be edited at any time. Changes apply to the next batch; the current queue, revealed answer, counts, and response timer stay intact. A stale-card refresh uses the current batch's original limits.
+- In learning, Space reveals the answer; on the back, 1/2/3/4 rate Again/Hard/Good/Easy, and Space rates Good. Shortcuts ignore held keys, pending saves, modifiers, and typing in form fields. Rating buttons use colored text and outlines with transparent backgrounds.
+- Analytics shows an expandable subject/folder/deck hierarchy with Progress, Mature, Learned, Left, and Total. Mature cards have review intervals of at least 21 days; Learned means seen but not mature, and Left means unseen. Clicking a collection opens its detailed metrics and rating/state charts.
 - Anki `.apkg` export runs entirely in the browser using lazily loaded SQL.js and fflate. It writes a SQLite `collection.anki2` and empty media manifest into a ZIP package. The package includes text cards only; demo cards carry a `demo` tag. Stable note IDs avoid creating new identities on repeated exports. Format reference: [genanki’s package implementation](https://github.com/kerrickstaley/genanki/tree/main/genanki). No backend or Anki connection is used.
 - New implementation: `models/material.ts`, `services/material-store.ts`, `components/material-library.component.*`, `components/file-viewer.component.*`, `components/folder-flashcards.component.ts`, and `services/flashcard-export.service.ts`. Package serialization lives in `models/apkg.ts`.
 - Validation: 17 tests cover the existing study data plus legacy file migration, nested aggregation, filtering, folder boundaries, and ZIP/SQLite package integrity. Browser checks cover folder and note creation, title/content edits, PDF upload, source/card switching, practice completion, export, persistence, and mobile layouts. Anki desktop import was not tested here.

@@ -12,11 +12,14 @@ import json
 from pathlib import Path
 import re
 import shutil
+import stat
 import threading
+import time
 
 from errors import RequestError
 
 from . import pdf_study
+from .config import model_for, reasoning_for
 
 SUMMARY_SENTENCES = 1
 DEFAULT_QUESTIONS = 60
@@ -26,19 +29,27 @@ __all__ = ["DEFAULT_QUESTIONS", "SUMMARY_SENTENCES", "RequestError", "StudyJobs"
 
 
 class StudyJobs:
-    def __init__(self, directory: Path, questions: int = DEFAULT_QUESTIONS, runner=None):
+    def __init__(self, directory: Path, questions: int = DEFAULT_QUESTIONS, runner=None, on_complete=None):
         self.directory = Path(directory).resolve()
         self.directory.mkdir(parents=True, exist_ok=True)
         self.questions = questions
         self.runner = runner or pdf_study.run
+        self.on_complete = on_complete
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pdf-study")
         self.lock = threading.Lock()
         self.active: set[tuple[str, str]] = set()
         self.deleted: set[str] = set()
         for marker in self.directory.glob("*/.deleted"):
-            self.deleted.add(marker.parent.name)
-            self.remove_folder(marker.parent.name)
+            if DOCUMENT_ID.fullmatch(marker.parent.name):
+                self.deletion_marker(marker.parent.name).write_text("deleted", encoding="utf-8")
+        for marker in self.directory.glob(".deleted-*"):
+            document_id = marker.name.removeprefix(".deleted-")
+            if DOCUMENT_ID.fullmatch(document_id):
+                self.deleted.add(document_id)
+                self.cleanup_deleted(document_id)
         for path in self.directory.rglob("result.json"):
+            if self.is_deleted(path.relative_to(self.directory).parts[0]):
+                continue
             data = self.read(path)
             if data.get("status") in {"queued", "running"}:
                 data.update(status="error", error="Processing was interrupted. Retry to resume saved work.")
@@ -48,9 +59,19 @@ class StudyJobs:
     def read(path: Path) -> dict:
         if not path.exists():
             raise RequestError(404, "No result exists for this file yet.")
-        data = json.loads(path.read_text(encoding="utf-8"))
+        # On Windows, a polling reader can briefly lose access while the worker
+        # atomically replaces this file. Retry that sharing violation.
+        for attempt in range(5):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(.05 * (attempt + 1))
         documents = data.get("documents", [])
         data.setdefault("mode", "deep" if documents and documents[0].get("deep_mode") else "shallow")
+        data.setdefault("task", "flashcards")
         return data
 
     def folder(self, document_id: str) -> Path:
@@ -64,8 +85,49 @@ class StudyJobs:
     def remove_folder(self, document_id: str) -> None:
         # Resolve and verify the exact directory before any recursive removal.
         folder = self.folder(document_id)
-        if folder.exists():
-            shutil.rmtree(folder)
+
+        def retry_readonly(_function, path, exc_info):
+            target = Path(path)
+            if not isinstance(exc_info[1], PermissionError) or target.is_symlink() or not target.resolve().is_relative_to(folder):
+                raise exc_info[1]
+            target.chmod(target.stat().st_mode | stat.S_IWRITE)
+            # POSIX requires write permission on the containing directory to
+            # unlink a file; Windows requires the file's read-only flag cleared.
+            # Never change permissions outside this document's storage folder.
+            parent = target.parent
+            if parent.resolve().is_relative_to(folder) and not parent.is_symlink():
+                parent.chmod(parent.stat().st_mode | stat.S_IWRITE | stat.S_IXUSR)
+            # Retry rmtree itself: its callback may receive functions such as
+            # scandir/open, whose return values and arguments rmtree must manage.
+            raise exc_info[1]
+
+        for attempt in range(5):
+            try:
+                if folder.exists():
+                    shutil.rmtree(folder, onerror=retry_readonly)
+                return
+            except OSError as exc:
+                if attempt == 4 or (not isinstance(exc, PermissionError) and getattr(exc, "winerror", None) not in {32, 33, 145}):
+                    raise
+                time.sleep(.05 * (2 ** attempt))
+
+    def deletion_marker(self, document_id: str) -> Path:
+        self.folder(document_id)  # Validate the id and its storage boundary.
+        marker = self.directory / f".deleted-{document_id}"
+        if marker.is_symlink():
+            raise RequestError(400, "Invalid deletion marker.")
+        return marker
+
+    def cleanup_deleted(self, document_id: str) -> bool:
+        try:
+            self.remove_folder(document_id)
+            self.deletion_marker(document_id).unlink(missing_ok=True)
+            return True
+        except OSError:
+            # The database row is already gone. Keep a durable marker outside the
+            # folder so a locked PDF can be cleaned up after a server restart.
+            print(f"PDF cleanup deferred for {document_id}; will retry on restart.", flush=True)
+            return False
 
     def is_deleted(self, document_id: str) -> bool:
         return document_id in self.deleted
@@ -75,9 +137,9 @@ class StudyJobs:
             folder = self.folder(document_id)
             self.deleted.add(document_id)
             if folder.exists():
-                (folder / ".deleted").write_text("deleted", encoding="utf-8")
+                self.deletion_marker(document_id).write_text("deleted", encoding="utf-8")
             if not any(active_id == document_id for active_id, _ in self.active):
-                self.remove_folder(document_id)
+                self.cleanup_deleted(document_id)
 
     def source_path(self, document_id: str) -> Path:
         """Where this document's PDF lives. Uploads write it; the pipeline reads it."""
@@ -96,23 +158,30 @@ class StudyJobs:
             source.write_bytes(pdf)
         return digest
 
-    def result_path(self, document_id: str, mode: str) -> Path:
+    def result_path(self, document_id: str, mode: str, task: str = "flashcards") -> Path:
+        if task not in {"summary", "flashcards"}:
+            raise RequestError(400, "Choose summary or flashcards.")
         if mode not in {"shallow", "deep"}:
             raise RequestError(400, "Choose shallow or deep processing mode.")
+        if task == "summary":
+            return self.folder(document_id) / "summary" / mode / "result.json"
         legacy = self.folder(document_id) / "result.json"
         if legacy.exists() and self.read(legacy)["mode"] == mode:
             return legacy
         return self.folder(document_id) / mode / "result.json"
 
-    def result(self, document_id: str, mode: str = "shallow") -> dict:
+    def result(self, document_id: str, mode: str = "shallow", task: str = "flashcards") -> dict:
         if self.is_deleted(document_id):
             raise RequestError(404, "This PDF was deleted.")
-        return self.read(self.result_path(document_id, mode))
+        return self.read(self.result_path(document_id, mode, task))
 
-    def submit(self, document_id: str, name: str, pdf: bytes | None = None, mode: str = "shallow", questions: int | None = None) -> dict:
+    def submit(self, document_id: str, name: str, pdf: bytes | None = None, mode: str = "shallow",
+               questions: int | None = None, task: str = "flashcards", regenerate: bool = False) -> dict:
         """Start a run. Without `pdf`, the PDF stored for this document is used."""
         questions = self.questions if questions is None else questions
-        if type(questions) is not int or not 5 <= questions <= 300:
+        if task == "summary":
+            questions = 0
+        elif type(questions) is not int or not 5 <= questions <= 300:
             raise RequestError(400, "Enter a whole number of flashcards from 5 to 300.")
         if mode not in {"shallow", "deep"}:
             raise RequestError(400, "Choose shallow or deep processing mode.")
@@ -130,48 +199,73 @@ class StudyJobs:
             if self.is_deleted(document_id):
                 raise RequestError(410, "This PDF was deleted. Upload it again as a new file.")
             source = self.source_path(document_id)
-            output = self.result_path(document_id, mode)
+            output = self.result_path(document_id, mode, task)
+            active_key = (document_id, f"{task}:{mode}")
             data = self.read(output) if output.exists() else None
-            if data and data.get("requested_questions", self.questions) != questions:
-                raise RequestError(409, "This upload uses a different flashcard count. Upload it again to change the count.")
+            count_changed = data and data.get("requested_questions", self.questions) != questions
             if (source.exists() and hashlib.sha256(source.read_bytes()).hexdigest() != digest) or (data and data.get("pdf_sha256") != digest):
                 raise RequestError(409, "This file ID belongs to a different PDF. Upload it as a new file.")
-            if data and ((document_id, mode) in self.active or data.get("status") == "complete"):
+            if active_key in self.active:
+                if count_changed or regenerate:
+                    raise RequestError(409, "Wait for the current generation to finish before starting another.")
+                return data
+            if data and data.get("status") == "complete" and not count_changed and not regenerate and (task == "summary" or
+                    pdf_study.has_card_sources((data.get("documents") or [{}])[0].get("questions"))):
                 return data
             if not pdf_study.API_KEY.strip():
                 raise RequestError(503, "The model API key is missing. Set OPENAI_API_KEY in .env and restart the server, then retry.")
             output.parent.mkdir(parents=True, exist_ok=True)
             if not source.exists():
                 source.write_bytes(pdf)
-            if data is None:
-                data = {"id": document_id, "file": name, "pdf_sha256": digest, "mode": mode,
+            if data is None or count_changed or regenerate:
+                documents = []
+                # Reuse the upload summary; generating cards must not erase it or
+                # spend another request on the same abstract.
+                if task == "flashcards":
+                    for summary_mode in (mode, "deep", "shallow"):
+                        summary_path = self.result_path(document_id, summary_mode, "summary")
+                        if summary_path.exists():
+                            summary = self.read(summary_path)
+                            if summary.get("status") == "complete" and summary.get("documents"):
+                                document = dict(summary["documents"][0])
+                                document.update(deep_mode=mode == "deep", complete=False, questions=[], requested_questions=questions)
+                                documents = [document]
+                                break
+                data = {"id": document_id, "file": name, "pdf_sha256": digest, "mode": mode, "task": task,
                         "requested_sentences": SUMMARY_SENTENCES, "requested_questions": questions,
-                        "documents": []}
+                        "documents": documents}
             data.update(status="queued", error="")
             pdf_study.write_json(output, data)
-            self.active.add((document_id, mode))
-            self.pool.submit(self.process, document_id, source, output, mode)
+            self.active.add(active_key)
+            self.pool.submit(self.process, document_id, source, output, mode, task)
             return data
 
-    def process(self, document_id: str, source: Path, output: Path, mode: str) -> None:
+    def process(self, document_id: str, source: Path, output: Path, mode: str, task: str) -> None:
         try:
             if self.is_deleted(document_id):
                 return
             data = self.read(output)
-            data.update(status="running", error="")
+            model = model_for(task)
+            data.update(status="running", error="", model=model)
             pdf_study.write_json(output, data)
             args = argparse.Namespace(pdfs=[str(source)], output=str(output),
+                                      source_pdf_name=data["file"], source_pdf_id=document_id,
                                       sentences=data["requested_sentences"], questions=data["requested_questions"],
-                                      language="same language as the PDF", model=pdf_study.MODEL,
+                                      language="same language as the PDF", model=model,
+                                      reasoning_effort=reasoning_for(task),
                                       timeout=600, allow_empty_pages=False, feedback="", deep_mode=mode == "deep",
-                                      cancelled=lambda: self.is_deleted(document_id))
+                                      cancelled=lambda: self.is_deleted(document_id), task=task)
             self.runner(args)
             if self.is_deleted(document_id):
                 return
             data = self.read(output)
             if not data["documents"] or not data["documents"][0].get("complete"):
                 raise pdf_study.WorkflowError("Processing did not finish. Retry to resume saved work.")
+            if task == "flashcards" and not pdf_study.has_card_sources(data["documents"][0].get("questions")):
+                raise pdf_study.WorkflowError("Flashcards are missing their source pages or evidence. Retry generation.")
             data.update(status="complete", error="")
+            if self.on_complete:
+                self.on_complete(document_id, data)
             pdf_study.write_json(output, data)
         except Exception as exc:
             if self.is_deleted(document_id):
@@ -186,6 +280,6 @@ class StudyJobs:
                 print(f"PDF job {document_id}: {message}", flush=True)
         finally:
             with self.lock:
-                self.active.discard((document_id, mode))
+                self.active.discard((document_id, f"{task}:{mode}"))
                 if self.is_deleted(document_id) and not any(active_id == document_id for active_id, _ in self.active):
-                    self.remove_folder(document_id)
+                    self.cleanup_deleted(document_id)

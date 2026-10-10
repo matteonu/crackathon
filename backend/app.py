@@ -24,6 +24,7 @@ def load_env_file(path=os.path.join(BACKEND_DIR, "..", ".env")):
 load_env_file()
 
 import shutil  # noqa: E402
+import sys  # noqa: E402
 from urllib.parse import quote  # noqa: E402
 
 import click  # noqa: E402
@@ -34,7 +35,14 @@ from auth import current_user  # noqa: E402
 import db  # noqa: E402
 import learning  # noqa: E402
 import materials  # noqa: E402
+import planner  # noqa: E402
+import tasks  # noqa: E402
+import decks  # noqa: E402
+import practice  # noqa: E402
+import vvz.sync  # noqa: E402
 from learning import RequestError, StudyJobs  # noqa: E402
+from learning.document_chat import DocumentChat, bp as document_chat_bp  # noqa: E402
+from learning.mcq import MCQJobs  # noqa: E402
 
 
 PUBLIC_URL = "https://13.hackathon.ethz.ch/"
@@ -69,11 +77,19 @@ def config_from_env():
         "SIGN_OUT_URL": os.environ.get("SIGN_OUT_URL", DEFAULT_SIGN_OUT_URL),
         "LEARNING_DIR": os.environ.get("LEARNING_DIR", os.path.join(data_dir, "learning")),
         "STATIC_DIR": os.environ.get("STATIC_DIR", os.path.join(BACKEND_DIR, "..", "frontend", "dist")),
+        # The course catalogue (courses, course_offerings, ...) is filled from the ETH VVZ by a
+        # background thread at start and refreshed daily; VVZ_AUTO_SYNC=0 turns that off.
+        "VVZ_AUTO_SYNC": os.environ.get("VVZ_AUTO_SYNC", "1").lower() not in {"0", "false", "no"},
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
         # 50 MB PDFs, with headroom for the request around them.
         "MAX_CONTENT_LENGTH": 70 * 1024 * 1024,
     }
+
+
+def _flask_cli():
+    """True under `flask --app app <command>`, where a background download would be a nuisance."""
+    return os.path.basename(sys.argv[0]) == "flask"
 
 
 def create_app(overrides=None):
@@ -91,10 +107,25 @@ def create_app(overrides=None):
             db.reset_db()
             print(f"Loaded the seed from {os.pathsep.join(app.config['SEED_DIRS'])}", flush=True)
 
-    app.extensions["learning_jobs"] = StudyJobs(app.config["LEARNING_DIR"])
+    def save_deck(document_id, result):
+        with app.app_context():
+            decks.persist_result(db.get_db(), document_id, result)
+
+    app.extensions["learning_jobs"] = StudyJobs(app.config["LEARNING_DIR"], on_complete=save_deck)
+    app.extensions["document_chat"] = DocumentChat(app.config["DATABASE_PATH"], app.config["LEARNING_DIR"],
+        background=app.config.get("CHAT_BACKGROUND_TASKS", True) and not app.testing)
+    if app.config.get("CHAT_BACKGROUND_TASKS", True) and not app.testing and (not _flask_cli() or "run" in sys.argv[1:]):
+        app.extensions["document_chat"].start()
+    app.extensions["mcq_jobs"] = MCQJobs(app.config["DATABASE_PATH"], app.extensions["learning_jobs"])
     auth.init_app(app)
     app.register_blueprint(materials.bp)
+    app.register_blueprint(planner.bp)
+    app.register_blueprint(tasks.bp)
     app.register_blueprint(learning.bp)
+    app.register_blueprint(practice.bp)
+    app.register_blueprint(document_chat_bp)
+    if app.config["VVZ_AUTO_SYNC"] and not app.testing and not _flask_cli():
+        vvz.sync.start_background(app.config["DATABASE_PATH"], app.config["DATA_DIR"])
 
     @app.errorhandler(RequestError)
     def request_error(exc):
@@ -130,14 +161,24 @@ def create_app(overrides=None):
             return jsonify(error="Unknown endpoint."), 404
         static_dir = app.config["STATIC_DIR"]
         if path and os.path.isfile(os.path.join(static_dir, path)):
-            return send_from_directory(static_dir, path)
+            # Some Windows MIME registries call .mjs text/plain, which browsers
+            # refuse to load as the PDF renderer's module worker.
+            return send_from_directory(static_dir, path, mimetype="text/javascript" if path.endswith(".mjs") else None)
         return send_from_directory(static_dir, "index.html")
+
+    def refill_catalogue():
+        """After a reset, put the VVZ courses back from the cached dump (no network, about a second)."""
+        if vvz.sync.sync(offline=True, db_path=app.config["DATABASE_PATH"], data_dir=app.config["DATA_DIR"]):
+            click.echo("Course catalogue refilled from the cached VVZ dump")
+        else:
+            click.echo("No cached VVZ dump yet; the catalogue fills when the app next starts")
 
     @app.cli.command("reset-db")
     def reset_db_command():
         """Delete the database and rebuild it from the seed. Discards everything users changed."""
         db.reset_db()
         click.echo(f"Database reset from {os.pathsep.join(app.config['SEED_DIRS'])}")
+        refill_catalogue()
 
     @app.cli.command("wipe")
     @click.option("--yes", is_flag=True, help="Do not ask.")
@@ -151,7 +192,9 @@ def create_app(overrides=None):
         for name in os.listdir(learning_dir) if os.path.isdir(learning_dir) else []:
             shutil.rmtree(os.path.join(learning_dir, name), ignore_errors=True)
             removed += 1
+        db.restore_seed_assets()
         click.echo(f"Database reloaded from the seed, {removed} uploaded document(s) deleted")
+        refill_catalogue()
 
     @app.cli.command("dump-seed")
     def dump_seed_command():
@@ -171,6 +214,7 @@ if __name__ == "__main__":
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         print(f" * Database: {app.config['DATABASE_PATH']}", flush=True)
         key = learning.pdf_study.API_KEY
+        from learning.config import MODELS
         print(f" * PDF pipeline: OPENAI_API_KEY {'is set' if key else 'is NOT set (add it to .env)'}, "
-              f"model {learning.pdf_study.MODEL}", flush=True)
+              f"models {MODELS}", flush=True)
     app.run(host="0.0.0.0", port=8080, debug=True)

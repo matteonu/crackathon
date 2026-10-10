@@ -1,9 +1,14 @@
 """The file library: what a caller can see, change and upload, and what belongs to whom."""
 from pathlib import Path
+import stat
 import tempfile
 import unittest
+from unittest.mock import patch
 import uuid
 
+from learning.jobs import StudyJobs
+import db
+from material_types import CATEGORY_TYPES
 from tests.support import build_app
 
 FIXTURE = Path(__file__).resolve().parents[2] / 'frontend/tests/fixtures/study-demo.pdf'
@@ -23,6 +28,7 @@ class MaterialTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.app = build_app(self.temp.name)
+        self.addCleanup(self.app.extensions['learning_jobs'].pool.shutdown, wait=True)
         self.client = self.app.test_client()
 
     def create(self, headers=ALICE, **overrides):
@@ -33,14 +39,61 @@ class MaterialTests(unittest.TestCase):
     def test_a_created_file_comes_back_in_the_listing(self):
         created = self.create(name='week1', kind='folder', category='Notes')
         self.assertEqual(created['kind'], 'folder')
+        self.assertIsNone(created['type'])
         listed = self.client.get('/api/materials', headers=ALICE).get_json()
         self.assertEqual([f['id'] for f in listed], [created['id']])
         self.assertEqual(self.client.get('/api/materials?subject=other', headers=ALICE).get_json(), [])
 
+    def test_every_upload_category_persists_its_document_type(self):
+        ids = {}
+        for category, document_type in CATEGORY_TYPES.items():
+            created = self.create(name=category + '.pdf', category=category, type=document_type)
+            self.assertEqual(created['type'], document_type)
+            ids[created['id']] = document_type
+        with self.app.app_context():
+            stored = dict(db.get_db().execute('SELECT id, type FROM materials'))
+        self.assertEqual(stored, ids)
+        restarted = build_app(self.temp.name)
+        self.addCleanup(restarted.extensions['learning_jobs'].pool.shutdown, wait=True)
+        listed = restarted.test_client().get('/api/materials', headers=ALICE).get_json()
+        self.assertEqual({item['id']: item['type'] for item in listed}, ids)
+
+    def test_types_and_legacy_categories_stay_in_sync(self):
+        # Existing callers can still send just a category.
+        created = self.create(category='Slides')
+        self.assertEqual(created['type'], 'slides')
+        url = f"/api/materials/{created['id']}"
+        for change, expected in (({'type': 'exercise'}, ('Exercises', 'exercise')),
+                                 ({'category': 'Solutions'}, ('Solutions', 'exercise_solution')),
+                                 ({'category': 'Notes'}, ('Notes', None))):
+            result = self.client.patch(url, json=change, headers=ALICE)
+            self.assertEqual(result.status_code, 200, result.get_json())
+            self.assertEqual((result.get_json()['category'], result.get_json()['type']), expected)
+        typed = body(name='typed.pdf', type='script')
+        del typed['category']
+        result = self.client.post('/api/materials', json=typed, headers=ALICE)
+        self.assertEqual(result.status_code, 201, result.get_json())
+        self.assertEqual((result.get_json()['category'], result.get_json()['type']), ('Scripts', 'script'))
+
+    def test_invalid_or_conflicting_document_types_are_rejected(self):
+        created = self.create()
+        for change in ({'type': 'unknown'}, {'type': []}, {'type': None},
+                       {'type': 'slides', 'category': 'Exams'}):
+            with self.subTest(change=change):
+                response = self.client.post('/api/materials', json=body(name='invalid.pdf', **change), headers=ALICE)
+                self.assertEqual(response.status_code, 400)
+                response = self.client.patch(f"/api/materials/{created['id']}", json=change, headers=ALICE)
+                self.assertEqual(response.status_code, 400)
+        response = self.client.post('/api/materials', json=body(kind='folder', name='folder', type='slides'), headers=ALICE)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.client.get('/api/materials', headers=ALICE).get_json(), [created])
+
     def test_files_are_private_to_their_owner(self):
         created = self.create()
+        self.assertEqual(self.client.get(f"/api/materials/{created['id']}", headers=ALICE).get_json(), created)
         self.assertEqual(self.client.get('/api/materials', headers=BOB).get_json(), [])
-        for method, path in ((self.client.get, f"/api/materials/{created['id']}/file"),
+        for method, path in ((self.client.get, f"/api/materials/{created['id']}"),
+                             (self.client.get, f"/api/materials/{created['id']}/file"),
                              (self.client.delete, f"/api/materials/{created['id']}"),
                              (self.client.get, f"/api/learning/documents/{created['id']}/result.json")):
             self.assertEqual(method(path, headers=BOB).status_code, 404, path)
@@ -86,16 +139,19 @@ class MaterialTests(unittest.TestCase):
         self.assertEqual((response.status_code, response.get_json()['error']),
                          (400, 'Only text files can be edited.'))
 
-    def test_outputs_and_processing_are_stored_as_sent(self):
+    def test_summary_and_processing_stay_on_pdf_and_cards_move_into_deck(self):
         pdf = self.create()
         outputs = {'summary': {'text': 'One sentence.'},
                    'flashcards': {'cards': [{'id': 'c1', 'question': 'Q', 'answer': 'A', 'generated': True}]}}
         updated = self.client.patch(f"/api/materials/{pdf['id']}",
                                     json={'outputs': outputs, 'processing': {'status': 'complete', 'mode': 'deep'}},
                                     headers=ALICE).get_json()
-        self.assertEqual(updated['outputs'], outputs)
+        self.assertEqual(updated['outputs'], {'summary': outputs['summary']})
         self.assertEqual(updated['processing'], {'status': 'complete', 'mode': 'deep'})
-        self.assertEqual(self.client.get('/api/materials', headers=ALICE).get_json()[0]['outputs'], outputs)
+        listing = self.client.get('/api/materials', headers=ALICE).get_json()
+        deck = next(m for m in listing if m['kind'] == 'deck')
+        self.assertEqual(deck['sourcePdfId'], pdf['id'])
+        self.assertEqual(deck['outputs']['flashcards']['cards'][0]['question'], 'Q')
 
     def test_a_pdf_is_uploaded_once_and_served_back(self):
         pdf = self.create()
@@ -125,15 +181,71 @@ class MaterialTests(unittest.TestCase):
 
     def test_deleting_a_folder_removes_what_is_inside_it_and_the_stored_pdf(self):
         folder = self.create(name='week1', kind='folder', category='Notes')
-        pdf = self.create(name='lecture.pdf', parentId=folder['id'])
+        nested = self.create(name='slides', kind='folder', category='Notes', parentId=folder['id'])
+        note = self.create(name='notes.txt', kind='txt', content='Notes', category='Notes', parentId=folder['id'])
+        pdf = self.create(name='lecture.pdf', parentId=nested['id'])
+        sibling = self.create(name='keep.txt', kind='txt', content='', category='Notes')
         self.client.put(f"/api/materials/{pdf['id']}/file", data=FIXTURE.read_bytes(),
                         content_type='application/pdf', headers=ALICE)
         stored = Path(self.temp.name) / 'learning' / pdf['id']
         self.assertTrue((stored / 'source.pdf').exists())
         deleted = self.client.delete(f"/api/materials/{folder['id']}", headers=ALICE)
-        self.assertEqual(sorted(deleted.get_json()['deleted']), sorted([folder['id'], pdf['id']]))
-        self.assertEqual(self.client.get('/api/materials', headers=ALICE).get_json(), [])
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(set(deleted.get_json()['deleted']), {folder['id'], nested['id'], note['id'], pdf['id']})
+        self.assertEqual(self.client.get('/api/materials', headers=ALICE).get_json(), [sibling])
+        self.assertEqual(self.client.get(f"/api/materials/{pdf['id']}", headers=ALICE).status_code, 404)
         self.assertFalse(stored.exists())
+
+    def test_readonly_pdf_and_folder_are_removed_without_a_ghost_row(self):
+        pdf = self.create()
+        jobs = self.app.extensions['learning_jobs']
+        jobs.store_source(pdf['id'], FIXTURE.read_bytes())
+        folder = jobs.folder(pdf['id'])
+        source = jobs.source_path(pdf['id'])
+        generated = folder / 'deep'
+        generated.mkdir()
+        result = generated / 'result.json'
+        result.write_text('{"status":"complete","documents":[]}', encoding='utf-8')
+        result.chmod(stat.S_IREAD)
+        generated.chmod(stat.S_IREAD | stat.S_IEXEC)
+        source.chmod(stat.S_IREAD)
+        folder.chmod(stat.S_IREAD | stat.S_IEXEC)
+        try:
+            response = self.client.delete(f"/api/materials/{pdf['id']}", headers=ALICE)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(self.client.get('/api/materials', headers=ALICE).get_json(), [])
+            self.assertFalse(folder.exists())
+        finally:
+            for path in (folder, generated, source, result):
+                if path.exists():
+                    path.chmod(path.stat().st_mode | stat.S_IWRITE)
+
+    def test_locked_pdf_does_not_fail_folder_deletion_and_is_cleaned_on_restart(self):
+        folder = self.create(name='week1', kind='folder', category='Notes')
+        locked = self.create(name='locked.pdf', parentId=folder['id'])
+        unlocked = self.create(name='unlocked.pdf', parentId=folder['id'])
+        jobs = self.app.extensions['learning_jobs']
+        for pdf in (locked, unlocked):
+            jobs.store_source(pdf['id'], FIXTURE.read_bytes())
+        remove = jobs.remove_folder
+        def locked_cleanup(document_id):
+            if document_id == locked['id']:
+                raise PermissionError('PDF is still open')
+            remove(document_id)
+        with patch.object(jobs, 'remove_folder', side_effect=locked_cleanup):
+            response = self.client.delete(f"/api/materials/{folder['id']}", headers=ALICE)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(set(response.get_json()['deleted']), {folder['id'], locked['id'], unlocked['id']})
+        self.assertEqual(self.client.get('/api/materials', headers=ALICE).get_json(), [])
+        self.assertEqual(self.client.get(f"/api/materials/{locked['id']}", headers=ALICE).status_code, 404)
+        self.assertEqual(self.client.get(f"/api/materials/{locked['id']}/file", headers=ALICE).status_code, 404)
+        self.assertFalse(jobs.folder(unlocked['id']).exists())
+        self.assertTrue(jobs.folder(locked['id']).exists())
+        self.assertTrue(jobs.deletion_marker(locked['id']).exists())
+        restarted = StudyJobs(jobs.directory)
+        self.addCleanup(restarted.pool.shutdown, wait=True)
+        self.assertFalse(jobs.folder(locked['id']).exists())
+        self.assertFalse(jobs.deletion_marker(locked['id']).exists())
 
     def test_a_malformed_file_is_refused(self):
         for overrides, field in ((dict(kind='exe'), 'kind'), (dict(name='a/b.pdf'), 'name'),

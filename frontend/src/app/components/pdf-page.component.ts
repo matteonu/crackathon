@@ -12,7 +12,9 @@ import { LoadingDotsComponent } from '../shared/loading-dots.component';
   </div>
   <p class="sr-only">{{text()}}</p>
 `,styles:`
-  :host{display:block;margin:0 auto 20px;max-width:100%;}
+  /* Anchor the hidden text to its page so it cannot extend the enclosing dialog. */
+  :host{display:block;position:relative;margin:0 auto 20px;max-width:100%;}
+  .sr-only{top:0;left:0;margin:0;}
   .pdf-page-label{font-size:10px;color:var(--muted);padding:5px 0 8px;}
   .pdf-page{position:relative;background:white;box-shadow:0 1px 5px #00000018;overflow:hidden;}
   canvas{display:block;width:100%;height:100%;position:absolute;inset:0;}
