@@ -168,7 +168,6 @@ export class StudyStore {
     this.editor.set(null);
     this.semkez.set(semkez);
     await this.load(true);
-    this.announce(`Showing ${this.data().semester}.`);
   }
 
   /** Courses offered this semester whose code or title contains q (at least 2 characters). */
