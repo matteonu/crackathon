@@ -8,6 +8,7 @@ import glob
 import json
 import os
 import sqlite3
+from contextlib import closing
 
 from flask import current_app, g
 
@@ -57,7 +58,8 @@ def close_db(_exc=None):
 def init_db():
     """Create every table the schema declares. Existing tables and rows are left alone."""
     os.makedirs(os.path.dirname(db_path()), exist_ok=True)
-    with connect() as db, open(SCHEMA_PATH) as f:
+    # SQLite's context manager commits/rolls back but does not close the file.
+    with closing(connect()) as db, db, open(SCHEMA_PATH) as f:
         db.executescript(f.read())
 
 
@@ -77,10 +79,11 @@ def seed_files():
 
 def reset_db():
     """Delete the database and rebuild it from the seed files."""
+    close_db()
     if os.path.exists(db_path()):
         os.remove(db_path())
     init_db()
-    with connect() as db:
+    with closing(connect()) as db, db:
         for path, table in seed_files():
             with open(path) as f:
                 rows = json.load(f)
@@ -101,7 +104,7 @@ def dump_seed():
     existing = {table: path for path, table in seed_files()}
     next_num = len(existing) + 1
     written = []
-    with connect() as db:
+    with closing(connect()) as db, db:
         tables = [r["name"] for r in db.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid"
         )]

@@ -51,16 +51,24 @@ def submit(document_id):
     name = unquote(request.headers.get("X-Filename", "document.pdf"))
     name = name.replace("\\", "/").rsplit("/", 1)[-1][:180]
     mode = request.headers.get("X-Learning-Mode", "shallow")
+    task = request.headers.get("X-Learning-Task", "flashcards")
+    if task not in {"summary", "flashcards"}:
+        raise RequestError(400, "Choose summary or flashcards.")
+    material = materials.row(document_id)
+    if material["kind"] != "pdf":
+        raise RequestError(400, "Choose a PDF to process.")
+    if task == "flashcards" and material["category"] not in materials.FLASHCARD_CATEGORIES:
+        raise RequestError(400, "Flashcards are available for slides, solutions and scripts.")
     try:
         questions = int(request.headers.get("X-Flashcard-Count", str(jobs().questions)))
     except ValueError:
         raise RequestError(400, "Enter a whole number of flashcards from 5 to 300.") from None
-    return jsonify(jobs().submit(document_id, name, pdf, mode, questions)), 202
+    return jsonify(jobs().submit(document_id, name, pdf, mode, questions, task)), 202
 
 
 @bp.get("/documents/<uuid:document_id>/result.json")
 def result(document_id):
-    return jsonify(jobs().result(owned(document_id), request.args.get("mode", "shallow")))
+    return jsonify(jobs().result(owned(document_id), request.args.get("mode", "shallow"), request.args.get("task", "flashcards")))
 
 
 @bp.delete("/documents/<uuid:document_id>")

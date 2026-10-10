@@ -1,4 +1,4 @@
-import type { Flashcard, Material, ProcessingState, LearningMode } from './material.ts';
+import type { Flashcard, Material, ProcessingState, LearningMode, LearningTask } from './material.ts';
 
 export interface StudyDocument {
   abstract?: string;
@@ -11,20 +11,22 @@ export interface StudyDocument {
 export interface StudyResult {
   id: string;
   mode?: LearningMode;
+  task?: LearningTask;
   requested_questions?: number;
   status: ProcessingState['status'];
   error?: string;
   documents: StudyDocument[];
 }
 
-export function parseStudyResult(value: unknown, id: string, mode: LearningMode = 'shallow'): StudyResult {
+export function parseStudyResult(value: unknown, id: string, mode: LearningMode = 'shallow', task: LearningTask = 'flashcards'): StudyResult {
   const result = value as StudyResult;
   if (!result || result.id !== id || !['queued', 'running', 'complete', 'error'].includes(result.status)
       || !Array.isArray(result.documents) || result.documents.length > 1) {
     throw new Error('The Python server returned an invalid result file. Retry processing.');
   }
   if (result.error !== undefined && typeof result.error !== 'string') throw new Error('Invalid processing error.');
-  if (result.requested_questions !== undefined && (!Number.isInteger(result.requested_questions) || result.requested_questions < 5 || result.requested_questions > 300)) throw new Error('Invalid flashcard count.');
+  if ((result.task ?? 'flashcards') !== task) throw new Error('The result belongs to a different processing task.');
+  if (result.requested_questions !== undefined && (task === 'summary' ? result.requested_questions !== 0 : (!Number.isInteger(result.requested_questions) || result.requested_questions < 5 || result.requested_questions > 300))) throw new Error('Invalid flashcard count.');
   if ((result.mode ?? 'shallow') !== mode) throw new Error('The result belongs to a different processing mode. Retry processing.');
   for (const document of result.documents) {
     if (!document || typeof document !== 'object'
@@ -35,7 +37,8 @@ export function parseStudyResult(value: unknown, id: string, mode: LearningMode 
       throw new Error('The saved summary or flashcards are invalid. Retry processing.');
     }
   }
-  if (result.status === 'complete' && (!result.documents[0]?.abstract || !result.documents[0]?.questions?.length
+  if (task === 'summary' && result.documents.some(document => document.questions?.length)) throw new Error('A summary result must not contain flashcards.');
+  if (result.status === 'complete' && (!result.documents[0]?.abstract || (task === 'flashcards' && !result.documents[0]?.questions?.length)
       || result.documents[0]?.sentence_count !== 1 || result.documents[0]?.complete !== true)) {
     throw new Error('The result file is missing its one-sentence summary or flashcards. Retry processing.');
   }
@@ -45,16 +48,19 @@ export function parseStudyResult(value: unknown, id: string, mode: LearningMode 
 /** Stable generated IDs replace old demo/generated cards while preserving manual cards. */
 export function learningPatch(file: Material, result: StudyResult) {
   const document = result.documents[0];
+  const task = result.task ?? 'flashcards';
+  const summary = document?.abstract ?? file.outputs?.summary?.text ?? file.description ?? '';
   const manual = (file.outputs?.flashcards?.cards ?? []).filter(card => !card.demo && !card.generated);
   const generated: Flashcard[] = (document?.questions ?? []).map((card, index) => ({
     ...card, id: `pipeline:${file.id}:${index}`, demo: false, generated: true,
   }));
   return {
-    processing: { status: result.status, error: result.error ?? '', mode: result.mode ?? 'shallow', requestedQuestions: result.requested_questions ?? file.processing?.requestedQuestions ?? 60 },
-    description: document?.abstract ?? '',
+    processing: { status: result.status, error: result.error ?? '', mode: result.mode ?? 'shallow', task,
+      requestedQuestions: task === 'summary' ? (file.processing?.requestedQuestions || 60) : result.requested_questions ?? file.processing?.requestedQuestions ?? 60 },
+    description: summary,
     outputs: {
-      summary: { text: document?.abstract ?? '' },
-      flashcards: { cards: [...generated, ...manual] },
+      summary: { text: summary },
+      flashcards: { cards: task === 'summary' ? (file.outputs?.flashcards?.cards ?? []) : [...generated, ...manual] },
     },
   };
 }

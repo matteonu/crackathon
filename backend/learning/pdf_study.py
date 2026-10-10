@@ -562,9 +562,15 @@ def process_document(client, pdf: Path, source: dict, args: argparse.Namespace,
     identity = {"pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest(), "questions": args.questions,
                 "sentences": args.sentences, "language": args.language, "deep_mode": args.deep_mode,
                 "allow_empty_pages": args.allow_empty_pages}
-    key = hashlib.sha256((str(pdf) + str(args.deep_mode)).encode("utf-8")).hexdigest()[:24]
+    key = hashlib.sha256((str(pdf) + str(args.deep_mode) + str(args.questions)).encode("utf-8")).hexdigest()[:24]
     state_path = output.parent / (output.stem + ".work") / (key + ".json")
     state_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_key = hashlib.sha256((str(pdf) + str(args.deep_mode)).encode("utf-8")).hexdigest()[:24]
+    legacy_path = state_path.with_name(legacy_key + ".json")
+    if not state_path.exists() and legacy_path.exists():
+        legacy_state = json.loads(legacy_path.read_text(encoding="utf-8"))
+        if legacy_state.get("identity") == identity:
+            write_json(state_path, legacy_state)
     if state_path.exists():
         state = json.loads(state_path.read_text(encoding="utf-8"))
         if state.get("identity") != identity:
@@ -647,6 +653,7 @@ def _run(args: argparse.Namespace) -> Path:
     import openai
 
     args.deep_mode = getattr(args, "deep_mode", DEEP_MODE)
+    summary_only = getattr(args, "task", "flashcards") == "summary"
     files = collect_pdfs(args.pdfs)
     output = Path(args.output).expanduser().resolve()
     if output.suffix.lower() != ".json":
@@ -656,7 +663,7 @@ def _run(args: argparse.Namespace) -> Path:
     pending = []
     for pdf in files:
         record = records.get((pdf, args.deep_mode))
-        if record and record.get("complete") and record.get("abstract") and record.get("questions"):
+        if record and record.get("complete") and record.get("abstract") and (summary_only or record.get("questions")):
             print(f"Skipping {pdf.name}: summary and questions already exist for this mode.", flush=True)
         else:
             pending.append((pdf, record))
@@ -675,8 +682,16 @@ def _run(args: argparse.Namespace) -> Path:
                 record = {"file": pdf.name, "path": str(pdf), "deep_mode": args.deep_mode,
                           "model": args.model, "language": args.language, "complete": False}
                 data[field].append(record)
-            process_document(client, pdf, source, args, record, output, data)
-            print(f"Completed summary and questions: {pdf.name}", flush=True)
+            if summary_only:
+                abstract = (summarize_full_pdf(client, source["file_input"], args.sentences, args.language, args.model)
+                            if args.deep_mode else summarize_pdf(client, source["pages"], args.sentences, args.language, args.model))
+                check_cancelled()
+                record.update(abstract=abstract, sentence_count=count_sentences(abstract),
+                              requested_sentences=args.sentences, questions=[], requested_questions=0, complete=True)
+                write_json(output, data)
+            else:
+                process_document(client, pdf, source, args, record, output, data)
+            print(f"Completed {'summary' if summary_only else 'summary and questions'}: {pdf.name}", flush=True)
     print(f"\nSaved combined study material: {output}")
     return output
 

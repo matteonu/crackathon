@@ -11,7 +11,7 @@ npm ci
 npm start
 ```
 
-Open http://127.0.0.1:4300. This integrated branch uses the Python learning server on port 8010 for automatic PDF summaries and flashcards. Run `bash start-learning.sh` from the repository root for the complete app, or see [LEARNING_VIEW.md](../LEARNING_VIEW.md) for separate development servers and API-key setup.
+Open http://127.0.0.1:4300. The Flask backend runs on port 8080; this development server proxies `/api` to it. See [LEARNING_VIEW.md](../LEARNING_VIEW.md) for backend startup and API-key setup.
 
 ```bash
 npm test       # data, dates, totals, and import validation
@@ -31,7 +31,7 @@ The production files are written directly to `dist/` and served by the Python le
 - Totals, hours remaining, subject progress, and weekly summaries recalculate immediately.
 - Exam view supports All, Still to do, and Completed filters. Click a status to change it.
 - Subject pages let you edit a target, exam date, next action, and completion status.
-- PDF uploads generate a one-sentence summary and flashcards from Python JSON. Choose Shallow for faster text extraction or Deep for complete PDF pages including visuals, then set the number of cards (5–300) for new uploads; both modes keep their own saved results.
+- PDF uploads generate a one-sentence summary from Python JSON. Choose Slides, Exercises, Solutions, Exams, or Scripts in the upload dropdown. Slides, Solutions, and Scripts offer optional flashcards: open the PDF, choose Shallow or Deep and 5–300 cards, then click Generate flashcards.
 - Generation labels animate through one, two, and three dots, respecting reduced-motion preferences.
 - Changes persist in this browser’s local storage. Data & settings includes JSON export/import and restoring the original sample after confirmation.
 - Responsive layout for desktop and mobile. Dense tables scroll inside their panels.

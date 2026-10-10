@@ -1,11 +1,23 @@
 """The app's HTTP surface: who the caller is, and what they get without a proxy."""
 import tempfile
+from pathlib import Path
 import unittest
 
 from tests.support import build_app
 
 
 class AuthTests(unittest.TestCase):
+    def test_pdf_module_worker_is_served_as_javascript(self):
+        with tempfile.TemporaryDirectory() as temp:
+            worker = Path(temp) / 'pdf.worker.min.mjs'
+            worker.write_text('export const worker = true;', encoding='utf-8')
+            response = build_app(temp).test_client().get('/pdf.worker.min.mjs')
+            try:
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.mimetype, 'text/javascript')
+            finally:
+                response.close()
+
     def test_health_needs_no_user(self):
         with tempfile.TemporaryDirectory() as temp:
             response = build_app(temp).test_client().get('/api/health')
@@ -36,7 +48,7 @@ class AuthTests(unittest.TestCase):
             client.get('/api/me', headers={'X-User-Id': 'NEW.PERSON@ethz.ch', 'X-User-Name': 'Ren%C3%A9%20M.'})
             with app.app_context():
                 import db
-                rows = db.connect().execute('SELECT email, display_name FROM users').fetchall()
+                rows = db.get_db().execute('SELECT email, display_name FROM users').fetchall()
             self.assertEqual([tuple(r) for r in rows], [('new.person@ethz.ch', 'René M.')])
 
     def test_a_missing_name_header_falls_back_to_the_local_part(self):

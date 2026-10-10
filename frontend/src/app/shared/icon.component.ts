@@ -1,6 +1,7 @@
 import { Component, input } from '@angular/core';
 
 const paths:Record<string,string> = {
+  file:'M14 2H5v20h14V7z M14 2v6h5 M8 12h8 M8 16h8',
   folder:'M3 7V4h6l3 3h9v13H3z',
   'folder-open':'M3 10V4h6l3 3h8v3 M3 10h19l-3 10H3z',
   'folder-plus':'M3 7V4h6l3 3h9v13H3z M12 10v7 M8.5 13.5h7',
@@ -15,6 +16,7 @@ const paths:Record<string,string> = {
   arrow:'M5 12h14 M13 6l6 6-6 6',
   expand:'M14 3h7v7 M21 3l-8 8 M10 21H3v-7 M3 21l8-8',
   plus:'M12 5v14 M5 12h14',
+  minus:'M5 12h14',
   close:'M6 6l12 12 M18 6L6 18',
   trash:'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7',
   left:'M15 5l-7 7 7 7',

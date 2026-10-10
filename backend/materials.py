@@ -19,7 +19,8 @@ from errors import RequestError
 bp = Blueprint("materials", __name__, url_prefix="/api/materials")
 
 KINDS = {"folder", "pdf", "md", "txt"}
-CATEGORIES = {"Slides", "Notes", "Transcripts", "Books", "Exams", "Exercises"}
+CATEGORIES = {"Slides", "Solutions", "Scripts", "Notes", "Transcripts", "Books", "Exams", "Exercises"}
+FLASHCARD_CATEGORIES = {"Slides", "Solutions", "Scripts"}
 MARKERS = {"To read", "Done", "Revisit", "Ignore"}
 MAX_TEXT = 200_000      # a note's content
 MAX_JSON = 1_000_000    # outputs or processing, serialised
@@ -169,6 +170,11 @@ def create():
     return jsonify(to_json(row(material_id))), 201
 
 
+@bp.get("/<uuid:material_id>")
+def detail(material_id):
+    return jsonify(to_json(row(str(material_id))))
+
+
 @bp.patch("/<uuid:material_id>")
 def update(material_id):
     material_id = str(material_id)
@@ -236,7 +242,12 @@ def delete(material_id):
     # The rows are gone either way; the PDFs and generated results follow.
     for removed_id, kind in removed:
         if kind == "pdf":
-            jobs().delete(removed_id)
+            try:
+                jobs().delete(removed_id)
+            except OSError:
+                # Never report a failed logical deletion after committing it, or
+                # skip the rest of a deleted folder when one PDF is locked.
+                current_app.logger.warning("File cleanup deferred for deleted material %s", removed_id)
     return jsonify(deleted=[removed_id for removed_id, _ in removed])
 
 

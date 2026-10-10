@@ -1,4 +1,5 @@
-export const MATERIAL_CATEGORIES = ['Slides','Notes','Transcripts','Books','Exams','Exercises'] as const;
+export const MATERIAL_CATEGORIES = ['Slides','Solutions','Scripts','Notes','Transcripts','Books','Exams','Exercises'] as const;
+export const UPLOAD_CATEGORIES = ['Slides','Exercises','Solutions','Exams','Scripts'] as const;
 export const MATERIAL_MARKERS = ['To read','Done','Revisit','Ignore'] as const;
 export type MaterialCategory = typeof MATERIAL_CATEGORIES[number];
 export type MaterialMarker = typeof MATERIAL_MARKERS[number];
@@ -6,7 +7,8 @@ export type MaterialKind = 'folder' | 'pdf' | 'md' | 'txt';
 export type ToolId = 'summary' | 'flashcards';
 export interface Flashcard { id?:string; question:string; answer:string; demo?:boolean; generated?:boolean; }
 export type LearningMode = 'shallow' | 'deep';
-export interface ProcessingState { status:'queued'|'running'|'complete'|'error'; error?:string; mode?:LearningMode; requestedQuestions?:number; }
+export type LearningTask = 'summary' | 'flashcards';
+export interface ProcessingState { status:'queued'|'running'|'complete'|'error'; error?:string; mode?:LearningMode; requestedQuestions?:number; task?:LearningTask; }
 export interface ToolResult { text?: string; cards?: Flashcard[]; }
 export interface Material {
   id:string; subjectId:string; name:string; size:number; category:MaterialCategory;
@@ -21,6 +23,7 @@ export interface FolderCard extends Flashcard { key:string; fileId:string; fileN
 export interface TreeRow { material:Material; depth:number; }
 
 export function materialKind(file:Material):MaterialKind { return file.kind??'pdf'; }
+export function canGenerateFlashcards(file:Material):boolean { return materialKind(file)==='pdf'&&['Slides','Solutions','Scripts'].includes(file.category); }
 /** Where the server serves this file's bytes: the PDF itself, or a text file's content. */
 export function materialFileUrl(id:string):string { return `/api/materials/${encodeURIComponent(id)}/file`; }
 export function normalizeMaterial(file:Material):Material {
@@ -38,7 +41,7 @@ export function descendants(files:readonly Material[],parentId:string|null):Mate
   visit(parentId);return found;
 }
 export function folderCards(files:readonly Material[],folderId:string|null):FolderCard[] {
-  return descendants(files,folderId).filter(f=>materialKind(f)!=='folder').flatMap(file=>(file.outputs?.flashcards?.cards??[]).map((card,i)=>({...card,key:card.id??`${file.id}-${i}`,fileId:file.id,fileName:file.name})));
+  return descendants(files,folderId).filter(f=>materialKind(f)!=='folder'&&(materialKind(f)!=='pdf'||canGenerateFlashcards(f))).flatMap(file=>(file.outputs?.flashcards?.cards??[]).map((card,i)=>({...card,key:card.id??`${file.id}-${i}`,fileId:file.id,fileName:file.name})));
 }
 export function treeRows(files:readonly Material[],expanded:ReadonlySet<string>,query='',marker=''):TreeRow[] {
   const rows:TreeRow[]=[];const seen=new Set<string>();const filtering=!!query||!!marker;

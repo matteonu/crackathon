@@ -13,15 +13,33 @@ DEMO_SEED = PRODUCTION_SEED + [os.path.join(BACKEND_DIR, 'seed_demo')]
 
 def emails(app):
     with app.app_context():
-        return [r['email'] for r in db.connect().execute('SELECT email FROM users ORDER BY id')]
+        return [r['email'] for r in db.get_db().execute('SELECT email FROM users ORDER BY id')]
 
 
 class SeedTests(unittest.TestCase):
+    def test_first_start_seeds_and_releases_the_database_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            app = build_app(temp, SEED_IF_NEW=True, SEED_DIRS=DEMO_SEED)
+            self.assertEqual(emails(app), ['alice@ethz.ch', 'bob@ethz.ch'])
+            # Windows refuses to rename the file if a connection is still open.
+            path = app.config['DATABASE_PATH']
+            os.rename(path, path + '.moved')
+            os.rename(path + '.moved', path)
+
+    def test_reset_replaces_the_current_context_connection(self):
+        with tempfile.TemporaryDirectory() as temp:
+            app = build_app(temp, seed=True, SEED_DIRS=DEMO_SEED)
+            with app.app_context():
+                db.upsert_user('guest@ethz.ch', 'Guest')
+                db.reset_db()
+                self.assertIsNone(db.get_user_by_email('guest@ethz.ch'))
+                self.assertIsNotNone(db.get_user_by_email('alice@ethz.ch'))
+
     def test_production_starts_with_an_empty_database(self):
         with tempfile.TemporaryDirectory() as temp:
             app = build_app(temp, seed=True, SEED_DIRS=PRODUCTION_SEED)
             with app.app_context():
-                conn = db.connect()
+                conn = db.get_db()
                 counts = {table: conn.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0]
                           for table in ('users', 'courses', 'course_resources', 'semesters', 'materials')}
             self.assertEqual(counts, {'users': 0, 'courses': 0, 'course_resources': 0,
@@ -31,7 +49,7 @@ class SeedTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             app = build_app(temp, seed=True, SEED_DIRS=DEMO_SEED)
             with app.app_context():
-                conn = db.connect()
+                conn = db.get_db()
                 self.assertGreater(conn.execute('SELECT count(*) FROM courses').fetchone()[0], 0)
                 self.assertGreater(conn.execute('SELECT count(*) FROM semesters').fetchone()[0], 0)
                 self.assertGreater(conn.execute('SELECT count(*) FROM course_resources').fetchone()[0], 0)

@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { descendants, folderCards, materialName, normalizeMaterial, treeRows, validParent } from '../src/app/models/material.ts';
+import { canGenerateFlashcards, UPLOAD_CATEGORIES, descendants, folderCards, materialName, normalizeMaterial, treeRows, validParent } from '../src/app/models/material.ts';
 import type { Material } from '../src/app/models/material.ts';
 import { buildApkg } from '../src/app/models/apkg.ts';
 import initSqlJs from 'sql.js';
 import { unzipSync, strFromU8 } from 'fflate';
 
-const file=(id:string,parentId:string|null,kind:Material['kind']='pdf'):Material=>({id,name:id+(kind==='folder'?'':'.'+kind),parentId,kind,subjectId:'subject',size:0,blob:new Blob(),added:0,category:'Notes',marker:'To read'});
+const file=(id:string,parentId:string|null,kind:Material['kind']='pdf'):Material=>({id,name:id+(kind==='folder'?'':'.'+kind),parentId,kind,subjectId:'subject',size:0,blob:new Blob(),added:0,category:kind==='pdf'?'Slides':'Notes',marker:'To read'});
 const fixture=()=>[file('week1',null,'folder'),file('lecture','week1','folder'),file('notes','lecture','md'),file('slides','week1'),file('root',null)];
 
 test('legacy PDFs remain in Materials with stable card IDs',()=>{
@@ -66,4 +66,15 @@ test('APKG is a readable Anki SQLite package with escaped content and stable not
   assert.deepEqual(reopened.exec('SELECT guid FROM notes ORDER BY guid')[0].values,ids);
   await assert.rejects(buildApkg(SQL,[],'Empty','empty'));
   db.close();reopened.close();
+});
+
+
+test('only slides, solutions and scripts offer PDF flashcards, including folder collections',()=>{
+  assert.deepEqual(UPLOAD_CATEGORIES,['Slides','Exercises','Solutions','Exams','Scripts']);
+  for(const category of ['Slides','Solutions','Scripts','Exercises','Exams','Notes'] as const){
+    const pdf={...file(category,null),category,outputs:{flashcards:{cards:[{question:'Q',answer:'A'}]}}};
+    const allowed=['Slides','Solutions','Scripts'].includes(category);
+    assert.equal(canGenerateFlashcards(pdf),allowed,category);
+    assert.equal(folderCards([pdf],null).length,allowed?1:0,category);
+  }
 });

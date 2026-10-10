@@ -29,11 +29,11 @@ export class PdfPreviewComponent {
         try{
           const pdf=await import('pdfjs-dist');if(!active)return;
           const assets=new URL('assets/pdfjs/',window.document.baseURI).href;
-          pdf.GlobalWorkerOptions.workerSrc=assets+'pdf.worker.min.mjs';
+          pdf.GlobalWorkerOptions.workerSrc=assets+'pdf.worker.min.mjs?v='+pdf.version;
           task=pdf.getDocument({url,cMapUrl:assets+'cmaps/',cMapPacked:true,standardFontDataUrl:assets+'standard_fonts/',wasmUrl:assets+'wasm/'});
           const document=await task.promise;const first=await document.getPage(1);const size=first.getViewport({scale:1});
           if(active){this.aspect.set(size.width/size.height);this.document.set(document);const viewport=this.viewport()?.nativeElement;if(viewport)viewport.scrollTop=0;}
-        }catch(e){if(active)this.error.set(e instanceof Error&&e.name==='PasswordException'?'Password-protected PDFs cannot be previewed.':'This PDF could not be previewed.');}
+        }catch(e){if(active)console.warn('PDF preview failed:',e instanceof Error?e.message:'Unknown PDF error');if(active)this.error.set(e instanceof Error&&e.name==='PasswordException'?'Password-protected PDFs cannot be previewed.':'This PDF could not be previewed.');}
         finally{if(active)this.loading.set(false);}
       })();
       onCleanup(()=>{active=false;void task?.destroy();});

@@ -1,6 +1,7 @@
 import argparse
 import contextlib
 import io
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -66,9 +67,14 @@ class PipelineTests(unittest.TestCase):
             partial = json.loads(output.read_text())['documents'][0]
             self.assertEqual(partial['sentence_count'], 1)
             self.assertFalse(partial['complete'])
+            # Checkpoints from before per-file card counts used a key without the count.
+            state_path = next(output.with_suffix('.work').glob('*.json'))
+            legacy_key = hashlib.sha256((str(FIXTURE.resolve()) + 'False').encode('utf-8')).hexdigest()[:24]
+            state_path.rename(state_path.with_name(legacy_key + '.json'))
             pdf_study.run(args)
             self.assertTrue(json.loads(output.read_text())['documents'][0]['complete'])
             self.assertEqual(stages.count('preview_and_abstract'), 1)
+            self.assertEqual(stages.count('preview'), 0)
             self.assertEqual(stages.count('questions'), 2)
 
     def test_sentence_counts_and_correction(self):
@@ -157,7 +163,6 @@ class PipelineTests(unittest.TestCase):
                 self.assertEqual((unknown.status_code, unknown.get_json()['error']), (404, 'Unknown endpoint.'))
                 for count in ('0', '4', '301', '5.5', 'abc'):
                     self.assertEqual(upload(**{'X-Flashcard-Count': count}).status_code, 400, count)
-                self.assertEqual(upload(**{'X-Flashcard-Count': '8'}).status_code, 409)
                 with self.assertRaises(RequestError) as conflict:
                     jobs.submit(document_id, 'other.pdf', b'%PDF-different file')
                 self.assertEqual(conflict.exception.status, 409)

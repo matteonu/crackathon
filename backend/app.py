@@ -142,7 +142,9 @@ def create_app(overrides=None):
             return jsonify(error="Unknown endpoint."), 404
         static_dir = app.config["STATIC_DIR"]
         if path and os.path.isfile(os.path.join(static_dir, path)):
-            return send_from_directory(static_dir, path)
+            # Some Windows MIME registries call .mjs text/plain, which browsers
+            # refuse to load as the PDF renderer's module worker.
+            return send_from_directory(static_dir, path, mimetype="text/javascript" if path.endswith(".mjs") else None)
         return send_from_directory(static_dir, "index.html")
 
     def refill_catalogue():

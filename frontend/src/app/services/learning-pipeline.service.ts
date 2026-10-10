@@ -1,10 +1,10 @@
 import { Injectable } from '@angular/core';
-import type { Material, LearningMode } from '../models/material';
+import type { Material, LearningMode, LearningTask } from '../models/material';
 import { parseStudyResult, StudyResult } from '../models/learning';
 
 @Injectable({ providedIn: 'root' })
 export class LearningPipelineService {
-  resultUrl(id: string, mode: LearningMode = 'shallow'): string { return `/api/learning/documents/${encodeURIComponent(id)}/result.json?mode=${mode}`; }
+  resultUrl(id: string, mode: LearningMode = 'shallow', task: LearningTask = 'flashcards'): string { return `/api/learning/documents/${encodeURIComponent(id)}/result.json?mode=${mode}&task=${task}`; }
 
   async remove(id: string): Promise<void> {
     await this.request(`/api/learning/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
@@ -27,19 +27,25 @@ export class LearningPipelineService {
     return data;
   }
 
-  async process(file: Material, receive: (result: StudyResult) => Promise<void>, resume = false, mode: LearningMode = 'shallow'): Promise<void> {
-    let data = await this.request(resume ? this.resultUrl(file.id,mode) : `/api/learning/documents/${encodeURIComponent(file.id)}`,
-      resume ? undefined : { method: 'POST', headers: { 'X-Filename': encodeURIComponent(file.name), 'X-Learning-Mode': mode, 'X-Flashcard-Count': String(file.processing?.requestedQuestions ?? 60) } });
+  async process(file: Material, receive: (result: StudyResult) => Promise<void>, resume = false, mode: LearningMode = 'shallow', task: LearningTask = 'flashcards', count = 60): Promise<void> {
+    const submit = () => this.request(`/api/learning/documents/${encodeURIComponent(file.id)}`, { method: 'POST', headers: { 'X-Filename': encodeURIComponent(file.name), 'X-Learning-Mode': mode, 'X-Learning-Task': task, 'X-Flashcard-Count': String(count) } });
+    let data: unknown;
+    try { data = resume ? await this.request(this.resultUrl(file.id,mode,task)) : await submit(); }
+    catch (error) {
+      // An upload can finish just before a page refresh, before the queued job was submitted.
+      if (resume && file.processing?.status === 'queued') data = await submit();
+      else throw error;
+    }
     let previous = '';
     const deadline = Date.now() + 30 * 60 * 1000;
     while (true) {
-      const result = parseStudyResult(data, file.id, mode);
+      const result = parseStudyResult(data, file.id, mode, task);
       const serialized = JSON.stringify(result);
       if (serialized !== previous) { await receive(result); previous = serialized; }
       if (result.status === 'error' || result.status === 'complete') return;
       if (Date.now() >= deadline) throw new Error('Processing is taking longer than expected. Retry to reconnect to saved progress.');
       await new Promise(resolve => setTimeout(resolve, 1500));
-      data = await this.request(this.resultUrl(file.id,mode));
+      data = await this.request(this.resultUrl(file.id,mode,task));
     }
   }
 }
