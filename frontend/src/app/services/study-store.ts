@@ -1,13 +1,19 @@
-import { Injectable, computed, effect, signal } from '@angular/core';
-import seed from '../data/study-data.json';
+import { Injectable, computed, signal } from '@angular/core';
 import { StudyData, Subject, PlannedSession, validSession, sessionsOverlap, addDays, dailyTotal, mondayOf, round, sumHours, validateData, weekDays } from '../models/study';
+import { CourseHit, Plan, courseIdOf, emptyData, planToData } from '../models/semester';
 
-const STORAGE_KEY = 'studyphase-angular-v1';
+const today = () => new Date().toISOString().slice(0, 10);
 
+/** The study plan of the current semester, kept on the server (see backend/planner.py).
+ *  This is the in-memory copy the pages read. A change shows at once, is sent to the server
+ *  in order, and if the server refuses it the plan is reloaded from the server. */
 @Injectable({providedIn:'root'})
 export class StudyStore {
-  readonly persistence = signal('Saved on this device');
-  private readonly state = signal<StudyData>(this.load());
+  readonly persistence = signal('Loading your plan…');
+  readonly loaded = signal(false);
+  readonly loadError = signal('');
+  readonly semkez = signal('');
+  private readonly state = signal<StudyData>(emptyData(today()));
   readonly data = this.state.asReadonly();
   readonly subjects = computed(() => this.data().subjects);
   readonly dates = computed(() => this.data().dates);
@@ -28,21 +34,60 @@ export class StudyStore {
   readonly editor = signal<{subjectId:string,date:string} | null>(null);
   readonly notice = signal('');
   private noticeTimer?: ReturnType<typeof setTimeout>;
+  private writes: Promise<unknown> = Promise.resolve();
+  private pending = 0;
 
-  constructor() {
-    effect(() => {
-      const data = this.state();
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
-      catch { this.persistence.set('Changes are temporary; use Export to keep them'); }
-    });
+  constructor() { void this.load(); }
+
+  private async request<T>(url:string, init?:RequestInit):Promise<T> {
+    let response:Response;
+    try { response = await fetch(url, {cache:'no-store', ...init}); }
+    catch { throw new Error('Cannot reach the server. Check your connection and retry.'); }
+    let data:unknown = null;
+    try { data = await response.json(); } catch { /* Non-JSON errors have no body. */ }
+    if (!response.ok) throw new Error(typeof (data as {error?:unknown})?.error === 'string' ? (data as {error:string}).error : 'The server could not save that change. Please retry.');
+    return data as T;
+  }
+  private json(method:string, body:unknown):RequestInit {
+    return {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)};
   }
 
-  private load(): StudyData {
+  /** Loads the current semester's plan. Keeps the shown week when it is still in range. */
+  async load():Promise<void> {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) { const parsed:unknown = JSON.parse(raw); if (validateData(parsed)) return parsed; }
-    } catch { /* Missing, unavailable or invalid storage falls back to the sample. */ }
-    return structuredClone(seed) as StudyData;
+      if (!this.semkez()) this.semkez.set((await this.request<{current:string}>('/api/semesters')).current);
+      const data = planToData(await this.request<Plan>(`/api/semesters/${this.semkez()}/plan`), today());
+      const first = !this.loaded();
+      this.state.set(data);
+      if (first || this.weekStart() < mondayOf(data.dates[0]) || this.weekStart() > mondayOf(data.dates.at(-1)!)) this.weekStart.set(mondayOf(data.referenceDate));
+      this.loaded.set(true); this.loadError.set(''); this.persistence.set('Saved to your account');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not load your study plan.';
+      this.loadError.set(message); this.persistence.set(`Not loaded: ${message}`);
+    }
+  }
+
+  /** Sends a change after the ones before it. On failure the server's version is reloaded. */
+  private write(url:string, init:RequestInit):Promise<void> {
+    this.pending++; this.persistence.set('Saving…');
+    const run = this.writes.then(async () => {
+      try { await this.request(url, init); }
+      catch (e) {
+        const message = e instanceof Error ? e.message : 'Could not save that change.';
+        this.announce(`Not saved: ${message}`);
+        await this.load();
+        throw e;
+      } finally {
+        if (--this.pending === 0 && !this.loadError()) this.persistence.set('Saved to your account');
+      }
+    });
+    this.writes = run.catch(() => undefined);
+    return run.catch(() => undefined);
+  }
+  private courseUrl(subjectId:string):string {
+    const courseId = courseIdOf(subjectId);
+    if (courseId === null) throw new Error('This subject is not a course of yours.');
+    return `/api/semesters/${this.semkez()}/courses/${courseId}`;
   }
 
   hours(subject:Subject, dates?:readonly string[]):number { return sumHours(subject,dates); }
@@ -58,7 +103,8 @@ export class StudyStore {
     const week=mondayOf(date);
     if(week >= this.firstWeek() && week <= this.lastWeek()) this.weekStart.set(week);
   }
-  openEditor(subjectId=this.subjects()[0].id,date=this.week().find(d=>this.dates().includes(d))!):void {
+  openEditor(subjectId=this.subjects()[0]?.id,date=this.week().find(d=>this.dates().includes(d))??this.examSession().start):void {
+    if(!subjectId){this.announce('Add a course first, with + next to Your subjects.');return;}
     this.editor.set({subjectId,date});
   }
   setHours(subjectId:string,date:string,hours:number|null):void {
@@ -67,18 +113,30 @@ export class StudyStore {
     if(hours !== null && (!Number.isFinite(hours) || hours < 0 || hours > 24)) throw new Error('Enter a number between 0 and 24 hours.');
     const others=this.subjects().filter(s=>s.id!==subjectId);
     if(round(dailyTotal(others,date)+(hours??0))>24) throw new Error('The combined study time for this day cannot exceed 24 hours.');
-    this.state.update(d=>({...d,subjects:d.subjects.map(s=>s.id===subjectId ? {...s,hours:{...s.hours,[date]:hours===null?null:round(hours)}} : s)}));
+    const url=`${this.courseUrl(subjectId)}/hours/${date}`;
+    const value=hours===null?null:round(hours);
+    this.state.update(d=>({...d,subjects:d.subjects.map(s=>{
+      if(s.id!==subjectId) return s;
+      const next={...s.hours}; if(value===null) delete next[date]; else next[date]=value;
+      return {...s,hours:next};
+    })}));
     this.editor.set(null);
     this.announce(hours===null ? 'Recorded hours cleared.' : 'Study hours saved. Your analytics are up to date.');
+    void this.write(url,this.json('PUT',{hours:value}));
   }
-  updateSubject(id:string,patch:Partial<Pick<Subject,'targetHours'|'examDate'|'nextAction'|'completed'|'ects'|'lectureId'|'homepage'>>):void {
+  /** ECTS, lecture ID and homepage come from the VVZ and are not the user's to change. */
+  updateSubject(id:string,patch:Partial<Pick<Subject,'targetHours'|'examDate'|'nextAction'|'completed'>>):void {
     const data={...this.data(),subjects:this.subjects().map(s=>s.id===id?{...s,...patch}:s)};
     if(!validateData(data)) throw new Error('Check the target hours, exam date, and next action.');
+    const url=this.courseUrl(id);
     this.state.set(data); this.announce('Subject changes saved.');
+    void this.write(url,this.json('PATCH',patch));
   }
   toggleDone(id:string):void {
-    this.state.update(d=>({...d,subjects:d.subjects.map(s=>s.id===id?{...s,completed:!s.completed}:s)}));
+    const subject=this.subjects().find(s=>s.id===id);
+    if(subject) this.updateSubject(id,{completed:!subject.completed});
   }
+  /** Anki decks have no source yet (the old sample's snapshot is gone), so there is nothing to link. */
   linkDeck(name:string,subjectId:string):void {
     if(subjectId && !this.subjects().some(s=>s.id===subjectId)) return;
     this.state.update(d=>({...d,anki:d.anki.map(a=>a.name===name?{...a,subjectId:subjectId || undefined}:a)}));
@@ -90,23 +148,34 @@ export class StudyStore {
       throw new Error('Study sessions cannot overlap. Choose another time.');
     this.state.update(d=>({...d,sessions}));
     this.announce('Planned sessions saved.');
+    void this.write(`/api/semesters/${this.semkez()}/sessions`,this.json('PUT',sessions));
   }
+
+  /** Courses offered this semester whose code or title contains q (at least 2 characters). */
+  searchCourses(q:string):Promise<CourseHit[]> {
+    return this.request<CourseHit[]>(`/api/courses?semkez=${encodeURIComponent(this.semkez())}&q=${encodeURIComponent(q)}&limit=20`);
+  }
+  /** Adds a course to this semester. It becomes a subject once the plan is reloaded. */
+  async addCourse(hit:CourseHit):Promise<void> {
+    await this.request(`/api/semesters/${this.semkez()}/courses`,this.json('POST',{courseId:hit.id}));
+    await this.load();
+    this.announce(`${hit.title} added to ${this.data().semester}.`);
+  }
+  /** Removes a course from this semester, together with its recorded hours and planned sessions. */
+  async removeCourse(subject:Subject):Promise<void> {
+    await this.writes;
+    await this.request(this.courseUrl(subject.id),{method:'DELETE'});
+    await this.load();
+    this.announce(`${subject.name} removed from ${this.data().semester}.`);
+  }
+
   announce(message:string):void {
     clearTimeout(this.noticeTimer); this.notice.set(message);
     this.noticeTimer=setTimeout(()=>this.notice.set(''),5000);
   }
   exportData():void {
     const url=URL.createObjectURL(new Blob([JSON.stringify(this.data(),null,2)],{type:'application/json'}));
-    const link=document.createElement('a');link.href=url;link.download='studyphase-data.json';link.click();
+    const link=document.createElement('a');link.href=url;link.download=`studyphase-${this.data().semester||'plan'}.json`;link.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000); this.announce('Your study data has been exported.');
-  }
-  importData(value:unknown):void {
-    if(!validateData(value)) throw new Error('This file is not valid Studyphase data. Import a JSON file created with Export data.');
-    this.state.set(structuredClone(value)); this.weekStart.set(mondayOf(value.referenceDate));
-    this.announce('Study data imported.');
-  }
-  reset():void {
-    this.state.set(structuredClone(seed) as StudyData);
-    this.weekStart.set(mondayOf(seed.referenceDate)); this.announce('The original HS24 sample has been restored.');
   }
 }

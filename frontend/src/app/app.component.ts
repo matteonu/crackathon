@@ -1,4 +1,4 @@
-import { Component, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, NavigationEnd, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
@@ -6,20 +6,34 @@ import { StudyStore } from './services/study-store';
 import { UserStore } from './services/user-store';
 import { IconComponent } from './shared/icon.component';
 import { HoursEditorComponent } from './shared/hours-editor.component';
+import { CourseSearchDialogComponent } from './components/course-search-dialog.component';
+import { Subject } from './models/study';
 
-@Component({selector:'app-root',standalone:true,imports:[RouterLink,RouterLinkActive,RouterOutlet,IconComponent,HoursEditorComponent],templateUrl:'./app.component.html'})
+@Component({selector:'app-root',standalone:true,imports:[RouterLink,RouterLinkActive,RouterOutlet,IconComponent,HoursEditorComponent,CourseSearchDialogComponent],templateUrl:'./app.component.html'})
 export class AppComponent {
   readonly store=inject(StudyStore);readonly users=inject(UserStore);private readonly router=inject(Router);
   readonly main=viewChild<ElementRef<HTMLElement>>('main');
   readonly settings=viewChild<ElementRef<HTMLDialogElement>>('settings');
-  readonly importError=signal('');
   constructor(){this.router.events.pipe(filter(e=>e instanceof NavigationEnd),takeUntilDestroyed()).subscribe(()=>{requestAnimationFrame(()=>{this.main()?.nativeElement.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});});});}
-  openSettings():void {this.importError.set('');this.settings()?.nativeElement.showModal();}
-  reset():void {if(confirm('Restore the original HS24 sample? This replaces the changes saved in this browser. Export first if you want to keep a copy.')){this.store.reset();this.settings()?.nativeElement.close();void this.router.navigate(['/']);}}
-  async import(event:Event):Promise<void> {
-    const input=event.target as HTMLInputElement;const file=input.files?.[0];if(!file)return;
-    try {if(file.size>1024*1024)throw new Error('Choose a data file smaller than 1 MB.');this.store.importData(JSON.parse(await file.text()));this.importError.set('');this.settings()?.nativeElement.close();void this.router.navigate(['/']);}
-    catch(e){this.importError.set(e instanceof SyntaxError?'This is not a valid JSON file.':(e as Error).message);}
-    finally{input.value='';}
+  /** The sidebar course whose ⋯ menu is open. */
+  readonly menuFor=signal<string|null>(null);
+  toggleMenu(id:string,event:Event):void {
+    event.stopPropagation();
+    const opening=this.menuFor()!==id;this.menuFor.set(opening?id:null);
+    // Move focus into the menu so it can be used from the keyboard.
+    if(opening)requestAnimationFrame(()=>document.querySelector<HTMLElement>('.course-menu [role=menuitem]')?.focus());
+  }
+  @HostListener('document:click') closeMenu():void {this.menuFor.set(null);}
+  @HostListener('document:keydown.escape') closeMenuOnEscape():void {
+    const id=this.menuFor();if(!id)return;
+    this.menuFor.set(null);
+    document.querySelector<HTMLElement>(`.sidebar-subject a[href$="${id}"] + .course-menu-button`)?.focus();
+  }
+  openSettings():void {this.settings()?.nativeElement.showModal();}
+  async removeCourse(subject:Subject):Promise<void> {
+    if(!confirm(`Remove ${subject.name} from ${this.store.data().semester}? Its recorded hours and planned sessions are deleted too. Your materials stay and come back if you add the course again.`))return;
+    const viewing=this.router.url===`/subject-tab/${subject.id}`;
+    try{await this.store.removeCourse(subject);if(viewing)void this.router.navigate(['/']);}
+    catch(e){this.store.announce(e instanceof Error?e.message:'Could not remove this course.');}
   }
 }

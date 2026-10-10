@@ -28,7 +28,8 @@ const paths:Record<string,string> = {
   settings:'M4 7h16 M4 17h16 M8 4v6 M16 14v6',
   flag:'M5 22V3 M5 3c5-4 9 4 15 0v10c-6 4-10-4-15 0',
   leaf:'M20 4C6 2 1 8 6 16c6 7 15 2 14-12Z M4 21L16 9',
-  menu:'M4 6h16 M4 12h16 M4 18h16'
+  menu:'M4 6h16 M4 12h16 M4 18h16',
+  more:'M4 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0 M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0 M18 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0'
 };
 
 @Component({selector:'app-icon',standalone:true,template:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path [attr.d]="paths[name()] || paths[\'grid\']" /></svg>',styles:':host{display:inline-flex;flex-shrink:0;width:20px;height:20px}svg{width:100%;height:100%}'})

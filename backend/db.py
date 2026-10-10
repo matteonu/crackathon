@@ -55,12 +55,30 @@ def close_db(_exc=None):
         db.close()
 
 
+# Columns added to a table after it first shipped. CREATE TABLE IF NOT EXISTS leaves an existing
+# table as it is, so init_db() adds these with ALTER TABLE (the courses columns the VVZ sync
+# adds are handled by vvz.sync.upgrade_schema()).
+ADDED_COLUMNS = {
+    "semester_courses": (
+        ("target_hours", "REAL NOT NULL DEFAULT 0"), ("exam_date", "TEXT"),
+        ("completed", "INTEGER NOT NULL DEFAULT 0"), ("next_action", "TEXT NOT NULL DEFAULT ''"),
+        ("color", "TEXT"),
+    ),
+}
+
+
 def init_db():
-    """Create every table the schema declares. Existing tables and rows are left alone."""
+    """Create every table the schema declares and add columns an older database lacks.
+    Existing rows are left alone."""
     os.makedirs(os.path.dirname(db_path()), exist_ok=True)
     # SQLite's context manager commits/rolls back but does not close the file.
     with closing(connect()) as db, db, open(SCHEMA_PATH) as f:
         db.executescript(f.read())
+        for table, columns in ADDED_COLUMNS.items():
+            present = {row["name"] for row in db.execute(f'PRAGMA table_info("{table}")')}
+            for column, definition in columns:
+                if column not in present:
+                    db.execute(f'ALTER TABLE "{table}" ADD COLUMN {column} {definition}')
 
 
 def exists():
