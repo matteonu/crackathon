@@ -1,10 +1,12 @@
 """Summary-only uploads and explicit, category-aware flashcard generation."""
 import json
+import argparse
 from pathlib import Path
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 import uuid
 
 from learning import pdf_study
@@ -37,12 +39,18 @@ class LearningTaskTests(unittest.TestCase):
                 summary = self.wait_result(jobs, document_id, 'deep', 'summary')
                 self.assertEqual(summary['requested_questions'], 0)
                 self.assertEqual(summary['documents'][0]['questions'], [])
+                self.assertEqual(summary['model'], pdf_study.SUMMARY_MODEL)
+                self.assertEqual(summary['documents'][0]['model'], pdf_study.SUMMARY_MODEL)
+                self.assertEqual(request.call_args.args[1], pdf_study.SUMMARY_MODEL)
                 self.assertEqual([call.args[2]['stage'] for call in request.call_args_list], ['abstract'])
                 self.assertFalse(jobs.result_path(document_id, 'shallow').exists())
                 request.reset_mock()
                 jobs.submit(document_id, 'slides.pdf', mode='shallow', questions=7)
                 cards = self.wait_result(jobs, document_id, 'shallow', 'flashcards')
                 self.assertEqual(len(cards['documents'][0]['questions']), 7)
+                self.assertEqual(cards['model'], pdf_study.MODEL)
+                self.assertEqual(cards['documents'][0]['model'], pdf_study.MODEL)
+                self.assertTrue(all(call.args[1] == pdf_study.MODEL for call in request.call_args_list))
                 self.assertEqual(cards['documents'][0]['abstract'], summary['documents'][0]['abstract'])
                 self.assertEqual([call.args[2]['stage'] for call in request.call_args_list], ['preview', 'questions'])
                 # A changed count starts a new run using the same stored PDF.
@@ -53,6 +61,28 @@ class LearningTaskTests(unittest.TestCase):
                 self.assertEqual(json.loads(jobs.result_path(document_id, 'shallow').read_text())['requested_questions'], 8)
             finally:
                 jobs.pool.shutdown(wait=True)
+
+    def test_summary_provider_settings_do_not_leak_into_card_requests(self):
+        provider = Mock()
+        provider.responses.create.return_value = SimpleNamespace(
+            status='completed', output=[], output_text='{"abstract":"A single sentence."}')
+        with tempfile.TemporaryDirectory() as temp, patch.object(pdf_study, 'API_KEY', 'test-only'), \
+             patch('openai.OpenAI') as factory:
+            factory.return_value.__enter__.return_value = provider
+            args = argparse.Namespace(pdfs=[str(FIXTURE)], output=str(Path(temp) / 'summary.json'),
+                                      sentences=1, questions=0, language='English', model=pdf_study.SUMMARY_MODEL,
+                                      timeout=10, allow_empty_pages=False, deep_mode=True,
+                                      task='summary', reasoning_effort='none')
+            pdf_study.run(args)
+            request = provider.responses.create.call_args.kwargs
+            self.assertEqual(request['model'], pdf_study.SUMMARY_MODEL)
+            self.assertEqual(request['reasoning'], {'effort': 'none'})
+            self.assertEqual(request['text']['format']['schema'], pdf_study.SUMMARY_SCHEMA)
+            self.assertEqual(request['input'][0]['content'][0]['type'], 'input_file')
+            result = json.loads(Path(args.output).read_text())['documents'][0]
+            self.assertEqual((result['sentence_count'], result['questions']), (1, []))
+            pdf_study.request_json(provider, pdf_study.MODEL, {}, pdf_study.SUMMARY_SCHEMA, 'Other request')
+            self.assertNotIn('reasoning', provider.responses.create.call_args.kwargs)
 
     def test_api_accepts_upload_categories_but_restricts_card_generation(self):
         with tempfile.TemporaryDirectory() as temp:

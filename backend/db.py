@@ -12,6 +12,8 @@ from contextlib import closing
 
 from flask import current_app, g
 
+from material_types import migrate_material_types
+
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_PATH = os.path.join(BACKEND_DIR, "schema.sql")
 
@@ -56,11 +58,15 @@ def close_db(_exc=None):
 
 
 def init_db():
-    """Create every table the schema declares. Existing tables and rows are left alone."""
+    """Create tables and apply non-destructive migrations to existing databases."""
     os.makedirs(os.path.dirname(db_path()), exist_ok=True)
     # SQLite's context manager commits/rolls back but does not close the file.
     with closing(connect()) as db, db, open(SCHEMA_PATH) as f:
         db.executescript(f.read())
+        # Serialize startup migrations across multiple server workers and make
+        # the column addition plus backfill one transaction.
+        db.execute("BEGIN IMMEDIATE")
+        migrate_material_types(db)
 
 
 def exists():
@@ -91,6 +97,7 @@ def reset_db():
                 cols = ", ".join(f'"{c}"' for c in row)
                 marks = ", ".join("?" for _ in row)
                 db.execute(f'INSERT INTO "{table}" ({cols}) VALUES ({marks})', list(row.values()))
+        migrate_material_types(db)
 
 
 def dump_seed():

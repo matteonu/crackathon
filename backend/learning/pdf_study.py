@@ -29,6 +29,8 @@ def configured_api_key() -> str:
 API_KEY = configured_api_key()
 API_BASE_URL = os.environ.get('OPENAI_BASE_URL', 'https://api.openai.com/v1')
 MODEL = os.environ.get('OPENAI_MODEL', 'gpt-6-astra')
+SUMMARY_MODEL = os.environ.get('OPENAI_SUMMARY_MODEL', 'gpt-6-luna')
+SUMMARY_REASONING_EFFORT = os.environ.get('OPENAI_SUMMARY_REASONING_EFFORT', 'none')
 MAX_OUTPUT_TOKENS = 16000
 DEEP_MODE = os.environ.get('PDF_DEEP_MODE', 'false').lower() == 'true'
 
@@ -65,6 +67,7 @@ class WorkflowError(Exception):
 
 
 _cancelled = ContextVar('study_cancelled', default=lambda: False)
+_reasoning_effort = ContextVar('study_reasoning_effort', default=None)
 
 
 def check_cancelled() -> None:
@@ -431,11 +434,13 @@ def request_json(client, model: str, data: dict, schema: dict, label: str,
         content = [{"role": "user", "content": [file_input, {"type": "input_text", "text": content}]}]
     print(f"  {label}...", flush=True)
     started = time.perf_counter()
+    # Job-local settings keep concurrent card generation on its own model defaults.
+    options = {"reasoning": {"effort": _reasoning_effort.get()}} if _reasoning_effort.get() else {}
     try:
         response = client.responses.create(
             model=model, instructions=STUDY_INSTRUCTIONS, input=content,
             text={"format": {"type": "json_schema", "name": "study_material", "strict": True, "schema": schema}},
-            max_output_tokens=MAX_OUTPUT_TOKENS, store=False,
+            max_output_tokens=MAX_OUTPUT_TOKENS, store=False, **options,
         )
     except openai.AuthenticationError:
         raise WorkflowError("API key rejected. Set a valid OPENAI_API_KEY in the server environment and restart.") from None
@@ -642,10 +647,12 @@ def process_document(client, pdf: Path, source: dict, args: argparse.Namespace,
 
 def run(args: argparse.Namespace) -> Path:
     token = _cancelled.set(getattr(args, 'cancelled', lambda: False))
+    reasoning_token = _reasoning_effort.set(getattr(args, 'reasoning_effort', None))
     try:
         check_cancelled()
         return _run(args)
     finally:
+        _reasoning_effort.reset(reasoning_token)
         _cancelled.reset(token)
 
 
@@ -682,6 +689,7 @@ def _run(args: argparse.Namespace) -> Path:
                 record = {"file": pdf.name, "path": str(pdf), "deep_mode": args.deep_mode,
                           "model": args.model, "language": args.language, "complete": False}
                 data[field].append(record)
+            record["model"] = args.model
             if summary_only:
                 abstract = (summarize_full_pdf(client, source["file_input"], args.sentences, args.language, args.model)
                             if args.deep_mode else summarize_pdf(client, source["pages"], args.sentences, args.language, args.model))

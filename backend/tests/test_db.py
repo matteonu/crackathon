@@ -1,10 +1,13 @@
 """The database lifecycle: what a restart keeps, and which seed a mode loads."""
 import os
+from pathlib import Path
+import sqlite3
 import tempfile
 import unittest
 
 from app import BACKEND_DIR
 import db
+from material_types import CATEGORY_TYPES
 from tests.support import build_app
 
 PRODUCTION_SEED = [os.path.join(BACKEND_DIR, 'seed')]
@@ -17,6 +20,47 @@ def emails(app):
 
 
 class SeedTests(unittest.TestCase):
+    def test_document_type_migration_preserves_the_old_library_and_pdf(self):
+        with tempfile.TemporaryDirectory() as temp:
+            # Build the pre-migration table, so this exercises ALTER TABLE rather
+            # than merely creating a fresh table from the current schema.
+            path = Path(temp) / 'app.db'
+            conn = sqlite3.connect(path)
+            try:
+                conn.executescript('''CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, display_name TEXT);
+                    INSERT INTO users VALUES (1, 'alice@ethz.ch', 'Alice');
+                    CREATE TABLE materials (
+                      id TEXT PRIMARY KEY, user_id INTEGER, subject_id TEXT, parent_id TEXT,
+                      kind TEXT, name TEXT, description TEXT, category TEXT, marker TEXT,
+                      size INTEGER, content TEXT, sha256 TEXT, added_at INTEGER, outputs TEXT, processing TEXT);''')
+                for category in (*CATEGORY_TYPES, 'Notes', 'Books', 'Transcripts'):
+                    conn.execute("INSERT INTO materials VALUES (?,1,'subject',NULL,'pdf',?,'Keep me',?,'Done',123,NULL,'digest',42,?,NULL)",
+                                 (category, category + '.pdf', category, '{"summary":{"text":"Keep this."}}'))
+                conn.execute("INSERT INTO materials (id, user_id, subject_id, kind, name, category) VALUES ('folder',1,'subject','folder','Folder','Slides')")
+                conn.commit()
+                original = conn.execute('SELECT * FROM materials ORDER BY id').fetchall()
+            finally:
+                conn.close()
+            pdf = Path(temp) / 'learning' / 'Slides' / 'source.pdf'
+            pdf.parent.mkdir(parents=True)
+            pdf.write_bytes(b'%PDF-existing-file')
+            for _ in range(2):
+                app = build_app(temp)
+                self.addCleanup(app.extensions['learning_jobs'].pool.shutdown, wait=True)
+                with app.app_context():
+                    conn = db.get_db()
+                    rows = conn.execute('SELECT * FROM materials ORDER BY id').fetchall()
+                    self.assertEqual([tuple(row)[:-1] for row in rows], original)
+                    for row in rows:
+                        expected = CATEGORY_TYPES.get(row['category']) if row['kind'] != 'folder' else None
+                        self.assertEqual(row['type'], expected)
+                    for invalid in ('unknown', 'cards'):
+                        # Unknown codes and typed folders are rejected in SQL too.
+                        with self.assertRaises(sqlite3.IntegrityError):
+                            with conn:
+                                conn.execute("UPDATE materials SET type = ? WHERE id = 'folder'", (invalid,))
+                self.assertEqual(pdf.read_bytes(), b'%PDF-existing-file')
+
     def test_first_start_seeds_and_releases_the_database_file(self):
         with tempfile.TemporaryDirectory() as temp:
             app = build_app(temp, SEED_IF_NEW=True, SEED_DIRS=DEMO_SEED)
