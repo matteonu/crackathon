@@ -26,7 +26,7 @@ cd frontend && npm install && npm start
 
 **Tests:** `cd backend && ../.venv/bin/python -m unittest` (CI runs them before every deploy).
 
-**Flashcards** need an LLM key: `OPENAI_API_KEY=... .venv/bin/python backend/run.py`, or put it in `.env` on the VM. Without it, the Flashcards page shows "The model API key is missing."
+**Flashcards** need an LLM key: put `OPENAI_API_KEY=sk-...` in `.env` in the repo root (`cp .env.example .env`; it's gitignored). `backend/run.py` reads it locally, Docker reads it on the VM, and `run.py` prints at startup whether a key was found. Without it, the Flashcards page shows "The model API key is missing."
 
 **UI components:** the frontend uses [zard/ui](https://zardui.com) with Tailwind. Components are copied into `frontend/src/app/shared/components/`; add more with `cd frontend && npx zard-cli@1.0.1 add <name>` (see the component list on the zard/ui site).
 
