@@ -1,6 +1,12 @@
 import { Component, input } from '@angular/core';
 
 const paths:Record<string,string> = {
+  folder:'M3 7V4h6l3 3h9v13H3z',
+  'folder-open':'M3 10V4h6l3 3h8v3 M3 10h19l-3 10H3z',
+  'folder-plus':'M3 7V4h6l3 3h9v13H3z M12 10v7 M8.5 13.5h7',
+  cards:'M7 7h14v14H7z M3 17V3h14 M11 12h6 M11 16h4',
+  play:'M6 3l15 9-15 9z',
+  down:'M5 9l7 7 7-7',
   grid:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
   calendar:'M8 2v4 M16 2v4 M3 10h18 M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2 M7 14h2 M12 14h2 M7 18h2',
   book:'M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1v15',

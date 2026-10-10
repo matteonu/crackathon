@@ -1,0 +1,36 @@
+@if(file();as file){
+<div class="file-viewer" (click)="surfaceClick($event)" (keydown.escape)="escape($event)">
+  <form class="file-details" [formGroup]="details" (ngSubmit)="saveDetails()">
+    <label class="sr-only" for="file-title">File title</label><input id="file-title" class="editable-file-title" formControlName="name" maxlength="180" required>
+    <label class="sr-only" for="file-description">File description</label><textarea id="file-description" class="editable-file-description" formControlName="description" rows="2" maxlength="2000" placeholder="Add a short description of this file…"></textarea>
+    <div class="file-detail-actions"><button type="button" class="text-button" [disabled]="describing()" (click)="autoDescribe()"><app-icon name="leaf" />{{describing()?'Filling description…':'Auto-fill description'}} <span class="demo-badge">Demo</span></button><button class="button secondary" type="submit" [disabled]="saving()">{{saving()?'Saving…':'Save details'}}</button></div>
+  </form>
+  <div class="file-meta-bar"><span class="file-kind">{{kind().toUpperCase()}}</span><label>Folder<select aria-label="Move file to folder" [ngModel]="file.parentId??''" (ngModelChange)="move($event)"><option value="">Materials</option>@for(folder of folders();track folder.id){<option [value]="folder.id">{{folder.name}}</option>}</select></label><label>Status<select aria-label="File status" [ngModel]="file.marker" (ngModelChange)="marker($event)">@for(marker of markers;track marker){<option>{{marker}}</option>}</select></label><a class="text-button" [href]="downloadUrl()" [download]="file.name"><app-icon name="download" />Download file</a></div>
+  @if(error()||materials.error()){<p class="form-error" role="alert">{{error()||materials.error()}}</p>}<p class="viewer-notice" aria-live="polite">{{notice()}}</p>
+  <div class="file-viewer-columns">
+    <section #stage class="file-stage" aria-label="File and flashcard viewer">
+      <div class="file-stage-toolbar"><span>{{card()?'FLASHCARD PREVIEW':'SOURCE FILE'}}</span>@if(card()){<button class="text-button" (click)="returnToFile()">← Back to file</button>}@else if(kind()!=='pdf'){<button class="text-button" (click)="editing.set(!editing())">{{editing()?'Preview':'Edit file'}}</button>}</div>
+      <div [hidden]="!!card()" class="source-pane">
+        @if(kind()==='pdf'){<app-pdf-preview [blob]="file.blob" [name]="file.name" />}
+        @else if(editing()){
+          <label class="sr-only" for="text-content">File content</label><textarea id="text-content" class="text-file-editor" [formControl]="content" spellcheck="false"></textarea><div class="action-buttons"><button class="button primary" (click)="saveContent()">Save file</button><button class="text-button" (click)="cancelContent()">Discard changes</button></div>
+        }@else{
+          <article class="text-file-preview" [class.markdown-preview]="kind()==='md'" aria-label="File content preview">
+            @if(!file.content){<p class="muted">This file is empty. Choose Edit file to start writing.</p>}
+            @else if(kind()==='txt'){<pre>{{file.content}}</pre>}
+            @else{@for(line of lines();track $index){@switch(heading(line)){@case(1){<h1>{{text(line)}}</h1>}@case(2){<h2>{{text(line)}}</h2>}@case(3){<h3>{{text(line)}}</h3>}@default{<p>{{text(line)||' '}}</p>}}}}
+          </article>
+        }
+      </div>
+      @if(card();as card){<article class="flashcard-stage" aria-label="Selected flashcard"><div class="flashcard-stage-top"><span class="eyebrow">QUESTION</span>@if(card.demo){<span class="demo-badge">Demo card</span>}</div><h2>{{card.question}}</h2>@if(revealed()){<div class="flashcard-answer"><span class="eyebrow">ANSWER</span><p>{{card.answer}}</p></div>}@else{<button class="button primary" (click)="revealed.set(true)">Reveal answer</button>}<p class="field-hint">Click outside this card, press Escape, or choose Back to file to return to your source.</p></article>}
+    </section>
+    <aside class="flashcard-panel" aria-label="File flashcards"><div class="tool-heading"><div><span class="eyebrow">ACTIVE RECALL</span><h3>Flashcards <span class="card-count">{{cards().length}}</span></h3></div><app-icon name="book" /></div>
+      <button class="button primary generate-cards" [disabled]="generating()" (click)="generate()">{{generating()?'Generating…':'Generate flashcards'}} <span class="demo-badge">Demo</span></button><p class="field-hint">Generation adds example cards. Your file is not analyzed or sent to a server.</p>
+      <div class="flashcard-list">@for(card of cards();track card.id){<button class="flashcard-choice" [class.selected]="selectedCard()===card.id" [attr.aria-pressed]="selectedCard()===card.id" (click)="selectCard(card.id!)"><span class="flashcard-number">{{ $index+1 }}</span><span><strong>{{card.question}}</strong><small>{{card.demo?'Demo card':'Your card'}} · Click to review</small></span><app-icon name="right" /></button>}@empty{<div class="empty-state">No flashcards yet. Generate a demo set or write your first card.</div>}</div>
+      <button class="text-button" (click)="addingCard.set(!addingCard())"><app-icon name="plus" /> Add a flashcard</button>
+      @if(addingCard()){<form class="add-card-form" [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><button class="button secondary" type="submit">Save flashcard</button></form>}
+    </aside>
+  </div>
+</div>
+}
+

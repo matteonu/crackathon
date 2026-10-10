@@ -21,6 +21,7 @@
             "index": "src/index.html",
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
+            "allowedCommonJsDependencies": ["sql.js"],
             "styles": [
               "src/styles.css"
             ],
@@ -48,6 +49,11 @@
                 "glob": "**/*",
                 "input": "node_modules/pdfjs-dist/wasm",
                 "output": "assets/pdfjs/wasm"
+              },
+              {
+                "output": "assets/sqljs",
+                "input": "node_modules/sql.js/dist",
+                "glob": "sql-wasm-browser.wasm"
               }
             ]
           },

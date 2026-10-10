@@ -1,66 +1,40 @@
 import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MaterialStore } from '../services/material-store';
-import { MATERIAL_CATEGORIES, MATERIAL_MARKERS, MaterialCategory, MaterialMarker } from '../models/material';
-import { MATERIAL_TOOLS } from '../services/study-demo.service';
-import { MaterialToolComponent } from './material-tool.component';
+import { MATERIAL_MARKERS, MaterialKind, MaterialMarker, materialKind, folderCards, treeRows } from '../models/material';
 import { IconComponent } from '../shared/icon.component';
-import { PdfPreviewComponent } from './pdf-preview.component';
+import { FileViewerComponent } from './file-viewer.component';
+import { FolderFlashcardsComponent } from './folder-flashcards.component';
+import { FlashcardExportService } from '../services/flashcard-export.service';
 
-@Component({selector:'app-material-library',standalone:true,imports:[FormsModule,MaterialToolComponent,IconComponent,PdfPreviewComponent],template:`
-  <section class="panel library-panel">
-    <div class="panel-heading"><div><span class="eyebrow">YOUR LEARNING MATERIAL</span><h2>Materials library</h2><p>Keep your sources and next steps together.</p></div><span class="soft-badge">{{subjectFiles().length}} {{subjectFiles().length===1?'file':'files'}}</span></div>
-    <div class="upload-zone" [class.dragging]="dragging()" (dragover)="$event.preventDefault();dragging.set(true)" (dragleave)="dragging.set(false)" (drop)="drop($event)">
-      <app-icon name="upload" /><strong>Drop your PDFs here</strong><p>Slides, notes, transcripts, books, exams, and exercises.</p>
-      <div class="upload-actions"><label class="sr-only" for="upload-category">Category for new files</label><select id="upload-category" [(ngModel)]="category">@for(c of categories;track c){<option>{{c}}</option>}</select>
-      <label class="button primary import-button">{{materials.busy()?'Saving…':'Choose PDFs'}}<input aria-label="Upload PDFs" type="file" multiple accept=".pdf,application/pdf" [disabled]="materials.loading()||materials.busy()" (change)="upload($event)"></label></div>
-      <small>Up to 50 MB per PDF · Stored in this browser</small>
-    </div>
-    <div class="library-filters"><input aria-label="Search materials" type="search" placeholder="Search materials…" [ngModel]="query()" (ngModelChange)="query.set($event)"><select aria-label="Filter by marker" [ngModel]="marker()" (ngModelChange)="marker.set($event)"><option value="">All markers</option>@for(m of markers;track m){<option>{{m}}</option>}</select></div>
-    @if(materials.error()){<p class="form-error" role="alert">{{materials.error()}}</p>}
-    @if(materials.loading()){<p class="empty-state">Loading your materials…</p>}
-    @else{
-      <div class="material-list">@for(file of filtered();track file.id){
-        <article class="material-row"><button class="file-open" (click)="open(file.id)"><span class="pdf-icon">PDF</span><span><strong>{{file.name}}</strong><small>{{size(file.size)}} · {{file.category}}</small></span></button>
-          <div class="material-row-controls"><select [attr.aria-label]="'Category for '+file.name" [ngModel]="file.category" (ngModelChange)="setCategory(file.id,$event)">@for(c of categories;track c){<option>{{c}}</option>}</select><select [attr.aria-label]="'Marker for '+file.name" [ngModel]="file.marker" (ngModelChange)="setMarker(file.id,$event)" [class.marker-done]="file.marker==='Done'">@for(m of markers;track m){<option>{{m}}</option>}</select></div>
-        </article>
-      }@empty{<div class="empty-state">{{subjectFiles().length?'No materials match your search.':'Add your first PDF to start building your study library.'}}</div>}</div>
-    }
-    <p class="field-hint library-note">PDFs stay on this device and are separate from the study-data JSON export.</p>
-  </section>
-  <dialog #preview class="edit-dialog material-dialog" aria-labelledby="material-title" (close)="selectedId.set(null)">
-    @if(selected();as file){
-      <div class="dialog-top"><span class="eyebrow">{{file.category}} · {{file.marker}}</span><button class="icon-button" aria-label="Close material" (click)="preview.close()"><app-icon name="close" /></button></div>
-      <h2 id="material-title">{{file.name}}</h2>
-      <div class="material-workspace"><div class="pdf-preview">
-        <app-pdf-preview [blob]="file.blob" [name]="file.name" />
-        <div class="preview-actions"><a class="button secondary" [href]="downloadUrl()" [download]="file.name">Download PDF</a><button class="text-button danger" (click)="remove(file.id)">Remove file</button></div>
-      </div><div class="material-tools"><p class="demo-notice">Demo tools show example results. Your PDF is not analyzed or sent to a server.</p>
-        @for(current of [file];track current.id){@for(tool of tools;track tool.id){<app-material-tool [file]="current" [tool]="tool.id" [title]="tool.title" [description]="tool.description" />}}
-      </div></div>
-    }
-  </dialog>
-`})
+@Component({selector:'app-material-library',standalone:true,imports:[FormsModule,IconComponent,FileViewerComponent,FolderFlashcardsComponent],templateUrl:'./material-library.component.html'})
 export class MaterialLibraryComponent {
-  readonly subjectId=input.required<string>();readonly materials=inject(MaterialStore);
-  readonly categories=MATERIAL_CATEGORIES;readonly markers=MATERIAL_MARKERS;readonly tools=MATERIAL_TOOLS;
-  readonly preview=viewChild<ElementRef<HTMLDialogElement>>('preview');
-  readonly query=signal('');readonly marker=signal('');readonly dragging=signal(false);readonly selectedId=signal<string|null>(null);
+  readonly subjectId=input.required<string>();readonly materials=inject(MaterialStore);private readonly exporter=inject(FlashcardExportService);
+  readonly preview=viewChild<ElementRef<HTMLDialogElement>>('preview');readonly createDialog=viewChild<ElementRef<HTMLDialogElement>>('createDialog');readonly collectionDialog=viewChild<ElementRef<HTMLDialogElement>>('collectionDialog');
+  readonly practice=viewChild(FolderFlashcardsComponent);
+  readonly markers=MATERIAL_MARKERS;readonly kind=materialKind;
+  readonly query=signal('');readonly marker=signal('');readonly dragging=signal(false);readonly selectedId=signal<string|null>(null);readonly activeFolder=signal<string|null>(null);readonly expanded=signal(new Set<string>());
   readonly subjectFiles=computed(()=>this.materials.files().filter(f=>f.subjectId===this.subjectId()));
-  readonly filtered=computed(()=>this.subjectFiles().filter(f=>f.name.toLowerCase().includes(this.query().toLowerCase())&&(!this.marker()||f.marker===this.marker())));
   readonly selected=computed(()=>this.subjectFiles().find(f=>f.id===this.selectedId()));
-  private readonly selectedBlob=computed(()=>this.selected()?.blob);
-  readonly downloadUrl=signal('');category:MaterialCategory='Slides';
-  constructor(){effect(onCleanup=>{
-    const blob=this.selectedBlob();if(!blob){this.downloadUrl.set('');return;}
-    const url=URL.createObjectURL(blob);this.downloadUrl.set(url);
-    onCleanup(()=>URL.revokeObjectURL(url));
-  });}
-  size(bytes:number):string{return bytes<1024*1024?`${Math.max(1,Math.round(bytes/1024))} KB`:`${(bytes/1024/1024).toFixed(1)} MB`;}
+  readonly rows=computed(()=>treeRows(this.subjectFiles(),this.expanded(),this.query(),this.marker()));
+  readonly fileCount=computed(()=>this.subjectFiles().filter(f=>materialKind(f)!=='folder').length);
+  readonly folderName=computed(()=>this.subjectFiles().find(f=>f.id===this.activeFolder())?.name??'Materials');
+  readonly breadcrumbs=computed(()=>{const parts:{id:string|null;name:string}[]=[];let id=this.activeFolder();const seen=new Set<string>();while(id&&!seen.has(id)){seen.add(id);const f=this.subjectFiles().find(f=>f.id===id);if(!f)break;parts.unshift({id:f.id,name:f.name});id=f.parentId??null;}return [{id:null,name:'Materials'},...parts];});
+  readonly collectionFolder=signal<string|null>(null);readonly collectionOpen=signal(false);readonly collectionCards=computed(()=>folderCards(this.subjectFiles(),this.collectionFolder()));readonly collectionName=computed(()=>this.subjectFiles().find(f=>f.id===this.collectionFolder())?.name??'Materials');
+  readonly exporting=signal(false);readonly localError=signal('');readonly status=signal('');readonly creating=signal(false);readonly creationError=signal('');
+  createType:Exclude<MaterialKind,'pdf'>='folder';newName='';private createParent:string|null=null;
+  constructor(){effect(()=>{this.subjectId();this.activeFolder.set(null);this.selectedId.set(null);this.expanded.set(new Set());this.query.set('');this.marker.set('');});}
+  count(folderId:string|null):number{return folderCards(this.subjectFiles(),folderId).length;}
+  chooseFolder(id:string|null):void{this.activeFolder.set(id);if(id)this.expanded.update(s=>new Set([...s,id]));}
+  toggle(id:string):void{this.expanded.update(s=>{const next=new Set(s);next.has(id)?next.delete(id):next.add(id);return next;});}
   open(id:string):void{this.selectedId.set(id);this.preview()?.nativeElement.showModal();}
-  async upload(event:Event):Promise<void>{const input=event.target as HTMLInputElement;await this.materials.add(this.subjectId(),Array.from(input.files??[]),this.category);input.value='';}
-  async drop(event:DragEvent):Promise<void>{event.preventDefault();this.dragging.set(false);await this.materials.add(this.subjectId(),Array.from(event.dataTransfer?.files??[]),this.category);}
-  setMarker(id:string,marker:MaterialMarker):void{void this.materials.update(id,{marker});}
-  setCategory(id:string,category:MaterialCategory):void{void this.materials.update(id,{category});}
-  async remove(id:string):Promise<void>{await this.materials.remove(id);if(!this.materials.files().some(f=>f.id===id))this.preview()?.nativeElement.close();}
+  newItem(kind:Exclude<MaterialKind,'pdf'>):void{this.createType=kind;this.newName='';this.createParent=this.activeFolder();this.creationError.set('');this.createDialog()?.nativeElement.showModal();}
+  selectType(event:Event):void{const input=event.target as HTMLSelectElement;if(input.value)this.newItem(input.value as Exclude<MaterialKind,'pdf'>);input.value='';}
+  async create():Promise<void>{this.creating.set(true);try{const file=await this.materials.create(this.subjectId(),this.createParent,this.createType,this.newName);if(this.createParent)this.expanded.update(s=>new Set([...s,this.createParent!]));this.createDialog()?.nativeElement.close();if(file.kind==='folder')this.chooseFolder(file.id);else this.open(file.id);this.status.set(`${file.name} created.`);}catch(e){this.creationError.set(e instanceof Error?e.message:'Could not create item.');}finally{this.creating.set(false);}}
+  async upload(event:Event):Promise<void>{const input=event.target as HTMLInputElement;await this.materials.add(this.subjectId(),Array.from(input.files??[]),'Slides',this.activeFolder());input.value='';}
+  async drop(event:DragEvent):Promise<void>{event.preventDefault();this.dragging.set(false);await this.materials.add(this.subjectId(),Array.from(event.dataTransfer?.files??[]),'Slides',this.activeFolder());}
+  setMarker(id:string,value:MaterialMarker):void{void this.materials.update(id,{marker:value});}
+  showCards(id:string|null,learn=false):void{this.collectionFolder.set(id);this.collectionOpen.set(true);this.collectionDialog()?.nativeElement.showModal();if(learn)requestAnimationFrame(()=>this.practice()?.start());}
+  openSource(id:string):void{this.collectionDialog()?.nativeElement.close();this.open(id);}
+  async exportFolder(id:string|null):Promise<void>{if(this.exporting())return;const name=this.subjectFiles().find(f=>f.id===id)?.name??'Materials';const cards=folderCards(this.subjectFiles(),id);this.exporting.set(true);this.localError.set('');try{await this.exporter.export(cards,name,`${this.subjectId()}:${id??'root'}`);this.status.set(`${cards.length} flashcards exported as ${name}.apkg.`);}catch(e){this.localError.set(e instanceof Error?e.message:'Export failed. Please retry.');}finally{this.exporting.set(false);}}
 }
