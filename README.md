@@ -317,9 +317,13 @@ algorithm.
   week's proposal treats the other weekdays as days off. The + on a single day plans it anyway.
 - **The hours overview** colours each cell by its hours: recorded hours in the course colour,
   deeper the more there are, and hours only planned as a light wash with the number shown.
-- **Generating sets each course's `target_hours`** to what the plan asks of it, over every
-  block held and not just the latest run, so the hours overview and the progress bars have
-  something to measure recorded hours against. A dry run changes nothing.
+- **Targets:** a course whose `target_hours` is still 0 gets the scheduler's workload estimate
+  (30 h per ECTS, less 13 weeks of its lecture hours) the first time slots are planned. A target
+  you set, or the seed set, is never overwritten -- it is a semester goal, not what one week holds.
+- **One source for "planned":** the plan's `sessions` (what the analytics reads) are the
+  calendar's course slots. Old hand-planned `study_sessions` rows, including the demo seed's,
+  are moved into the calendar as your own slots on every start and reseed
+  (`db.migrate_sessions_to_slots`).
 - **The study phase itself** is fixed per semester in `planner.phase()`: HS runs 21 Dec to
   14 Feb, FS 1 Jun to 31 Aug. It is not user-settable yet; the VVZ API would be the place to
   get the real session dates from.

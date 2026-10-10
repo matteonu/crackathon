@@ -1,5 +1,9 @@
 """Generating a study plan: /api/semesters/<semkez>/plan/generate and /preferences."""
+import tempfile
+import unittest
+
 import db
+from tests.support import build_app
 from tests.test_planner import ALICE, BOB, PlannerCase
 
 # HS26's study phase is 2026-12-21 to 2027-02-14. Most tests plan the last two weeks of it
@@ -291,24 +295,20 @@ class StoredTotalsTests(ScheduleApiCase):
 
 class TargetHoursTests(ScheduleApiCase):
 
-    def test_generating_sets_what_each_course_asks_for(self):
+    def test_generating_fills_an_empty_target_with_the_workload_estimate(self):
         self.add(1)
         self.add(2)
         self.assertEqual([s["targetHours"] for s in self.plan()["subjects"]], [0, 0])
-        plan = self.generate().get_json()
-        targets = {s["id"]: s["targetHours"] for s in self.plan()["subjects"]}
-        for entry in plan["summary"]:
-            self.assertAlmostEqual(targets[entry["subjectId"]], entry["scheduledHours"], places=2)
-        self.assertTrue(all(value > 0 for value in targets.values()))
+        self.generate()
+        # 7 ECTS x 30 h, less 6 weekly lecture hours x 13 weeks.
+        self.assertEqual([s["targetHours"] for s in self.plan()["subjects"]], [132, 132])
 
-    def test_the_target_adds_up_every_week_planned(self):
+    def test_a_target_already_set_is_kept(self):
         self.add(1)
+        self.client.patch("/api/semesters/2026W/courses/1", json={"targetHours": 80}, headers=ALICE)
         self.generate(fromDate="2027-02-01")
-        first = self.plan()["subjects"][0]["targetHours"]
         self.generate(fromDate="2027-02-08")
-        both = self.plan()["subjects"][0]["targetHours"]
-        self.assertGreater(both, first)
-        self.assertAlmostEqual(both, self.studied() / 60, places=2)
+        self.assertEqual(self.plan()["subjects"][0]["targetHours"], 80)
 
     studied = PreferenceTests.studied
     minutes = GenerateTests.minutes
@@ -342,7 +342,7 @@ class SlotTests(ScheduleApiCase):
         self.assertIsNone(plan["generatedAt"])
         self.assertEqual([(b["start"], b["end"], b["subjectId"], b["type"]) for b in plan["blocks"]],
                          [("09:00", "11:00", "course-1", "active_learning")])
-        self.assertEqual(self.plan()["subjects"][0]["targetHours"], 2)    # counts towards the target
+        self.assertEqual(self.plan()["subjects"][0]["targetHours"], 132)  # an empty target is filled in
 
     def test_a_break_is_a_slot_without_a_course(self):
         self.add(1)
@@ -578,3 +578,40 @@ class DayTests(ScheduleApiCase):
         self.add(1)
         self.assertEqual(self.clear("2026-01-01").status_code, 400)
         self.assertEqual(self.clear("2027-02-02", user=BOB).status_code, 404)
+
+
+class SessionBridgeTests(ScheduleApiCase):
+    """The calendar and the analytics read the same slots."""
+
+    def test_calendar_slots_are_the_planned_sessions_analytics_reads(self):
+        self.add(1)
+        self.generate()
+        body = self.plan()
+        course_slots = [b for b in body["plan"]["blocks"] if b["courseId"] is not None]
+        self.assertEqual(len(body["sessions"]), len(course_slots))
+        self.assertAlmostEqual(sum(s["hours"] for s in body["sessions"]),
+                               sum(self.minutes(b) for b in course_slots) / 60, places=2)
+
+    def test_hand_planned_sessions_move_into_the_calendar(self):
+        self.add(1)
+        self.client.put("/api/semesters/2026W/sessions", headers=ALICE,
+                        json=[{"id": "s1", "subjectId": "course-1", "date": "2027-02-02", "start": "09:00", "hours": 2.5}])
+        with self.app.app_context():
+            conn = db.get_db()
+            with conn:
+                db.migrate_sessions_to_slots(conn)       # what every start and every reseed runs
+            self.assertEqual(conn.execute("SELECT count(*) FROM study_sessions").fetchone()[0], 0)
+        (slot,) = [b for b in self.blocks() if b["courseId"] == 1]
+        self.assertEqual((slot["date"], slot["start"], slot["end"], slot["source"]), ("2027-02-02", "09:00", "11:30", "manual"))
+
+    minutes = GenerateTests.minutes
+
+
+class DemoSeedTests(unittest.TestCase):
+    def test_the_demo_seed_comes_up_with_its_sessions_in_the_calendar(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = build_app(tmp, seed=True)
+            with app.app_context():
+                conn = db.get_db()
+                self.assertEqual(conn.execute("SELECT count(*) FROM study_sessions").fetchone()[0], 0)
+                self.assertGreater(conn.execute("SELECT count(*) FROM plan_blocks WHERE source = 'manual'").fetchone()[0], 100)

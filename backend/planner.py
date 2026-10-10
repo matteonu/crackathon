@@ -36,6 +36,7 @@ from auth import current_user
 import db
 from errors import RequestError
 from schedule_planner.main import generate_schedule
+from schedule_planner.schedule import HOURS_PER_ECTS, WEEKS_IN_SEMESTER
 from vvz.sync import semester_of, term_of
 
 bp = Blueprint("planner", __name__, url_prefix="/api")
@@ -328,11 +329,19 @@ def plan(semkez):
     semkez = checked(semkez)
     start, end = phase(semkez)
     sid = semester_id(current_user()["id"], semkez)
-    sessions = [] if sid is None else [
+    # What is planned, for the analytics: every course slot in the calendar, and any
+    # study_sessions row written since the last start (they move into the calendar then).
+    sessions = [] if sid is None else sorted([
         {"id": r["id"], "subjectId": f"course-{r['course_id']}", "date": r["date"], "start": r["start"], "hours": r["hours"]}
         for r in db.get_db().execute(
             "SELECT id, course_id, date, start, hours FROM study_sessions WHERE semester_id = ? ORDER BY date, start",
-            (sid,))]
+            (sid,))] + [
+        {"id": f"slot-{r['id']}", "subjectId": f"course-{r['course_id']}", "date": r["date"], "start": r["start_time"],
+         "hours": round((minutes_of(r["end_time"]) - minutes_of(r["start_time"])) / 60, 2)}
+        for r in db.get_db().execute(
+            """SELECT id, course_id, date, start_time, end_time FROM plan_blocks
+               WHERE semester_id = ? AND course_id IS NOT NULL AND type <> 'meal'""", (sid,))],
+        key=lambda s: (s["date"], s["start"]))
     return jsonify(semkez=semkez, label=label_of(semkez), start=start, end=end,
                    subjects=[] if sid is None else subjects(sid, semkez), sessions=sessions,
                    preferences=DEFAULT_PREFERENCES if sid is None else preferences(sid),
@@ -596,15 +605,20 @@ def plan_payload(from_date, generated_at, plan, ids):
 
 
 def refresh_targets(conn, sid):
-    """A course's target hours become what its slots add up to, the user's own included, so
-    the hours overview and the progress bars have something to measure recorded hours against."""
-    hours = {}
-    for r in conn.execute("""SELECT course_id, start_time, end_time FROM plan_blocks
-                             WHERE semester_id = ? AND type <> 'meal' AND course_id IS NOT NULL""", (sid,)):
-        hours[r["course_id"]] = hours.get(r["course_id"], 0.0) + (
-            minutes_of(r["end_time"]) - minutes_of(r["start_time"])) / 60
-    conn.executemany("UPDATE semester_courses SET target_hours = ? WHERE semester_id = ? AND course_id = ?",
-                     [(round(total, 2), sid, course_id) for course_id, total in hours.items()])
+    """Give a course without a target the scheduler's own workload estimate for it: ECTS times
+    HOURS_PER_ECTS, less the lectures over the semester. A target the user typed, or the seed
+    set, is never touched -- it is a goal for the semester, not what this week's plan holds."""
+    conn.execute(
+        """UPDATE semester_courses SET target_hours = (
+               SELECT max(0, round(? * coalesce(o.ects, c.ects, 0)
+                                   - ? * coalesce(semester_courses.lecture_per_week, o.weekly_hours, c.weekly_hours, 0), 2))
+               FROM courses c LEFT JOIN course_offerings o ON o.course_id = c.id
+                    AND o.semkez = (SELECT CASE substr(s.label, 1, 2) WHEN 'HS' THEN '20' || substr(s.label, 3) || 'W'
+                                                ELSE '20' || substr(s.label, 3) || 'S' END
+                                    FROM semesters s WHERE s.id = semester_courses.semester_id)
+               WHERE c.id = semester_courses.course_id)
+           WHERE semester_id = ? AND target_hours = 0""",
+        (HOURS_PER_ECTS, WEEKS_IN_SEMESTER, sid))
 
 
 def store_plan(sid, from_date, to_date, payload, result):

@@ -79,6 +79,24 @@ ADDED_COLUMNS = {
 }
 
 
+def migrate_sessions_to_slots(conn):
+    """Hand-planned study_sessions become the user's own calendar slots (plan_blocks with
+    source 'manual'), so the calendar and the analytics read one thing. Covers sessions from
+    before the calendar had slots, and the demo seed, which still writes study_sessions.
+    Generated slots under a moved-in session give way, as they do when one is drawn."""
+    rows = conn.execute("SELECT semester_id, id, course_id, date, start, hours FROM study_sessions").fetchall()
+    for r in rows:
+        begin = int(r["start"][:2]) * 60 + int(r["start"][3:])
+        finish = min(begin + round(r["hours"] * 60), 24 * 60 - 1)
+        end = f"{finish // 60:02d}:{finish % 60:02d}"
+        conn.execute("""DELETE FROM plan_blocks WHERE semester_id = ? AND date = ? AND source = 'generated'
+                        AND start_time < ? AND end_time > ?""", (r["semester_id"], r["date"], end, r["start"]))
+        conn.execute("""INSERT INTO plan_blocks (semester_id, course_id, date, start_time, end_time, type, label, source)
+                        VALUES (?, ?, ?, ?, ?, 'active_learning', NULL, 'manual')""",
+                     (r["semester_id"], r["course_id"], r["date"], r["start"], end))
+    conn.execute("DELETE FROM study_sessions")
+
+
 def init_db():
     """Create tables and apply non-destructive migrations to existing databases."""
     os.makedirs(os.path.dirname(db_path()), exist_ok=True)
@@ -94,6 +112,7 @@ def init_db():
                 if column not in present:
                     db.execute(f'ALTER TABLE "{table}" ADD COLUMN {column} {definition}')
         migrate_material_types(db)
+        migrate_sessions_to_slots(db)
 
 
 def exists():
@@ -125,6 +144,7 @@ def reset_db():
                 marks = ", ".join("?" for _ in row)
                 db.execute(f'INSERT INTO "{table}" ({cols}) VALUES ({marks})', list(row.values()))
         migrate_material_types(db)
+        migrate_sessions_to_slots(db)
 
 
 def dump_seed():
