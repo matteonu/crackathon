@@ -58,9 +58,10 @@ export interface PlanBlock {
   source: 'generated' | 'manual';
 }
 
-/** What the calendar draws: everything but the scheduler's own lunch and dinner. */
-export function visibleBlock(block: PlanBlock): boolean {
-  return !(block.type === 'meal' && block.source === 'generated');
+/** Lunch and dinner the scheduler placed from the habits: shown, but changed in the setup,
+ *  not by dragging, since the next generation would put them back where the habits say. */
+export function lockedBlock(block: PlanBlock): boolean {
+  return block.type === 'meal' && block.source === 'generated';
 }
 
 export interface PlanTotals {

@@ -192,8 +192,8 @@ class PreferenceTests(ScheduleApiCase):
     def test_with_no_budget_every_free_slot_is_used(self):
         self.add(1)
         self.generate(fromDate="2027-02-01")
-        # 08:00-20:00 less lunch and dinner is 10 h, every day until the exam on the 14th.
-        self.assertEqual(self.studied() / 60, 10 * 13)
+        # 08:00-20:00 less lunch and dinner is 10 h, every day of the week planned.
+        self.assertEqual(self.studied() / 60, 10 * 7)
 
     def test_the_day_window_and_block_size_reach_the_plan(self):
         self.add(1)
@@ -300,12 +300,17 @@ class TargetHoursTests(ScheduleApiCase):
             self.assertAlmostEqual(targets[entry["subjectId"]], entry["scheduledHours"], places=2)
         self.assertTrue(all(value > 0 for value in targets.values()))
 
-    def test_the_target_covers_weeks_kept_from_an_earlier_run(self):
+    def test_the_target_adds_up_every_week_planned(self):
         self.add(1)
         self.generate(fromDate="2027-02-01")
-        whole = self.plan()["subjects"][0]["targetHours"]
+        first = self.plan()["subjects"][0]["targetHours"]
         self.generate(fromDate="2027-02-08")
-        self.assertAlmostEqual(self.plan()["subjects"][0]["targetHours"], whole, places=2)
+        both = self.plan()["subjects"][0]["targetHours"]
+        self.assertGreater(both, first)
+        self.assertAlmostEqual(both, self.studied() / 60, places=2)
+
+    studied = PreferenceTests.studied
+    minutes = GenerateTests.minutes
 
     def test_a_dry_run_changes_no_target(self):
         self.add(1)
@@ -437,3 +442,63 @@ class SessionTests(ScheduleApiCase):
         # Morning learning, 08:00 until lunch, is one session.
         first = sorted(by_day["2027-02-01"], key=lambda b: b["start"])[0]
         self.assertEqual((first["start"], first["end"], first["type"]), ("08:00", "12:00", "active_learning"))
+
+
+
+class WeekTests(ScheduleApiCase):
+    """A proposal covers the week open in the calendar, not the whole study phase."""
+
+    def test_one_week_by_default(self):
+        self.add(1)
+        plan = self.generate().get_json()
+        self.assertEqual({b["date"] for b in plan["blocks"]},
+                         {f"2027-02-0{d}" for d in range(1, 8)})
+
+    def test_an_explicit_week(self):
+        self.add(1)
+        plan = self.generate(fromDate="2027-01-04", toDate="2027-01-10").get_json()
+        dates = {b["date"] for b in plan["blocks"]}
+        self.assertEqual((min(dates), max(dates)), ("2027-01-04", "2027-01-10"))
+
+    def test_a_week_past_the_phase_is_cut_at_its_end(self):
+        self.add(1)
+        plan = self.generate(fromDate="2027-02-12").get_json()
+        self.assertEqual(max(b["date"] for b in plan["blocks"]), "2027-02-14")   # the phase's last day
+        # No study on the exam day itself; lunch and dinner still happen.
+        self.assertEqual(max(b["date"] for b in plan["blocks"] if b["type"] != "meal"), "2027-02-13")
+
+    def test_planning_one_week_leaves_the_others_alone(self):
+        self.add(1)
+        self.generate(fromDate="2027-02-01")
+        first = [b for b in self.blocks() if b["date"] <= "2027-02-07"]
+        self.generate(fromDate="2027-02-08")
+        self.assertEqual([b for b in self.blocks() if b["date"] <= "2027-02-07"], first)
+        self.generate(fromDate="2027-02-01")      # and again: the second week survives
+        self.assertTrue(any(b["date"] >= "2027-02-08" for b in self.blocks()))
+
+    def test_bad_weeks_are_refused(self):
+        self.add(1)
+        for body in ({"toDate": "2027-01-31"}, {"toDate": "2027-03-01"}, {"toDate": "next week"}):
+            self.assertEqual(self.generate(**body).status_code, 400, body)
+
+
+class MealTests(ScheduleApiCase):
+    """Lunch and dinner are slots in the calendar too."""
+
+    def slot(self, **body):
+        return self.client.post("/api/semesters/2026W/plan/blocks", json=body, headers=ALICE)
+
+    def test_a_plan_holds_lunch_and_dinner(self):
+        self.add(1)
+        self.generate()
+        meals = {(b["start"], b["end"], b["label"]) for b in self.blocks() if b["date"] == "2027-02-02" and b["type"] == "meal"}
+        self.assertEqual(meals, {("12:00", "13:00", "Lunch"), ("18:00", "19:00", "Dinner")})
+
+    def test_drawing_over_lunch_replaces_it_and_regenerating_respects_that(self):
+        self.add(1)
+        self.generate()
+        self.slot(date="2027-02-02", start="12:00", end="13:00", kind="course", courseId=1)
+        self.generate()
+        lunch = [b for b in self.blocks() if b["date"] == "2027-02-02" and b["label"] == "Lunch"]
+        self.assertEqual(lunch, [])
+        self.assertTrue(any(b["label"] == "Lunch" for b in self.blocks() if b["date"] == "2027-02-03"))

@@ -13,7 +13,7 @@
     PUT    /api/semesters/<semkez>/sessions            [{id, subjectId, date, start, hours}] replaces them all
 
     PUT    /api/semesters/<semkez>/preferences         study habits and days off
-    POST   /api/semesters/<semkez>/plan/generate       build a schedule proposal from them
+    POST   /api/semesters/<semkez>/plan/generate       a schedule proposal for one week
     POST   /api/semesters/<semkez>/plan/blocks         draw a slot (a course, or a break)
     PATCH  /api/semesters/<semkez>/plan/blocks/<id>    move or resize one; it becomes yours
     DELETE /api/semesters/<semkez>/plan/blocks/<id>    remove one
@@ -56,8 +56,8 @@ DEFAULT_PREFERENCES = {"dayStart": "08:00", "dayEnd": "20:00", "lunch": ["12:00"
                        "studyHoursPerWeek": None, "alpha": .3, "beta": 5, "daysOff": []}
 # A slot the user draws: a course, or a break that keeps the scheduler away.
 SLOT_KINDS = ("course", "break")
-# A block the calendar shows. Generated meals are kept in the data but not drawn.
-VISIBLE = "NOT (type = 'meal' AND source = 'generated')"
+# A generated plan covers one week, the one open in the calendar, unless asked for more.
+PLAN_DAYS = 7
 # Colours of new subjects, in order of adding; the same family as the frontend's.
 COLORS = ("#2598A2", "#E4AC17", "#D56568", "#5586CA", "#DD792F", "#6E9A5A", "#9A6BB8", "#C2577E")
 
@@ -492,7 +492,7 @@ def preferences(sid):
                                WHERE semester_id = ? ORDER BY start_date""", (sid,))]}
 
 
-def scheduler_request(sid, semkez, from_date):
+def scheduler_request(sid, semkez, from_date, to_date):
     """The schedule_planner request for one semester, and the course id behind each subject.
 
     Subjects are keyed by course code: unique, stable, and short enough to read in a dump.
@@ -531,14 +531,14 @@ def scheduler_request(sid, semkez, from_date):
                       WHERE semester_id = ? AND date < ? AND type <> 'meal' ORDER BY date, start_time""",
                    (sid, from_date))
                if r["course_id"] in codes]
-    # The user's own slots from from_date on stay where they are; the scheduler plans around them.
+    # The user's own slots in the planned days stay where they are; the scheduler plans around them.
     busy = [{"date": r["date"], "start_time": r["start_time"], "end_time": r["end_time"],
              "subject": codes.get(r["course_id"]) if r["type"] != "meal" else None}
             for r in conn.execute(
                 """SELECT course_id, date, start_time, end_time, type FROM plan_blocks
-                   WHERE semester_id = ? AND date >= ? AND source = 'manual' ORDER BY date, start_time""",
-                (sid, from_date))]
-    length = (dt.date.fromisoformat(end) - dt.date.fromisoformat(from_date)).days + 1
+                   WHERE semester_id = ? AND date BETWEEN ? AND ? AND source = 'manual' ORDER BY date, start_time""",
+                (sid, from_date, to_date))]
+    length = (dt.date.fromisoformat(to_date) - dt.date.fromisoformat(from_date)).days + 1
     return {
         "subjects": subjects_input,
         "history": history,
@@ -597,15 +597,22 @@ def refresh_targets(conn, sid):
                      [(round(total, 2), sid, course_id) for course_id, total in hours.items()])
 
 
-def store_plan(sid, from_date, payload, result):
-    """Replace the generated slots from `from_date` on. Earlier slots stay as history, and the
-    user's own slots stay everywhere: the run planned around them."""
+def store_plan(sid, from_date, to_date, payload, result):
+    """Replace the generated slots from `from_date` to `to_date`. Every other week stays as it
+    is, and the user's own slots stay everywhere: the run planned around them."""
     conn = db.get_db()
+    mine = {}
+    for r in conn.execute("""SELECT date, start_time, end_time FROM plan_blocks
+                             WHERE semester_id = ? AND date BETWEEN ? AND ? AND source = 'manual'""",
+                          (sid, from_date, to_date)):
+        mine.setdefault(r["date"], []).append((r["start_time"], r["end_time"]))
+    # Lunch and dinner come from the habits every time; one the user has drawn over gives way.
     rows = [(sid, block["courseId"], block["date"], block["start"], block["end"],
-             block["type"], block["label"]) for block in result["blocks"]]
+             block["type"], block["label"]) for block in result["blocks"]
+            if not any(block["start"] < end and block["end"] > start for start, end in mine.get(block["date"], []))]
     with conn:
-        conn.execute("DELETE FROM plan_blocks WHERE semester_id = ? AND date >= ? AND source = 'generated'",
-                     (sid, from_date))
+        conn.execute("""DELETE FROM plan_blocks WHERE semester_id = ? AND date BETWEEN ? AND ?
+                        AND source = 'generated'""", (sid, from_date, to_date))
         conn.executemany("""INSERT INTO plan_blocks (semester_id, course_id, date, start_time, end_time, type, label, source)
                             VALUES (?, ?, ?, ?, ?, ?, ?, 'generated')""", rows)
         conn.execute("""INSERT INTO study_plans (semester_id, generated_at, from_date, input_json, summary_json)
@@ -734,11 +741,12 @@ def save_preferences(semkez):
 
 @bp.post("/semesters/<semkez>/plan/generate")
 def generate_plan(semkez):
-    """Build a schedule proposal for the rest of the study phase.
+    """Build a schedule proposal for one week: the one open in the calendar.
 
-    `fromDate` is the first day to plan, defaulting to today clamped into the study phase, so
-    pressing the button again next week keeps the weeks already behind. `dryRun` returns the
-    proposal without storing it, which is what the preview dialog asks for.
+    `fromDate` and `toDate` are the first and last day to plan. `fromDate` defaults to today
+    clamped into the study phase, `toDate` to a week after it; only generated slots in those
+    days are replaced, so the rest of the phase and the user's own slots stay as they are.
+    `dryRun` returns the proposal without storing it, which is what the preview dialog asks for.
     """
     semkez = checked(semkez)
     body = request.get_json(silent=True) or {}
@@ -753,8 +761,13 @@ def generate_plan(semkez):
         from_date = min(max(dt.date.today().isoformat(), start), end)
     elif not iso_date(from_date) or not start <= from_date <= end:
         raise RequestError(400, f"fromDate must be a date in the study phase, {start} to {end}.")
+    to_date = body.get("toDate")
+    if to_date is None:
+        to_date = min((dt.date.fromisoformat(from_date) + dt.timedelta(days=PLAN_DAYS - 1)).isoformat(), end)
+    elif not iso_date(to_date) or not from_date <= to_date <= end:
+        raise RequestError(400, f"toDate must be a date from fromDate to the end of the study phase, {end}.")
 
-    payload, ids = scheduler_request(sid, semkez, from_date)
+    payload, ids = scheduler_request(sid, semkez, from_date, to_date)
     try:
         result = generate_schedule(payload)
     except ValueError as exc:
@@ -762,7 +775,7 @@ def generate_plan(semkez):
         raise RequestError(400, str(exc)) from None
     plan = plan_payload(from_date, dt.datetime.now().astimezone().isoformat(timespec="seconds"), result, ids)
     if not body.get("dryRun"):
-        store_plan(sid, from_date, payload, plan)
+        store_plan(sid, from_date, to_date, payload, plan)
         plan = stored_plan(sid)
     return jsonify(plan)
 
@@ -790,7 +803,7 @@ def make_room(conn, sid, date, begin, finish, keep=None):
     """Clear a slot's time: generated slots under it give way, the user's own do not."""
     clashes = conn.execute(
         f"""SELECT id, source FROM plan_blocks
-            WHERE semester_id = ? AND date = ? AND start_time < ? AND end_time > ? AND {VISIBLE}
+            WHERE semester_id = ? AND date = ? AND start_time < ? AND end_time > ?
               AND id IS NOT ?""", (sid, date, finish, begin, keep)).fetchall()
     if any(r["source"] == "manual" for r in clashes):
         raise RequestError(409, "That overlaps another slot of yours. Move or shorten it first.")

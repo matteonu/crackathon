@@ -2,7 +2,7 @@ import { Component, ElementRef, HostListener, computed, inject, signal, viewChil
 import { Router } from '@angular/router';
 import { StudyStore } from '../services/study-store';
 import { dayLabel } from '../models/study';
-import { PlanBlock, blockLabel, minutesOf, studyHours, timeOf } from '../models/semester';
+import { PlanBlock, blockLabel, lockedBlock, minutesOf, studyHours, timeOf } from '../models/semester';
 import { IconComponent } from '../shared/icon.component';
 import { ScheduleSetupComponent } from './schedule-setup.component';
 
@@ -35,7 +35,9 @@ export class CalendarComponent {
   readonly draftTotals=computed(()=>this.store.subjects().map(subject=>({subject,
     hours:studyHours(this.draft().filter(b=>b.subjectId===subject.id))})).filter(entry=>entry.hours>0));
   readonly dayLabel=dayLabel;readonly weekday=(date:string)=>dayLabel(date,{weekday:'short'});
-  readonly blockLabel=blockLabel;readonly timeOf=timeOf;readonly minutesOf=minutesOf;
+  readonly blockLabel=blockLabel;readonly timeOf=timeOf;readonly minutesOf=minutesOf;readonly locked=lockedBlock;
+  /** The open week, cut to the study phase: what a proposal covers. */
+  readonly planWeek=computed(()=>{const days=this.store.week().filter(d=>this.allowed(d));return days.length?{fromDate:days[0],toDate:days.at(-1)!}:null;});
 
   subject(id:string|null){return id?this.store.subjects().find(s=>s.id===id):undefined;}
   allowed(date:string):boolean{return this.store.dates().includes(date)&&date>=this.store.examSession().start&&date<=this.store.examSession().end;}
@@ -74,6 +76,7 @@ export class CalendarComponent {
   startMove(event:PointerEvent,block:PlanBlock,mode:'move'|'start'|'end'):void{
     if(event.button!==0||block.id===null)return;
     event.stopPropagation();event.preventDefault();
+    if(lockedBlock(block))return;
     const start=minutesOf(block.start),end=minutesOf(block.end);
     this.drag.set({mode,id:block.id,date:block.date,start,end,originY:event.clientY,originDate:block.date,
       grab:this.minutesAt(event.clientY,block.date)-start,moved:false});
@@ -120,18 +123,19 @@ export class CalendarComponent {
   openSetup():void{this.proposalDialog()?.nativeElement.close();this.setup().open();}
   async propose():Promise<void>{
     if(!this.store.subjects().length){this.store.announce('Add a course first, with + next to Your subjects.');return;}
+    if(!this.planWeek()){this.store.announce('This week is outside the study phase. Pick a week inside it.');return;}
     await this.regenerate();
     if(this.draft().length||this.proposalError())this.proposalDialog()?.nativeElement.showModal();
   }
   async regenerate():Promise<void>{
     this.proposalError.set('');
-    const plan=await this.store.generate({dryRun:true});
+    const plan=await this.store.generate({...this.planWeek()!,dryRun:true});
     this.draft.set(plan?.blocks??[]);
     if(!plan)this.proposalError.set(this.store.planError());
   }
   async apply():Promise<void>{
     this.proposalError.set('');
-    if(await this.store.generate()){this.draft.set([]);this.proposalDialog()?.nativeElement.close();await this.store.load();}
+    if(await this.store.generate(this.planWeek()!)){this.draft.set([]);this.proposalDialog()?.nativeElement.close();await this.store.load();}
     else this.proposalError.set(this.store.planError());
   }
 }

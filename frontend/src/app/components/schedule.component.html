@@ -20,7 +20,7 @@
           <th class="subject-col" scope="row"><a [routerLink]="['/subject-tab',subject.id]"><span class="subject-dot" [style.background]="subject.color"></span><span>{{subject.shortName}}</span></a></th>
           <td class="remaining-col" [class.over-target]="!expanded()&&store.remaining(subject)<0">{{expanded()?store.hours(subject,store.week()):store.remaining(subject)}}</td>
           @for(date of visibleDates();track date){<td [class.weekend]="weekday(date)==='Sat'||weekday(date)==='Sun'">
-            @if(store.dates().includes(date)){<button class="hour-cell" [class.recorded]="subject.hours[date]!=null" [style.background]="subject.hours[date]!=null ? subject.color+'28' : null" [attr.aria-label]="cellLabel(subject,date)" (click)="store.openEditor(subject.id,date)">@if(subject.hours[date]!=null){{{subject.hours[date]}}}@else if(planned(subject.id,date)){<span class="planned-hint">{{planned(subject.id,date)}}</span>}@else{—}</button>}
+            @if(store.dates().includes(date)){<button class="hour-cell" [class.recorded]="subject.hours[date]!=null" [class.planned]="subject.hours[date]==null&&planned(subject.id,date)>0" [style.background]="cellColor(subject,date)" [attr.aria-label]="cellLabel(subject,date)" (click)="store.openEditor(subject.id,date)">@if(subject.hours[date]!=null){{{subject.hours[date]}}}@else if(planned(subject.id,date)){<span class="planned-hint">{{planned(subject.id,date)}}</span>}@else{—}</button>}
             @else {<span class="outside-phase" title="Outside the study phase">—</span>}
           </td>}
         </tr>

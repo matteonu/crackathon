@@ -269,11 +269,12 @@ algorithm.
   ../.venv/bin/python -m schedule_planner.main < tests/example_input.json
   ```
 
-- **Generating** is `POST /api/semesters/<semkez>/plan/generate`. `dryRun: true` returns a
-  proposal without storing it, which is what the preview dialog shows. `fromDate` is the first
-  day to plan and defaults to today clamped into the study phase: blocks before it are kept
-  and fed back to the scheduler as history, so pressing the button again next week does not
-  rewrite the weeks already behind, and the hours they used still count against a course's cap.
+- **Generating** is `POST /api/semesters/<semkez>/plan/generate`, and it plans **one week**:
+  the one open in the calendar, which the frontend sends as `fromDate`/`toDate` (defaults:
+  today clamped into the study phase, and a week after it). Only generated slots in those days
+  are replaced; other weeks and your own slots stay. Blocks before `fromDate` go to the
+  scheduler as history, so the hours they used still count against a course's cap.
+  `dryRun: true` returns the proposal without storing it, which is what the preview shows.
 - **Reading** is `GET /api/semesters/<semkez>/plan`, which carries the subjects, your own
   sessions, the habits the plan was built from, and `plan: null` until one has been generated.
   Its totals are added up from the stored blocks, not from the last run, because earlier weeks
@@ -306,8 +307,11 @@ algorithm.
   scheduler as busy time, so nothing is planned on top of it and a course slot counts towards
   that course's share and cap. Drawing over a generated slot replaces it; overlapping one of
   your own is refused. Back-to-back blocks of one course are stored as one session, so a
-  morning of study is one slot to drag, not three. The scheduler's own lunch and dinner are
-  kept in the data and not drawn.
+  morning of study is one slot to drag, not three. Lunch and dinner are slots too, placed
+  from the habits and locked: change them in Study setup. Drawing over one replaces it, and the
+  next generation leaves it out of that day.
+- **The hours overview** colours each cell by its hours: recorded hours in the course colour,
+  deeper the more there are, and hours only planned as a light wash with the number shown.
 - **Generating sets each course's `target_hours`** to what the plan asks of it, over every
   block held and not just the latest run, so the hours overview and the progress bars have
   something to measure recorded hours against. A dry run changes nothing.

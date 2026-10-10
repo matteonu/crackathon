@@ -1,7 +1,7 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { StudyData, Subject, PlannedSession, validSession, sessionsOverlap, addDays, dailyTotal, mondayOf, round, sumHours, validateData, weekDays } from '../models/study';
 import { CourseHit, GeneratedPlan, Plan, PlanBlock, PlanSubject, Preferences, SemesterOption, Semesters,
-  courseIdOf, emptyData, planToData, studyHours, visibleBlock } from '../models/semester';
+  courseIdOf, emptyData, planToData, studyHours } from '../models/semester';
 
 /** The habits of a semester nobody has configured, mirroring the server's defaults. */
 const DEFAULT_PREFERENCES: Preferences = {dayStart:'08:00', dayEnd:'20:00', lunch:['12:00','13:00'],
@@ -161,10 +161,9 @@ export class StudyStore {
     this.state.set(data); this.announce('Subject changes saved.');
     void this.write(url,this.json('PATCH',patch));
   }
-  /** The slots the calendar shows on one day, earliest first. The scheduler's own lunch and
-   *  dinner are left out; a break the user drew is shown. */
+  /** The slots the calendar shows on one day, earliest first, lunch and dinner included. */
   planOn(date:string):PlanBlock[] {
-    return (this.generatedPlan()?.blocks ?? []).filter(block => block.date === date && visibleBlock(block));
+    return (this.generatedPlan()?.blocks ?? []).filter(block => block.date === date);
   }
 
   /** Draw a slot. Generated slots under it give way; the server refuses an overlap with yours. */
@@ -206,7 +205,7 @@ export class StudyStore {
   }
 
   /** Ask the server for a schedule. `dryRun` previews it without storing anything. */
-  async generate(options:{fromDate?:string; dryRun?:boolean} = {}):Promise<GeneratedPlan | null> {
+  async generate(options:{fromDate?:string; toDate?:string; dryRun?:boolean} = {}):Promise<GeneratedPlan | null> {
     await this.writes;        // Let a queued change to a course land before planning around it.
     this.generating.set(true); this.planError.set('');
     try {
