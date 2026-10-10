@@ -7,14 +7,16 @@ import { MaterialStore } from '../services/material-store';
 import { StudyDemoService } from '../services/study-demo.service';
 import { IconComponent } from '../shared/icon.component';
 import { MaterialLibraryComponent } from '../components/material-library.component';
+import { TaskListComponent } from '../components/task-list.component';
 
-@Component({standalone:true,imports:[RouterLink,FormsModule,IconComponent,MaterialLibraryComponent],template:`
+@Component({standalone:true,imports:[RouterLink,FormsModule,IconComponent,MaterialLibraryComponent,TaskListComponent],template:`
   @if(subject();as s){
     <header class="page-heading"><div><div class="breadcrumb">YOUR WORKSPACE <span>/</span> SUBJECTS</div><h1><span class="subject-dot heading-dot" [style.background]="s.color"></span>{{s.name}}<span>.</span></h1>
       <div class="subject-meta"><span>{{s.lectureId || 'Lecture ID not set'}}</span><span>{{s.ects===undefined?'ECTS not set':s.ects+' ECTS'}}</span>@if(s.homepage){<a [href]="s.homepage" target="_blank" rel="noopener noreferrer">Subject homepage ↗</a>}</div>
     </div><button class="button primary" (click)="store.openEditor(s.id)"><app-icon name="plus" /> Record hours</button></header>
     <div class="subject-workspace"><app-material-library [subjectId]="s.id" />
       <aside class="subject-sidebar">
+        <app-task-list [subjectId]="s.id" />
         <section class="panel subject-form"><div class="panel-heading"><div><h2>Subject details</h2><p>Your goals and course information.</p></div><app-icon name="book" /></div>
           <form (ngSubmit)="save()"><div class="form-grid"><label>Target study hours<input type="number" name="target" min="0" max="5000" step="0.25" required [(ngModel)]="target"></label><label>Exam date<input type="date" name="exam" required [(ngModel)]="examDate"></label></div>
             <div class="form-grid"><label>ECTS<input type="number" name="ects" min="0" max="60" step="0.5" [(ngModel)]="ects" placeholder="e.g. 8"></label><label>Lecture ID<input name="lecture" maxlength="100" [(ngModel)]="lectureId" placeholder="Course code"></label></div>
