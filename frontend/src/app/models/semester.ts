@@ -1,0 +1,85 @@
+import type { PlannedSession, StudyData, Subject } from './study';
+
+/** A course of one subject's semester, as GET /api/semesters/<semkez>/plan returns it. */
+export interface PlanSubject {
+  id: string;
+  courseId: number;
+  name: string;
+  shortName: string;
+  color: string;
+  targetHours: number;
+  examDate: string;
+  completed: boolean;
+  nextAction: string;
+  ects: number | null;
+  lectureId: string;
+  homepage: string | null;
+  desiredGrade: number | null;
+  hours: Record<string, number>;
+}
+
+/** The whole study plan of a semester. */
+export interface Plan {
+  semkez: string;
+  label: string;
+  start: string;
+  end: string;
+  subjects: PlanSubject[];
+  sessions: PlannedSession[];
+}
+
+/** A search result from GET /api/courses. */
+export interface CourseHit {
+  id: number;
+  code: string;
+  title: string;
+  ects: number | null;
+  professor: string | null;
+  weeklyHours: number | null;
+  levels: string[];
+  language: string | null;
+  added: boolean;
+}
+
+/** '2026W' -> 'HS26', '2027S' -> 'FS27'. */
+export function semesterLabel(semkez: string): string {
+  return `${semkez.endsWith('W') ? 'HS' : 'FS'}${semkez.slice(2, 4)}`;
+}
+
+/** The course id behind a subject id 'course-<id>', or null for anything else. */
+export function courseIdOf(subjectId: string): number | null {
+  const match = /^course-(\d+)$/.exec(subjectId);
+  return match ? Number(match[1]) : null;
+}
+
+/** Every ISO date from start to end, inclusive. */
+export function dateRange(start: string, end: string): string[] {
+  const dates: string[] = [];
+  for (let day = new Date(start + 'T12:00:00Z'); day.toISOString().slice(0, 10) <= end; day.setUTCDate(day.getUTCDate() + 1)) {
+    dates.push(day.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+/** The server's plan in the shape the app's pages use. `today` decides which week is shown first. */
+export function planToData(plan: Plan, today: string): StudyData {
+  const dates = dateRange(plan.start, plan.end);
+  const referenceDate = today < plan.start ? plan.start : today > plan.end ? plan.end : today;
+  const subjects: Subject[] = plan.subjects.map(s => {
+    const subject: Subject = {
+      id: s.id, courseId: s.courseId, name: s.name, shortName: s.shortName, color: s.color, targetHours: s.targetHours,
+      examDate: s.examDate, completed: s.completed, nextAction: s.nextAction, lectureId: s.lectureId, hours: {...s.hours},
+    };
+    if (s.ects !== null) subject.ects = s.ects;
+    if (s.homepage) subject.homepage = s.homepage;
+    return subject;
+  });
+  return {version: 1, semester: plan.label, referenceDate, dates, subjects, anki: [], notes: '',
+    examSession: {start: plan.start, end: plan.end}, sessions: plan.sessions.map(s => ({...s}))};
+}
+
+/** What the app shows before the plan has loaded: no subjects, a one-day range. */
+export function emptyData(today: string): StudyData {
+  return {version: 1, semester: '', referenceDate: today, dates: [today], subjects: [], anki: [], notes: '',
+    examSession: {start: today, end: today}, sessions: []};
+}

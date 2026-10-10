@@ -27,6 +27,7 @@ export class CalendarComponent {
   start(s:PlannedSession):number{return Number(s.start.slice(0,2))+Number(s.start.slice(3))/60;}
   end(s:PlannedSession):string{const minutes=Math.round((this.start(s)+s.hours)*60);return `${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;}
   open(date?:string,session?:PlannedSession):void{
+    if(!this.store.subjects().length){this.store.announce('Add a course first, with + next to Your subjects.');return;}
     this.editingId.set(session?.id??null);this.error.set('');
     this.form.reset({subjectId:session?.subjectId??this.store.subjects()[0].id,date:session?.date??date??this.store.week().find(d=>this.allowed(d))??'',start:session?.start??'09:00',hours:session?.hours??2});
     this.sessionDialog()?.nativeElement.showModal();
