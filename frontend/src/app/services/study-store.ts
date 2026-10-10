@@ -19,7 +19,6 @@ const today = () => new Date().toISOString().slice(0, 10);
  *  in order, and if the server refuses it the plan is reloaded from the server. */
 @Injectable({providedIn:'root'})
 export class StudyStore {
-  readonly persistence = signal('Loading your plan…');
   readonly loaded = signal(false);
   readonly loadError = signal('');
   readonly semkez = signal('');
@@ -58,7 +57,6 @@ export class StudyStore {
   readonly notice = signal('');
   private noticeTimer?: ReturnType<typeof setTimeout>;
   private writes: Promise<unknown> = Promise.resolve();
-  private pending = 0;
 
   constructor() { void this.load(); }
 
@@ -90,16 +88,15 @@ export class StudyStore {
       this.preferences.set(plan.preferences ?? DEFAULT_PREFERENCES);
       this.generatedPlan.set(plan.plan);
       if (first || this.weekStart() < mondayOf(data.dates[0]) || this.weekStart() > mondayOf(data.dates.at(-1)!)) this.weekStart.set(mondayOf(data.referenceDate));
-      this.loaded.set(true); this.loadError.set(''); this.persistence.set('Saved to your account');
+      this.loaded.set(true); this.loadError.set('');
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Could not load your study plan.';
-      this.loadError.set(message); this.persistence.set(`Not loaded: ${message}`);
+      this.loadError.set(message);
     }
   }
 
   /** Sends a change after the ones before it. On failure the server's version is reloaded. */
   private write(url:string, init:RequestInit):Promise<void> {
-    this.pending++; this.persistence.set('Saving…');
     const run = this.writes.then(async () => {
       try { await this.request(url, init); }
       catch (e) {
@@ -107,8 +104,6 @@ export class StudyStore {
         this.announce(`Not saved: ${message}`);
         await this.load();
         throw e;
-      } finally {
-        if (--this.pending === 0 && !this.loadError()) this.persistence.set('Saved to your account');
       }
     });
     this.writes = run.catch(() => undefined);

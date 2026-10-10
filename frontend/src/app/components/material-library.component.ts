@@ -22,7 +22,6 @@ export class MaterialLibraryComponent {
   readonly subjectFiles=computed(()=>this.materials.files().filter(f=>f.subjectId===this.subjectId()));
   readonly selected=computed(()=>this.subjectFiles().find(f=>f.id===this.selectedId()));
   readonly rows=computed(()=>treeRows(this.subjectFiles(),this.expanded(),this.query(),this.marker()));
-  readonly fileCount=computed(()=>this.subjectFiles().filter(f=>materialKind(f)!=='folder').length);
   readonly folderName=computed(()=>this.subjectFiles().find(f=>f.id===this.activeFolder())?.name??'Materials');
   readonly collectionFolder=signal<string|null>(null);readonly collectionOpen=signal(false);readonly collectionCards=computed(()=>folderCards(this.subjectFiles(),this.collectionFolder()));readonly collectionName=computed(()=>this.subjectFiles().find(f=>f.id===this.collectionFolder())?.name??'Materials');
   readonly learningFolder=signal<string|null>(null);readonly learningDeck=signal<string|null>(null);readonly learningOpen=signal(false);
