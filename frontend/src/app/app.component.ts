@@ -20,23 +20,31 @@ export class AppComponent {
   readonly menuFor=signal<string|null>(null);
   toggleMenu(id:string,event:Event):void {
     event.stopPropagation();
-    this.semesterMenu.set(false);
+    this.semesterMenu.set(false);this.profileMenu.set(false);
     const opening=this.menuFor()!==id;this.menuFor.set(opening?id:null);
     // Move focus into the menu so it can be used from the keyboard.
     if(opening)requestAnimationFrame(()=>document.querySelector<HTMLElement>('.course-menu [role=menuitem]')?.focus());
   }
-  @HostListener('document:click') closeMenu():void {this.menuFor.set(null);this.semesterMenu.set(false);}
+  @HostListener('document:click') closeMenu():void {this.menuFor.set(null);this.semesterMenu.set(false);this.profileMenu.set(false);}
   @HostListener('document:keydown.escape') closeMenuOnEscape():void {
+    if(this.profileMenu()){this.profileMenu.set(false);document.querySelector<HTMLElement>('.profile-button')?.focus();return;}
     if(this.semesterMenu()){this.semesterMenu.set(false);document.querySelector<HTMLElement>('.semester-switch')?.focus();return;}
     const id=this.menuFor();if(!id)return;
     this.menuFor.set(null);
     document.querySelector<HTMLElement>(`.sidebar-subject a[href$="${id}"] + .course-menu-button`)?.focus();
   }
-  /** The semester picker in the sidebar's semester card. */
+  /** The account menu behind the profile at the bottom of the sidebar. */
+  readonly profileMenu=signal(false);
+  toggleProfileMenu(event:Event):void {
+    event.stopPropagation();this.menuFor.set(null);this.semesterMenu.set(false);
+    const opening=!this.profileMenu();this.profileMenu.set(opening);
+    if(opening)requestAnimationFrame(()=>document.querySelector<HTMLElement>('.profile-menu [role=menuitem]')?.focus());
+  }
+  /** The semester picker at the bottom of the sidebar. */
   readonly semesterMenu=signal(false);
   readonly semesterName=semesterName;
   toggleSemesterMenu(event:Event):void {
-    event.stopPropagation();this.menuFor.set(null);
+    event.stopPropagation();this.menuFor.set(null);this.profileMenu.set(false);
     const opening=!this.semesterMenu();this.semesterMenu.set(opening);
     if(opening)requestAnimationFrame(()=>document.querySelector<HTMLElement>('.semester-menu [aria-checked=true]')?.focus());
   }
