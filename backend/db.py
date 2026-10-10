@@ -80,6 +80,7 @@ ADDED_COLUMNS = {
     ),
     "plan_blocks": (("source", "TEXT NOT NULL DEFAULT 'generated'"),),
     "mcq_sets": (("requested_count", "INTEGER CHECK (requested_count BETWEEN 1 AND 60)"),),
+    "tasks": (("priority", "TEXT NOT NULL DEFAULT 'medium'"),),
 }
 
 
