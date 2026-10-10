@@ -8,14 +8,21 @@ import threading
 import time
 import unittest
 from unittest.mock import patch
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
 import uuid
 
-from learning_backend import pdf_study
-from learning_backend.server import StudyJobs, create_server, RequestError
+from app import create_app
+from learning import pdf_study
+from learning.jobs import RequestError, StudyJobs
 
-FIXTURE = Path(__file__).resolve().parents[1] / 'frontend/tests/fixtures/study-demo.pdf'
+FIXTURE = Path(__file__).resolve().parents[2] / 'frontend/tests/fixtures/study-demo.pdf'
+
+
+def build_app(temp, **overrides):
+    """An app whose database, data directory and seed are all inside a temp folder."""
+    config = {'SECRET_KEY': 'test-only', 'DATA_DIR': str(temp), 'DATABASE_PATH': str(Path(temp) / 'app.db'),
+              'LEARNING_DIR': str(Path(temp) / 'learning'), 'STATIC_DIR': str(temp)}
+    config.update(overrides)
+    return create_app(config)
 
 
 def fake_model(client, model, data, schema, label, file_input=None):
@@ -117,21 +124,21 @@ class PipelineTests(unittest.TestCase):
                 except Exception as exc:
                     failures.append(repr(exc))
                     raise
-            jobs = StudyJobs(Path(temp), questions=5, runner=tracked_runner)
-            server = create_server(jobs, port=0)
-            thread = threading.Thread(target=server.serve_forever, daemon=True)
-            thread.start()
-            base = f'http://127.0.0.1:{server.server_port}'
+            jobs = StudyJobs(Path(temp) / 'learning', questions=5, runner=tracked_runner)
+            app = build_app(temp)
+            app.extensions['learning_jobs'] = jobs
+            client = app.test_client()
             document_id = str(uuid.uuid4())
-            url = f'{base}/api/learning/documents/{document_id}'
+            url = f'/api/learning/documents/{document_id}'
+            pdf = FIXTURE.read_bytes()
+            def upload(**headers):
+                return client.post(url, data=pdf, content_type='application/pdf',
+                                   headers={'X-Filename': 'lecture.pdf', 'X-Flashcard-Count': '7', **headers})
             try:
-                request = Request(url, data=FIXTURE.read_bytes(), headers={'Content-Type': 'application/pdf', 'X-Filename': 'lecture.pdf', 'X-Flashcard-Count': '7'})
-                with urlopen(request) as response:
-                    self.assertEqual(response.status, 202)
+                self.assertEqual(upload().status_code, 202)
                 deadline = time.monotonic() + 15
                 while time.monotonic() < deadline:
-                    with urlopen(url + '/result.json') as response:
-                        data = json.load(response)
+                    data = client.get(url + '/result.json').get_json()
                     if data['status'] in {'complete', 'error'}:
                         break
                     time.sleep(0.02)
@@ -140,46 +147,31 @@ class PipelineTests(unittest.TestCase):
                 self.assertEqual(data['requested_questions'], 7)
                 self.assertEqual(data, json.loads(jobs.result_path(document_id, 'shallow').read_text()))
                 self.assertEqual(data['mode'], 'shallow')
-                with urlopen(request) as response:
-                    self.assertEqual(json.load(response)['status'], 'complete')
-                with self.assertRaises(HTTPError) as blocked:
-                    urlopen(Request(url, data=FIXTURE.read_bytes(), headers={'Content-Type':'application/pdf', 'Origin':'https://untrusted.example'}))
-                self.assertEqual(blocked.exception.code, 403)
-                with self.assertRaises(HTTPError) as invalid:
-                    urlopen(Request(f'{base}/api/learning/documents/{uuid.uuid4()}', data=b'not a pdf', headers={'Content-Type':'application/pdf'}))
-                self.assertEqual(invalid.exception.code, 400)
-                with self.assertRaises(HTTPError) as invalid_mode:
-                    urlopen(Request(url, data=FIXTURE.read_bytes(), headers={'Content-Type':'application/pdf', 'X-Learning-Mode':'invalid'}))
-                self.assertEqual(invalid_mode.exception.code, 400)
-                with self.assertRaises(HTTPError) as no_deep_result:
-                    urlopen(url + '/result.json?mode=deep')
-                self.assertEqual(no_deep_result.exception.code, 404)
+                self.assertEqual(upload().get_json()['status'], 'complete')
+                self.assertEqual(client.post(f'/api/learning/documents/{uuid.uuid4()}', data=b'not a pdf',
+                                             content_type='application/pdf').status_code, 400)
+                self.assertEqual(upload(**{'X-Learning-Mode': 'invalid'}).status_code, 400)
+                self.assertEqual(client.get(url + '/result.json?mode=deep').status_code, 404)
+                self.assertEqual(client.post(url, data=pdf, content_type='text/plain').status_code, 415)
+                # A malformed id matches no route, so Flask answers the POST with 405.
+                self.assertEqual(client.post('/api/learning/documents/not-a-uuid', data=pdf,
+                                             content_type='application/pdf').status_code, 405)
+                unknown = client.get('/api/learning/nothing-here')
+                self.assertEqual((unknown.status_code, unknown.get_json()['error']), (404, 'Unknown endpoint.'))
                 for count in ('0', '4', '301', '5.5', 'abc'):
-                    with self.assertRaises(HTTPError) as invalid_count:
-                        urlopen(Request(url, data=FIXTURE.read_bytes(), headers={'Content-Type':'application/pdf', 'X-Flashcard-Count':count}))
-                    self.assertEqual(invalid_count.exception.code, 400)
-                with self.assertRaises(HTTPError) as changed_count:
-                    urlopen(Request(url, data=FIXTURE.read_bytes(), headers={'Content-Type':'application/pdf', 'X-Flashcard-Count':'8'}))
-                self.assertEqual(changed_count.exception.code, 409)
+                    self.assertEqual(upload(**{'X-Flashcard-Count': count}).status_code, 400, count)
+                self.assertEqual(upload(**{'X-Flashcard-Count': '8'}).status_code, 409)
                 with self.assertRaises(RequestError) as conflict:
                     jobs.submit(document_id, 'other.pdf', b'%PDF-different file')
                 self.assertEqual(conflict.exception.status, 409)
-                with self.assertRaises(HTTPError) as blocked_delete:
-                    urlopen(Request(url, method='DELETE', headers={'Origin':'https://untrusted.example'}))
-                self.assertEqual(blocked_delete.exception.code, 403)
-                with urlopen(Request(url, method='DELETE')) as response:
-                    self.assertTrue(json.load(response)['deleted'])
-                self.assertFalse((Path(temp) / document_id).exists())
-                with self.assertRaises(HTTPError) as deleted_result:
-                    urlopen(url + '/result.json')
-                self.assertEqual(deleted_result.exception.code, 404)
-                with urlopen(Request(url, method='DELETE')) as response:
-                    self.assertEqual(response.status, 200)
+                response = client.delete(url)
+                self.assertTrue(response.get_json()['deleted'])
+                self.assertFalse((Path(temp) / 'learning' / document_id).exists())
+                self.assertEqual(client.get(url + '/result.json').status_code, 404)
+                self.assertEqual(client.delete(url).status_code, 200)
+                self.assertEqual(upload().status_code, 410)
             finally:
-                server.shutdown()
-                server.server_close()
                 jobs.pool.shutdown(wait=True)
-                thread.join()
 
     def test_concurrent_modes_use_separate_inputs_results_and_checkpoints(self):
         barrier = threading.Barrier(2)

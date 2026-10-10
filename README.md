@@ -1,19 +1,17 @@
 # crackathon
 
-On the `frontend_plus_learningView` branch, run `bash start-learning.sh` for the subject
-learning view with real PDF summaries and flashcards. See [LEARNING_VIEW.md](LEARNING_VIEW.md)
-for setup, JSON output, and development commands.
-
 Team repo for the VIScon 2026 Hackathon. Replace `NN` below with our team number.
 
 ## Running the app
 
-Flask (`backend/`) serves the API under `/api` and the built Angular app (`frontend/`) for every other path.
+Flask (`backend/`) serves the API under `/api` and the built Angular app (`frontend/`) for every
+other path — one process, one port. The PDF pipeline (lecture PDF → summary → flashcards → Anki
+deck) lives in `backend/learning/`; see [LEARNING_VIEW.md](LEARNING_VIEW.md) for how it works.
 
 **Deploy:** every push to `main` is deployed to the VM by `.github/workflows/deploy.yml`. One-time VM setup:
 
 ```bash
-cp .env.example .env           # then set SECRET_KEY, e.g. python3 -c "import secrets; print(secrets.token_hex(32))"
+cp .env.example .env           # then set SECRET_KEY and OPENAI_API_KEY
 docker compose up -d --build   # serves on :8080, restarts automatically
 ```
 
@@ -24,11 +22,23 @@ docker compose up -d --build   # serves on :8080, restarts automatically
 python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
 .venv/bin/python backend/app.py
 
-# Terminal 2: frontend with hot reload on :4200 (proxies /api to :8080)
+# Terminal 2: frontend with hot reload on :4300 (proxies /api to :8080)
 cd frontend && npm install && npm start
 ```
 
-**UI components:** the frontend uses [zard/ui](https://zardui.com) with Tailwind. Components are copied into `frontend/src/app/shared/components/`; add more with `cd frontend && npx zard-cli@1.0.1 add <name>` (see the component list on the zard/ui site).
+Serving the built frontend instead of the dev server: `cd frontend && npm run build`, then open
+<http://localhost:8080>.
+
+**Checks:**
+
+```bash
+cd backend && ../.venv/bin/python -m unittest discover -s tests -t .   # never calls OpenAI
+cd frontend && npm test && npm run check && npm run build
+```
+
+**Flashcards need a key.** Put `OPENAI_API_KEY=sk-...` in `.env` (gitignored). The backend prints
+at startup whether it found one, and `/api/learning/health` reports it too. Without a key the
+learning view says the model API key is missing.
 
 ## Data
 
@@ -40,8 +50,9 @@ The database is rebuilt from git on every start, both locally and on the server.
 Demo logins: `alice` / `alice123`, `bob` / `bob123` (see `backend/seed/01_users.json`). The repo is public, so these are not secret.
 
 ```bash
-.venv/bin/flask --app backend/app.py reset-db    # reload the seed without restarting
-.venv/bin/flask --app backend/app.py dump-seed   # write the current database back into backend/seed/
+cd backend
+../.venv/bin/flask --app app reset-db    # reload the seed without restarting
+../.venv/bin/flask --app app dump-seed   # write the current database back into backend/seed/
 ```
 
 To build test data by hand, click it together in the app, run `dump-seed`, check the diff, and commit. On the server, `docker compose restart` reloads the seed.

@@ -1,33 +1,26 @@
 # Integrated learning view
 
-This branch copies the full frontend, including the simplified Materials layout, and
-connects the subject file viewer to the adapted `learning_backend/pdf_study.py`.
+The subject file viewer is connected to `backend/learning/pdf_study.py`. The pipeline runs
+inside the one Flask app (`backend/learning/routes.py` serves it, `jobs.py` runs it), so there
+is no second server and no second port.
 
-## Run in Git Bash
-
-From this repository folder:
+## Run it
 
 ```bash
-bash start-learning.sh
+.venv/bin/python backend/app.py          # :8080, API and the built frontend
+cd frontend && npm start                 # :4300 with hot reload, proxies /api to :8080
 ```
 
-The launcher installs the Python dependencies, installs frontend packages if needed,
-and builds Angular. It uses `OPENAI_API_KEY` from the environment or the local
-`learning_backend/.env.local` file. If neither is configured, it prompts without
-displaying or saving your input. Open **http://127.0.0.1:8010**.
-Keep the terminal running; Ctrl+C stops the server.
-
-For persistent local configuration, create `learning_backend/.env.local` with an
-`OPENAI_API_KEY=...` entry and restart the server. Git ignores this file, so a fresh
-clone needs its own key. An environment variable takes precedence. Python alone
-reads the key; it is never sent to the browser or included in generated JSON.
-The server binds to `127.0.0.1` for local use.
+The key comes from `OPENAI_API_KEY` in the repo's `.env` (gitignored, so a fresh clone needs
+its own). An environment variable takes precedence. Python alone reads the key; it never
+reaches the browser and is never written into generated JSON. The backend prints at startup
+whether it found a key, and `GET /api/learning/health` reports it.
 
 ## Upload-to-study workflow
 
 1. Open a subject from Exam view or Your subjects. Choose **Shallow** or **Deep**
    under Materials, set **Flashcards per PDF** (5–300, default 60), then upload or drop a PDF.
-2. The PDF is saved in the browser and submitted to the local Python server.
+2. The PDF is saved in the browser and submitted to the backend.
 3. Python uses the chosen mode for both the summary and flashcards, with
    `--sentences 1`, automatic acceptance of the preview, and the chosen number of final cards.
 4. A one-sentence summary is saved first. It appears automatically as a read-only
@@ -66,10 +59,13 @@ silently skipping them.
 Each uploaded file has its own directory, excluded from Git:
 
 ```text
-learning_backend/data/<file-id>/source.pdf
-learning_backend/data/<file-id>/<shallow-or-deep>/result.json
-learning_backend/data/<file-id>/<shallow-or-deep>/result.work/<checkpoint>.json
+data/learning/<file-id>/source.pdf
+data/learning/<file-id>/<shallow-or-deep>/result.json
+data/learning/<file-id>/<shallow-or-deep>/result.work/<checkpoint>.json
 ```
+
+`DATA_DIR` sets the root (`data/` locally, `/app/data` in the container, bind-mounted so it
+survives a redeploy).
 
 The upload sends `X-Learning-Mode: shallow` or `deep` and `X-Flashcard-Count: 60`
 (or the chosen count). Deletion uses `DELETE /api/learning/documents/<file-id>`.
@@ -100,43 +96,28 @@ replaced by demo content. JSON remains the storage/API format but is not exposed
 
 ## Development
 
-Run Python from the repo root in one terminal (it also reads the local key file):
-
-```bash
-./.venv/Scripts/python.exe -m learning_backend.server
-```
-
-Run Angular in a second terminal:
-
-```bash
-cd frontend
-npm start
-```
-
-Angular uses http://127.0.0.1:4300 and proxies `/api/learning/**` to Python on port 8010.
-The original frontend can keep running on port 4200. Each origin has separate browser storage.
+Angular serves on http://127.0.0.1:4300 and proxies `/api` to Flask on :8080. Browser storage
+is per origin, so the dev server and the built app on :8080 keep separate material libraries.
 
 The defaults preserve the original script's `gpt-6-astra` model and shallow mode.
 Optional server environment settings: `OPENAI_MODEL`, `OPENAI_BASE_URL`.
 The frontend chooses the mode separately for each PDF; `PDF_DEEP_MODE` only sets the
 standalone CLI's default when `--mode` is omitted.
-Use `--questions 15` when starting the server to change its fallback count for requests
-without a count header; the frontend sends the number entered in Materials.
-The summary sentence count is `SUMMARY_SENTENCES = 1` in `learning_backend/server.py`.
+`DEFAULT_QUESTIONS` in `backend/learning/jobs.py` is the fallback count for a request without
+a count header; the frontend sends the number entered in Materials. The summary sentence count
+is `SUMMARY_SENTENCES` in the same file.
 
 The adapted standalone CLI remains available:
 
 ```bash
-./.venv/Scripts/python.exe learning_backend/pdf_study.py "slides.pdf" --mode deep --sentences 1 --questions 15 --feedback "" --output study_materials.json
+.venv/bin/python backend/learning/pdf_study.py "slides.pdf" --mode deep --sentences 1 --questions 15 --feedback "" --output study_materials.json
 ```
 
 ## Checks
 
 ```bash
-./.venv/Scripts/python.exe -m unittest learning_backend.test_pipeline -v
-cd frontend
-npm test
-npm run build
+cd backend && ../.venv/bin/python -m unittest discover -s tests -t . -v
+cd frontend && npm test && npm run check && npm run build
 ```
 
 Automated backend tests use synthetic PDFs and mock only the model response boundary;
