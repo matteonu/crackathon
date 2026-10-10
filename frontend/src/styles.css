@@ -414,7 +414,8 @@ textarea { resize: vertical; line-height: 1.7; }
 .subject-sidebar .form-grid input { min-width:0; }
 /* The subject's progress, full width above the workspace: hours, totals, Anki decks side by side. */
 .subject-progress { margin-bottom:22px; padding:22px 24px; }
-.subject-progress-grid { display:grid; grid-template-columns:minmax(220px,1fr) minmax(200px,.8fr) minmax(0,1.6fr); gap:32px; align-items:start; }
+.subject-progress-grid { display:grid; grid-template-columns:minmax(220px,1fr) minmax(200px,.8fr) minmax(0,1.6fr); gap:26px; align-items:start; }
+.subject-progress-summary .summary-pair { padding:8px 0; }
 .subject-progress .subject-hour-total { font-size:46px; margin-top:0; }
 .subject-progress .progress-track { margin-top:18px; }
 /* Planned against recorded hours, one pair of bars per recent day. */
