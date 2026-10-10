@@ -204,10 +204,10 @@ cd backend
 ../.venv/bin/python -m vvz.sync                   # download the dump (~70 MB) if it changed, then import
 ../.venv/bin/python -m vvz.sync --force           # import again even if nothing changed
 ../.venv/bin/python -m vvz.sync --offline         # import from the cached dump, no network
-../.venv/bin/python -m unittest tests.test_vvz tests.test_vvz_api
+../.venv/bin/python -m unittest tests.test_vvz tests.test_vvz_app
 ```
 
-Endpoints (need the proxy user like every `/api` route): `GET /api/courses?q=Analysis&semkez=2026W&section=Computer%20Science%20Bachelor`, `GET /api/courses/<id>?semkez=2026W`, `GET /api/courses/timetable?ids=1,2&semkez=2026W`, `GET /api/courses/sync-status`. Python side: `vvz.queries.search_courses`, `get_course`, `weekly_timetable`.
+No endpoints yet: read the tables directly (`courses`, `course_offerings`, `course_lectures`, `course_timeslots`, ...) from whatever backend code needs them.
 
 ## Deadlines
 

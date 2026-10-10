@@ -1,4 +1,4 @@
-"""Tests for vvz.sync and vvz.queries against a tiny fake dump (no network)."""
+"""Tests for vvz.sync against a tiny fake dump (no network)."""
 
 import contextlib
 import datetime as dt
@@ -11,7 +11,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from vvz import queries, sync  # noqa: E402
+from vvz import sync  # noqa: E402
 
 DUMP_SCHEMA = """
 CREATE TABLE learningunit (id INTEGER PRIMARY KEY, semkez TEXT, number TEXT, title TEXT, title_english TEXT,
@@ -96,6 +96,17 @@ class SemesterMathTest(unittest.TestCase):
         self.assertEqual(sync.configured_semesters("2025w, 2026S"), ["2025W", "2026S"])
 
 
+def rows(db_path, sql, *params):
+    with contextlib.closing(sqlite3.connect(db_path)) as db:
+        db.row_factory = sqlite3.Row
+        return [dict(r) for r in db.execute(sql, params)]
+
+
+def one(db_path, sql, *params):
+    [row] = rows(db_path, sql, *params)
+    return row
+
+
 class ImportTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -111,29 +122,29 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(counts, {"courses": 1, "offerings": 1, "lectures": 2, "timeslots": 3,
                                   "inherited_timeslots": 0, "lecturers": 1, "sections": 1})
 
-        [course] = queries.search_courses("analysis", db_path=self.db)
-        self.assertEqual((course["code"], course["ects"], course["term"], course["offering_id"]), ("401-0212-16L", 7, "FS", 188507))
+        course = one(self.db, "SELECT * FROM courses")
+        self.assertEqual((course["code"], course["ects"], course["term"], course["latest_semkez"]), ("401-0212-16L", 7, "FS", "2025S"))
         self.assertEqual(course["professor"], "Prof. Dr. Özlem Imamoglu")
-        full = queries.get_course(course["id"], db_path=self.db)
-        self.assertEqual(full["objective"], "Goal")   # English preferred
-        self.assertEqual(full["content"], "Inhalt")   # German fallback
-        self.assertEqual(full["exam_block"], ["Computer Science 2016 (First Year Examination Block 2)"])
-        self.assertEqual(full["weekly_hours"], 6.0)
-        self.assertEqual(full["rating"]["difficulty"], 3.5)
-        self.assertEqual(full["offered_in"], ["2025S"])
-        offering = full["offering"]
-        self.assertEqual((offering["id"], offering["semkez"], offering["weekly_hours"]), (188507, "2025S", 6.0))
-        lecture = next(l for l in offering["lectures"] if l["type"] == "V")
-        self.assertEqual(lecture["type_name"], "lecture")
-        self.assertEqual([s["weekday_name"] for s in lecture["timeslots"]], ["Mon", "Wed"])
-        self.assertEqual(lecture["timeslots"][0]["building"], "HG")
-        self.assertIsNone(lecture["timeslots"][0]["inherited_from"])
-        self.assertEqual({(l["surname"], l["role"]) for l in offering["lecturers"]}, {("Imamoglu", "lecturer"), ("Imamoglu", "examiner")})
-        self.assertIn("Computer Science Bachelor", offering["sections"][0]["path_en"])
+        self.assertEqual(course["objective"], "Goal")   # English preferred
+        self.assertEqual(course["content"], "Inhalt")   # German fallback
+        self.assertEqual(json.loads(course["exam_block"]), ["Computer Science 2016 (First Year Examination Block 2)"])
+        self.assertEqual(course["weekly_hours"], 6.0)
+        self.assertEqual(one(self.db, "SELECT difficulty FROM course_ratings WHERE code = '401-0212-16L'")["difficulty"], 3.5)
 
-        self.assertEqual(queries.search_courses("Old", db_path=self.db), [])
-        self.assertEqual(queries.semesters(db_path=self.db), ["2025S"])
-        self.assertEqual(queries.status(db_path=self.db)["dump_last_modified_ms"], "123")
+        offering = one(self.db, "SELECT * FROM course_offerings")
+        self.assertEqual((offering["id"], offering["course_id"], offering["semkez"], offering["weekly_hours"]), (188507, course["id"], "2025S", 6.0))
+        lecture = one(self.db, "SELECT * FROM course_lectures WHERE type = 'V'")
+        self.assertEqual((lecture["offering_id"], lecture["type_name"], lecture["hours"]), (188507, "lecture", 4.0))
+        slots = rows(self.db, "SELECT * FROM course_timeslots WHERE lecture_number = ? ORDER BY weekday", lecture["number"])
+        self.assertEqual([(s["weekday"], s["start_time"], s["building"], s["inherited_from"]) for s in slots],
+                         [(0, "14:15", "HG", None), (2, "10:15", "HG", None)])
+        self.assertEqual({(r["surname"], r["role"]) for r in rows(self.db,
+                         "SELECT l.surname, cl.role FROM course_lecturers cl JOIN lecturers l ON l.id = cl.lecturer_id")},
+                         {("Imamoglu", "lecturer"), ("Imamoglu", "examiner")})
+        self.assertIn("Computer Science Bachelor", one(self.db, "SELECT path_en FROM course_sections")["path_en"])
+        self.assertEqual(rows(self.db, "SELECT * FROM lecturers WHERE surname = 'Nobody'"), [])   # unlinked lecturer left out
+        self.assertEqual(rows(self.db, "SELECT * FROM courses WHERE code = '401-9999-00L'"), [])  # 2019W not selected
+        self.assertEqual(one(self.db, "SELECT value FROM vvz_meta WHERE key = 'dump_last_modified_ms'")["value"], "123")
 
     def test_courses_are_upserted_by_code_and_keep_their_id(self):
         sync.import_dump(self.dump, self.db, ["2025S"])
@@ -142,49 +153,33 @@ class ImportTest(unittest.TestCase):
             db.execute("INSERT INTO users (id, email) VALUES (1, 'a@ethz.ch')")
             db.execute("INSERT INTO semesters (id, user_id, label) VALUES (1, 1, 'HS26')")
             db.execute("INSERT INTO semester_courses (semester_id, course_id) VALUES (1, 42)")
-            [(analysis_id,)] = db.execute("SELECT id FROM courses WHERE code = '401-0212-16L'").fetchall()
             db.commit()
+        analysis_id = one(self.db, "SELECT id FROM courses WHERE code = '401-0212-16L'")["id"]
 
         counts = sync.import_dump(self.dump, self.db, ["2025S", "2026S", "2026W"])
         self.assertEqual((counts["courses"], counts["offerings"]), (2, 3))
-        with contextlib.closing(sqlite3.connect(self.db)) as db:
-            rows = {r[0]: r[1:] for r in db.execute("SELECT code, id, ects, professor, latest_semkez FROM courses")}
-        self.assertEqual(rows["401-0131-00L"], (42, 7, "Prof. Example", "2026W"))      # id kept, ects fixed, professor kept
-        self.assertEqual(rows["401-0212-16L"][0], analysis_id)
-        self.assertEqual(rows["401-0212-16L"][3], "2026S")                             # the latest offering wins
-        full = queries.get_course(analysis_id, db_path=self.db)
-        self.assertEqual((full["objective"], full["offered_in"], full["offering"]["semkez"]), ("Goal 2026", ["2025S", "2026S"], "2026S"))
-        self.assertEqual(queries.get_course(analysis_id, semkez="2025S", db_path=self.db)["offering"]["id"], 188507)
+        by_code = {r["code"]: r for r in rows(self.db, "SELECT * FROM courses")}
+        linalg, analysis = by_code["401-0131-00L"], by_code["401-0212-16L"]
+        self.assertEqual((linalg["id"], linalg["ects"], linalg["professor"], linalg["latest_semkez"]), (42, 7, "Prof. Example", "2026W"))  # id kept, ects fixed, professor kept
+        self.assertEqual((analysis["id"], analysis["latest_semkez"], analysis["objective"]), (analysis_id, "2026S", "Goal 2026"))  # the latest offering wins
+        self.assertEqual([r["semkez"] for r in rows(self.db, "SELECT semkez FROM course_offerings WHERE course_id = ? ORDER BY semkez", analysis_id)], ["2025S", "2026S"])
 
-        # Re-importing is idempotent: offerings are replaced, nothing doubles.
+        # Re-importing is idempotent: offerings are replaced, nothing doubles, user data untouched.
         sync.import_dump(self.dump, self.db, ["2025S", "2026S", "2026W"])
-        with contextlib.closing(sqlite3.connect(self.db)) as db:
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM course_offerings").fetchone()[0], 3)
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM course_timeslots").fetchone()[0], 5)
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM semester_courses").fetchone()[0], 1)
+        self.assertEqual(one(self.db, "SELECT COUNT(*) AS n FROM course_offerings")["n"], 3)
+        self.assertEqual(one(self.db, "SELECT COUNT(*) AS n FROM course_timeslots")["n"], 5)
+        self.assertEqual(one(self.db, "SELECT COUNT(*) AS n FROM semester_courses")["n"], 1)
 
     def test_missing_timeslots_are_inherited_from_previous_year(self):
         counts = sync.import_dump(self.dump, self.db, ["2026W"])
         self.assertEqual((counts["offerings"], counts["timeslots"], counts["inherited_timeslots"]), (1, 0, 1))
-        [course] = queries.search_courses(semkez="2026W", db_path=self.db)
-        lecture = queries.get_course(course["id"], db_path=self.db)["offering"]["lectures"][0]
-        self.assertEqual(lecture["number"], "401-0131-00 V")
-        self.assertEqual(len(lecture["timeslots"]), 1)
-        self.assertEqual(lecture["timeslots"][0]["inherited_from"], "2025W")
-        self.assertEqual(lecture["timeslots"][0]["weekday_name"], "Wed")
-        self.assertEqual(queries.weekly_timetable([course["id"]], "2026W", db_path=self.db)[0]["inherited_from"], "2025W")
-
-    def test_search_filters(self):
-        sync.import_dump(self.dump, self.db, ["2025S", "2026W"])
-        self.assertEqual([c["code"] for c in queries.search_courses(semkez="2025S", db_path=self.db)], ["401-0212-16L"])
-        self.assertEqual([c["code"] for c in queries.search_courses(section="Computer Science Bachelor", db_path=self.db)], ["401-0212-16L"])
-        self.assertEqual([c["code"] for c in queries.search_courses(db_path=self.db)], ["401-0131-00L", "401-0212-16L"])
-        self.assertEqual(queries.search_courses("Lineare", semkez="2025S", db_path=self.db), [])
+        slot = one(self.db, "SELECT * FROM course_timeslots")
+        self.assertEqual((slot["offering_id"], slot["lecture_number"], slot["weekday"], slot["inherited_from"]), (204074, "401-0131-00 V", 2, "2025W"))
 
     def test_sync_offline_without_cache_is_a_noop_and_dump_path_imports(self):
         self.assertFalse(sync.sync(offline=True, semesters=["2025S"], db_path=self.db, data_dir=self.tmp.name))
         self.assertTrue(sync.sync(semesters=["2025S"], dump_path=self.dump, db_path=self.db, data_dir=self.tmp.name))
-        self.assertEqual(queries.status(db_path=self.db)["semesters"], "2025S")
+        self.assertEqual(one(self.db, "SELECT value FROM vvz_meta WHERE key = 'semesters'")["value"], "2025S")
 
     def test_a_unit_listed_twice_in_one_semester_becomes_one_offering(self):
         with contextlib.closing(sqlite3.connect(self.dump)) as dump:
@@ -193,8 +188,7 @@ class ImportTest(unittest.TestCase):
             dump.commit()
         counts = sync.import_dump(self.dump, self.db, ["2026W"])
         self.assertEqual((counts["courses"], counts["offerings"]), (1, 1))
-        [course] = queries.search_courses(semkez="2026W", db_path=self.db)
-        self.assertEqual(queries.get_course(course["id"], db_path=self.db)["offering"]["id"], 204999)
+        self.assertEqual(one(self.db, "SELECT id FROM course_offerings")["id"], 204999)
 
     def test_import_rejects_empty_semesters(self):
         with self.assertRaises(ValueError):
