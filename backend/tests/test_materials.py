@@ -152,6 +152,12 @@ class MaterialTests(unittest.TestCase):
         jobs.store_source(pdf['id'], FIXTURE.read_bytes())
         folder = jobs.folder(pdf['id'])
         source = jobs.source_path(pdf['id'])
+        generated = folder / 'deep'
+        generated.mkdir()
+        result = generated / 'result.json'
+        result.write_text('{"status":"complete","documents":[]}', encoding='utf-8')
+        result.chmod(stat.S_IREAD)
+        generated.chmod(stat.S_IREAD | stat.S_IEXEC)
         source.chmod(stat.S_IREAD)
         folder.chmod(stat.S_IREAD | stat.S_IEXEC)
         try:
@@ -160,7 +166,7 @@ class MaterialTests(unittest.TestCase):
             self.assertEqual(self.client.get('/api/materials', headers=ALICE).get_json(), [])
             self.assertFalse(folder.exists())
         finally:
-            for path in (folder, source):
+            for path in (folder, generated, source, result):
                 if path.exists():
                     path.chmod(path.stat().st_mode | stat.S_IWRITE)
 

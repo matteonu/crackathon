@@ -75,12 +75,20 @@ class StudyJobs:
         # Resolve and verify the exact directory before any recursive removal.
         folder = self.folder(document_id)
 
-        def retry_readonly(function, path, exc_info):
+        def retry_readonly(_function, path, exc_info):
             target = Path(path)
             if not isinstance(exc_info[1], PermissionError) or target.is_symlink() or not target.resolve().is_relative_to(folder):
                 raise exc_info[1]
             target.chmod(target.stat().st_mode | stat.S_IWRITE)
-            function(path)
+            # POSIX requires write permission on the containing directory to
+            # unlink a file; Windows requires the file's read-only flag cleared.
+            # Never change permissions outside this document's storage folder.
+            parent = target.parent
+            if parent.resolve().is_relative_to(folder) and not parent.is_symlink():
+                parent.chmod(parent.stat().st_mode | stat.S_IWRITE | stat.S_IXUSR)
+            # Retry rmtree itself: its callback may receive functions such as
+            # scandir/open, whose return values and arguments rmtree must manage.
+            raise exc_info[1]
 
         for attempt in range(5):
             try:
