@@ -228,14 +228,16 @@ main { min-width: 0; width: 100%; max-width: 1900px; margin: 0 auto; padding: 30
 .filter-tabs button.active { background: #e4edda; border-color: #d2dfc6; color: #3a6030; }
 .overview-bottom { display: grid; grid-template-columns: minmax(0,1fr) 232px; gap: 20px; }
 .analytics-panel .panel-heading { margin-bottom: 20px; }
-.metric-row { display: flex; width: max-content; min-width: 100%; padding: 0 0 8px; }
-.metric-card { width: 300px; flex: 0 0 auto; padding: 2px 24px; border-right: 1px solid var(--line); min-height: 155px; }
-.metric-card:first-child { padding-left: 0; width: 270px; }
+/* Cards wrap onto a second row when the panel is narrow, instead of hiding behind a scroll. */
+.metric-row { display: flex; flex-wrap: wrap; width: auto; min-width: 0; padding: 0 0 8px; row-gap: 18px; }
+.metric-card { flex: 1 1 220px; min-width: 220px; max-width: 360px; padding: 2px 22px; border-right: 1px solid var(--line); min-height: 155px; }
+.metric-card:first-child { padding-left: 0; }
+.metric-card:last-child { border-right: 0; }
 .metric-card:last-child { border: none; }
 .metric-card > .eyebrow { display: block; margin-bottom: 17px; font-size: 9px; }
 .hero-metric { display: flex; align-items: baseline; font-size: 38px; line-height: 1; letter-spacing: -.05em; font-weight: 550; white-space: nowrap; }
 .hero-metric > span { font-size: 20px; margin-left: 5px; }
-.hero-metric small { color: #a0ab9a; font-size: 16px; margin-left: auto; letter-spacing: -.02em; font-weight: 400; }
+.hero-metric small { color: #8a9683; font-size: 17px; margin-left: 10px; letter-spacing: -.02em; font-weight: 450; }
 .progress-track { height: 5px; border-radius: 10px; background: #edf1e7; overflow: hidden; margin-top: 24px; }
 .progress-track span { display: block; height: 100%; background: var(--green); border-radius: inherit; transition: width .3s ease; }
 .metric-card p { font-size: 10px; color: #5f7154; margin-top: 12px; }
@@ -243,7 +245,7 @@ main { min-width: 0; width: 100%; max-width: 1900px; margin: 0 auto; padding: 30
 .muted { color: var(--muted); }
 .hours-metric { width: 365px; }
 .mini-bars { display: grid; gap: 8px; }
-.mini-bars a { display: grid; grid-template-columns: 132px 1fr 37px; gap: 9px; align-items: center; font-size: 9px; }
+.mini-bars a { display: grid; grid-template-columns: minmax(110px, 1.3fr) minmax(70px, 1fr) 44px; gap: 9px; align-items: center; font-size: 9px; }
 .mini-bars a:hover { color: var(--green); }
 .mini-bars strong { font-size: 9px; font-weight: 500; text-align: right; }
 .bar-track { height: 5px; background: #eff2eb; border-radius: 10px; overflow: hidden; }
@@ -726,7 +728,7 @@ html:has(.file-viewer-dialog[open]) { overflow:hidden; }
 .stat-tile > .eyebrow { display: block; margin-bottom: 14px; font-size: 9px; }
 .stat-tile .hero-metric { font-size: 30px; gap: 0; }
 .stat-tile .hero-metric > span { font-size: 14px; }
-.stat-tile .hero-metric small { font-size: 11px; }
+.stat-tile .hero-metric small { font-size: 13px; }
 .stat-tile .hero-metric .subject-dot { width: 10px; height: 10px; margin-right: 8px; align-self: center; }
 .stat-tile .progress-track { margin-top: 14px; }
 .stat-tile p { font-size: 10px; color: #5f7154; margin-top: 12px; line-height: 1.6; }

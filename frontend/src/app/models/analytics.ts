@@ -41,7 +41,12 @@ export function asOfDate(data: StudyData, today: string): string {
   return lastRecorded && lastRecorded > clamped ? lastRecorded : clamped;
 }
 
-export interface DayPoint { date: string; recorded: number; planned: number; bySubject: Record<string, number>; weekday: number; }
+export interface DayPoint {
+  date: string; recorded: number; planned: number; bySubject: Record<string, number>; weekday: number;
+  /** A deliberate day off: something was recorded for the day, but zero hours. The schedule
+   *  distinguishes "no record" from "0 recorded", and the hours editor says so. */
+  rest: boolean;
+}
 
 /** One point per phase day: hours recorded (per subject too) and hours planned in sessions. */
 export function dailySeries(data: StudyData): DayPoint[] {
@@ -50,7 +55,9 @@ export function dailySeries(data: StudyData): DayPoint[] {
   return data.dates.map(date => {
     const bySubject: Record<string, number> = {};
     for (const s of data.subjects) if (s.hours[date]) bySubject[s.id] = s.hours[date]!;
-    return {date, recorded: round1(recordedOn(data.subjects, date)), planned: round1(planned.get(date) ?? 0), bySubject, weekday: weekdayIndex(date)};
+    const recorded = round1(recordedOn(data.subjects, date));
+    const anyRecord = data.subjects.some(s => s.hours[date] != null);
+    return {date, recorded, planned: round1(planned.get(date) ?? 0), bySubject, weekday: weekdayIndex(date), rest: anyRecord && recorded === 0};
   });
 }
 
@@ -128,24 +135,28 @@ export function subjectStats(data: StudyData, asOf: string): SubjectStat[] {
 }
 
 export interface Consistency {
-  recordedDays: number; elapsedDays: number; ratio: number;
+  recordedDays: number; restDays: number; elapsedDays: number; ratio: number;
   currentStreak: number; longestStreak: number; longestBreak: number;
   averagePerRecordedDay: number; medianPerRecordedDay: number; bestDay: DayPoint | null;
 }
 
-/** How regular the studying is: streaks, gaps, and a typical day. */
+/** How regular the studying is: streaks, gaps, and a typical day. A streak is consecutive
+ *  study days; a rest day (recorded as 0) neither extends nor breaks it, only a day with no
+ *  record at all does. Breaks count unrecorded days only. */
 export function consistency(days: DayPoint[], asOf: string): Consistency {
   const elapsed = days.filter(d => d.date <= asOf);
   const recorded = elapsed.filter(d => d.recorded > 0);
   let current = 0, longest = 0, run = 0, longestBreak = 0, gap = 0;
   for (const day of elapsed) {
-    if (day.recorded > 0) { run++; gap = 0; } else { run = 0; gap++; }
+    if (day.recorded > 0) { run++; gap = 0; }
+    else if (day.rest) { gap = 0; }
+    else { run = 0; gap++; }
     longest = Math.max(longest, run); longestBreak = Math.max(longestBreak, gap);
   }
-  for (let i = elapsed.length - 1; i >= 0 && elapsed[i].recorded > 0; i--) current++;
+  for (let i = elapsed.length - 1; i >= 0 && (elapsed[i].recorded > 0 || elapsed[i].rest); i--) if (elapsed[i].recorded > 0) current++;
   const values = recorded.map(d => d.recorded).sort((a, b) => a - b);
   const median = values.length ? (values.length % 2 ? values[(values.length - 1) / 2] : (values[values.length / 2 - 1] + values[values.length / 2]) / 2) : 0;
-  return {recordedDays: recorded.length, elapsedDays: elapsed.length, ratio: elapsed.length ? recorded.length / elapsed.length : 0,
+  return {recordedDays: recorded.length, restDays: elapsed.filter(d => d.rest).length, elapsedDays: elapsed.length, ratio: elapsed.length ? recorded.length / elapsed.length : 0,
     currentStreak: current, longestStreak: longest, longestBreak,
     averagePerRecordedDay: round1(recorded.length ? values.reduce((a, b) => a + b, 0) / recorded.length : 0),
     medianPerRecordedDay: round1(median), bestDay: recorded.length ? recorded.reduce((best, d) => d.recorded > best.recorded ? d : best) : null};

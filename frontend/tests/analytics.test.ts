@@ -46,10 +46,22 @@ test('subject stats give remaining hours, needed pace and a status, exam-sorted'
 
 test('consistency counts streaks, gaps and a typical day',()=>{
   const c=consistency(dailySeries(data()),'2027-01-10');
-  assert.deepEqual([c.recordedDays,c.elapsedDays,c.currentStreak,c.longestStreak,c.longestBreak],[4,7,0,2,2]);
+  assert.deepEqual([c.recordedDays,c.restDays,c.elapsedDays,c.currentStreak,c.longestStreak,c.longestBreak],[4,0,7,0,2,2]);
   assert.equal(c.averagePerRecordedDay,2.8);
   assert.equal(c.medianPerRecordedDay,3);    // recorded days: 2, 4, 1, 4
   assert.equal(c.bestDay?.date,'2027-01-05');
+});
+
+test('a day recorded as 0 is a rest day: it keeps the streak and is not a break',()=>{
+  const d=data();
+  d.subjects[0].hours['2027-01-06']=0;    // Wed: deliberately off
+  d.subjects[1].hours['2027-01-09']=0;    // Sat: off, then Sun 10th unrecorded
+  const days=dailySeries(d);
+  assert.deepEqual(days.filter(x=>x.rest).map(x=>x.date),['2027-01-06','2027-01-09']);
+  const c=consistency(days,'2027-01-09');
+  // Mon, Tue, Wed(rest), Thu, Fri, Sat(rest): the rest days bridge the study days, so one streak of 4.
+  assert.deepEqual([c.recordedDays,c.restDays,c.currentStreak,c.longestStreak,c.longestBreak],[4,2,4,4,0]);
+  assert.equal(consistency(days,'2027-01-10').currentStreak,0);   // the 10th has no record: breaks it
 });
 
 test('weekday profile averages over elapsed days including empty ones',()=>{

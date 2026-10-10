@@ -43,255 +43,303 @@
   },
   {
     "semester_id": 1,
-    "course_id": 3,
-    "date": "2025-12-26",
-    "hours": 2.25
+    "course_id": 1,
+    "date": "2025-12-25",
+    "hours": 0.75
+  },
+  {
+    "semester_id": 1,
+    "course_id": 4,
+    "date": "2025-12-25",
+    "hours": 0.75
   },
   {
     "semester_id": 1,
     "course_id": 1,
     "date": "2025-12-26",
-    "hours": 2.25
+    "hours": 5.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 3,
+    "date": "2025-12-27",
+    "hours": 0.25
   },
   {
     "semester_id": 1,
     "course_id": 4,
-    "date": "2025-12-26",
-    "hours": 1.75
+    "date": "2025-12-27",
+    "hours": 0.25
   },
   {
     "semester_id": 1,
     "course_id": 1,
     "date": "2025-12-27",
-    "hours": 1.5
-  },
-  {
-    "semester_id": 1,
-    "course_id": 3,
-    "date": "2025-12-28",
     "hours": 0.25
   },
   {
     "semester_id": 1,
     "course_id": 4,
     "date": "2025-12-28",
-    "hours": 0.25
-  },
-  {
-    "semester_id": 1,
-    "course_id": 1,
-    "date": "2025-12-28",
-    "hours": 0.25
-  },
-  {
-    "semester_id": 1,
-    "course_id": 4,
-    "date": "2025-12-29",
-    "hours": 2.75
+    "hours": 1.0
   },
   {
     "semester_id": 1,
     "course_id": 2,
+    "date": "2025-12-28",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 1,
+    "course_id": 1,
     "date": "2025-12-29",
-    "hours": 4.25
+    "hours": 4.5
   },
   {
     "semester_id": 1,
     "course_id": 1,
     "date": "2025-12-30",
-    "hours": 4.5
+    "hours": 2.75
   },
   {
     "semester_id": 1,
     "course_id": 3,
+    "date": "2025-12-30",
+    "hours": 2.75
+  },
+  {
+    "semester_id": 1,
+    "course_id": 1,
     "date": "2025-12-31",
-    "hours": 1.0
+    "hours": 0.5
   },
   {
     "semester_id": 1,
-    "course_id": 1,
+    "course_id": 4,
     "date": "2025-12-31",
-    "hours": 2.0
-  },
-  {
-    "semester_id": 1,
-    "course_id": 1,
-    "date": "2026-01-03",
-    "hours": 2.0
-  },
-  {
-    "semester_id": 1,
-    "course_id": 3,
-    "date": "2026-01-06",
-    "hours": 6.5
-  },
-  {
-    "semester_id": 1,
-    "course_id": 4,
-    "date": "2026-01-07",
-    "hours": 1.75
-  },
-  {
-    "semester_id": 1,
-    "course_id": 3,
-    "date": "2026-01-07",
-    "hours": 2.25
-  },
-  {
-    "semester_id": 1,
-    "course_id": 1,
-    "date": "2026-01-07",
-    "hours": 2.25
-  },
-  {
-    "semester_id": 1,
-    "course_id": 1,
-    "date": "2026-01-08",
-    "hours": 3.0
+    "hours": 0.5
   },
   {
     "semester_id": 1,
     "course_id": 2,
-    "date": "2026-01-08",
-    "hours": 3.5
-  },
-  {
-    "semester_id": 1,
-    "course_id": 1,
-    "date": "2026-01-11",
-    "hours": 1.25
-  },
-  {
-    "semester_id": 1,
-    "course_id": 2,
-    "date": "2026-01-11",
-    "hours": 1.75
-  },
-  {
-    "semester_id": 1,
-    "course_id": 1,
-    "date": "2026-01-12",
-    "hours": 6.5
-  },
-  {
-    "semester_id": 1,
-    "course_id": 1,
-    "date": "2026-01-13",
-    "hours": 6.0
-  },
-  {
-    "semester_id": 1,
-    "course_id": 2,
-    "date": "2026-01-14",
-    "hours": 9.0
-  },
-  {
-    "semester_id": 1,
-    "course_id": 1,
-    "date": "2026-01-15",
-    "hours": 4.0
-  },
-  {
-    "semester_id": 1,
-    "course_id": 4,
-    "date": "2026-01-15",
-    "hours": 3.0
-  },
-  {
-    "semester_id": 1,
-    "course_id": 3,
-    "date": "2026-01-16",
-    "hours": 3.0
-  },
-  {
-    "semester_id": 1,
-    "course_id": 4,
-    "date": "2026-01-16",
-    "hours": 2.5
-  },
-  {
-    "semester_id": 1,
-    "course_id": 2,
-    "date": "2026-01-17",
-    "hours": 0.75
-  },
-  {
-    "semester_id": 1,
-    "course_id": 4,
-    "date": "2026-01-17",
+    "date": "2025-12-31",
     "hours": 0.5
   },
   {
     "semester_id": 1,
     "course_id": 1,
+    "date": "2026-01-01",
+    "hours": 0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 1,
+    "date": "2026-01-02",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 1,
+    "course_id": 3,
+    "date": "2026-01-02",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 1,
+    "course_id": 4,
+    "date": "2026-01-02",
+    "hours": 1.25
+  },
+  {
+    "semester_id": 1,
+    "course_id": 4,
+    "date": "2026-01-04",
+    "hours": 1.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 3,
+    "date": "2026-01-04",
+    "hours": 1.25
+  },
+  {
+    "semester_id": 1,
+    "course_id": 2,
+    "date": "2026-01-04",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 1,
+    "course_id": 1,
+    "date": "2026-01-05",
+    "hours": 3.25
+  },
+  {
+    "semester_id": 1,
+    "course_id": 2,
+    "date": "2026-01-05",
+    "hours": 3.75
+  },
+  {
+    "semester_id": 1,
+    "course_id": 4,
+    "date": "2026-01-08",
+    "hours": 7.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 3,
+    "date": "2026-01-09",
+    "hours": 5.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 3,
+    "date": "2026-01-10",
+    "hours": 1.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 2,
+    "date": "2026-01-10",
+    "hours": 1.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 1,
+    "date": "2026-01-11",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 1,
+    "course_id": 1,
+    "date": "2026-01-12",
+    "hours": 5.5
+  },
+  {
+    "semester_id": 1,
+    "course_id": 1,
+    "date": "2026-01-13",
+    "hours": 0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 4,
+    "date": "2026-01-14",
+    "hours": 3.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 3,
+    "date": "2026-01-14",
+    "hours": 3.5
+  },
+  {
+    "semester_id": 1,
+    "course_id": 3,
+    "date": "2026-01-15",
+    "hours": 4.25
+  },
+  {
+    "semester_id": 1,
+    "course_id": 4,
+    "date": "2026-01-15",
+    "hours": 3.25
+  },
+  {
+    "semester_id": 1,
+    "course_id": 1,
+    "date": "2026-01-16",
+    "hours": 1.25
+  },
+  {
+    "semester_id": 1,
+    "course_id": 4,
+    "date": "2026-01-16",
+    "hours": 1.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 2,
+    "date": "2026-01-16",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 1,
+    "course_id": 3,
+    "date": "2026-01-17",
+    "hours": 1.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 4,
     "date": "2026-01-17",
     "hours": 0.75
   },
   {
     "semester_id": 1,
     "course_id": 2,
-    "date": "2026-01-19",
-    "hours": 8.5
+    "date": "2026-01-17",
+    "hours": 1.25
   },
   {
     "semester_id": 1,
     "course_id": 1,
+    "date": "2026-01-18",
+    "hours": 3.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 2,
+    "date": "2026-01-19",
+    "hours": 2.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 3,
+    "date": "2026-01-19",
+    "hours": 1.75
+  },
+  {
+    "semester_id": 1,
+    "course_id": 1,
+    "date": "2026-01-19",
+    "hours": 2.75
+  },
+  {
+    "semester_id": 1,
+    "course_id": 4,
     "date": "2026-01-20",
-    "hours": 4.0
+    "hours": 7.5
   },
   {
     "semester_id": 1,
     "course_id": 1,
     "date": "2026-01-21",
-    "hours": 8.0
-  },
-  {
-    "semester_id": 1,
-    "course_id": 2,
-    "date": "2026-01-22",
-    "hours": 1.75
-  },
-  {
-    "semester_id": 1,
-    "course_id": 3,
-    "date": "2026-01-22",
-    "hours": 2.25
-  },
-  {
-    "semester_id": 1,
-    "course_id": 1,
-    "date": "2026-01-22",
-    "hours": 2.25
+    "hours": 4.0
   },
   {
     "semester_id": 1,
     "course_id": 4,
+    "date": "2026-01-21",
+    "hours": 2.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 3,
     "date": "2026-01-23",
-    "hours": 7.5
-  },
-  {
-    "semester_id": 1,
-    "course_id": 2,
-    "date": "2026-01-24",
-    "hours": 1.0
-  },
-  {
-    "semester_id": 1,
-    "course_id": 4,
-    "date": "2026-01-26",
-    "hours": 1.5
-  },
-  {
-    "semester_id": 1,
-    "course_id": 3,
-    "date": "2026-01-26",
-    "hours": 3.0
+    "hours": 6.5
   },
   {
     "semester_id": 1,
     "course_id": 1,
-    "date": "2026-01-26",
-    "hours": 3.0
+    "date": "2026-01-24",
+    "hours": 2.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 3,
+    "date": "2026-01-25",
+    "hours": 1.0
   },
   {
     "semester_id": 1,
@@ -301,93 +349,69 @@
   },
   {
     "semester_id": 1,
-    "course_id": 3,
+    "course_id": 4,
     "date": "2026-01-28",
-    "hours": 4.5
-  },
-  {
-    "semester_id": 1,
-    "course_id": 2,
-    "date": "2026-01-28",
-    "hours": 5.5
-  },
-  {
-    "semester_id": 1,
-    "course_id": 3,
-    "date": "2026-01-29",
-    "hours": 4.0
-  },
-  {
-    "semester_id": 1,
-    "course_id": 2,
-    "date": "2026-01-29",
-    "hours": 5.0
+    "hours": 8.0
   },
   {
     "semester_id": 1,
     "course_id": 3,
     "date": "2026-01-30",
-    "hours": 6.0
+    "hours": 8.0
+  },
+  {
+    "semester_id": 1,
+    "course_id": 4,
+    "date": "2026-01-31",
+    "hours": 0.25
   },
   {
     "semester_id": 1,
     "course_id": 2,
     "date": "2026-01-31",
+    "hours": 0.25
+  },
+  {
+    "semester_id": 1,
+    "course_id": 2,
+    "date": "2026-02-01",
+    "hours": 0.5
+  },
+  {
+    "semester_id": 1,
+    "course_id": 4,
+    "date": "2026-02-01",
     "hours": 0.5
   },
   {
     "semester_id": 1,
     "course_id": 2,
-    "date": "2026-02-01",
-    "hours": 1.75
-  },
-  {
-    "semester_id": 1,
-    "course_id": 4,
-    "date": "2026-02-01",
-    "hours": 1.25
-  },
-  {
-    "semester_id": 1,
-    "course_id": 2,
     "date": "2026-02-02",
-    "hours": 3.0
-  },
-  {
-    "semester_id": 1,
-    "course_id": 2,
-    "date": "2026-02-03",
     "hours": 3.5
   },
   {
     "semester_id": 1,
     "course_id": 4,
     "date": "2026-02-03",
-    "hours": 2.5
+    "hours": 6.0
   },
   {
     "semester_id": 1,
     "course_id": 4,
     "date": "2026-02-05",
-    "hours": 2.5
+    "hours": 9.0
   },
   {
     "semester_id": 1,
     "course_id": 4,
-    "date": "2026-02-07",
-    "hours": 3.5
-  },
-  {
-    "semester_id": 1,
-    "course_id": 4,
-    "date": "2026-02-09",
+    "date": "2026-02-06",
     "hours": 10.0
   },
   {
     "semester_id": 1,
     "course_id": 4,
-    "date": "2026-02-10",
-    "hours": 9.0
+    "date": "2026-02-07",
+    "hours": 1.0
   },
   {
     "semester_id": 2,
@@ -621,19 +645,19 @@
     "semester_id": 2,
     "course_id": 5,
     "date": "2026-06-24",
-    "hours": 2.5
+    "hours": 0
   },
   {
     "semester_id": 2,
     "course_id": 5,
     "date": "2026-06-25",
-    "hours": 3.0
+    "hours": 1.75
   },
   {
     "semester_id": 2,
     "course_id": 7,
     "date": "2026-06-25",
-    "hours": 2.0
+    "hours": 1.25
   },
   {
     "semester_id": 2,
@@ -849,113 +873,143 @@
     "semester_id": 2,
     "course_id": 5,
     "date": "2026-07-18",
-    "hours": 2.5
+    "hours": 2.0
   },
   {
     "semester_id": 2,
     "course_id": 5,
     "date": "2026-07-19",
-    "hours": 2.0
-  },
-  {
-    "semester_id": 2,
-    "course_id": 5,
-    "date": "2026-07-20",
-    "hours": 4.25
-  },
-  {
-    "semester_id": 2,
-    "course_id": 5,
-    "date": "2026-07-21",
-    "hours": 2.0
-  },
-  {
-    "semester_id": 2,
-    "course_id": 5,
-    "date": "2026-07-22",
-    "hours": 1.5
-  },
-  {
-    "semester_id": 2,
-    "course_id": 7,
-    "date": "2026-07-25",
-    "hours": 1.5
-  },
-  {
-    "semester_id": 2,
-    "course_id": 8,
-    "date": "2026-07-25",
-    "hours": 1.0
-  },
-  {
-    "semester_id": 2,
-    "course_id": 8,
-    "date": "2026-07-26",
-    "hours": 1.0
-  },
-  {
-    "semester_id": 2,
-    "course_id": 6,
-    "date": "2026-07-26",
-    "hours": 1.0
-  },
-  {
-    "semester_id": 2,
-    "course_id": 5,
-    "date": "2026-07-26",
-    "hours": 1.75
-  },
-  {
-    "semester_id": 2,
-    "course_id": 8,
-    "date": "2026-07-27",
-    "hours": 1.0
-  },
-  {
-    "semester_id": 2,
-    "course_id": 6,
-    "date": "2026-07-27",
-    "hours": 1.0
-  },
-  {
-    "semester_id": 2,
-    "course_id": 7,
-    "date": "2026-07-27",
-    "hours": 1.25
-  },
-  {
-    "semester_id": 2,
-    "course_id": 5,
-    "date": "2026-07-28",
-    "hours": 6.0
-  },
-  {
-    "semester_id": 2,
-    "course_id": 5,
-    "date": "2026-07-29",
-    "hours": 4.0
-  },
-  {
-    "semester_id": 2,
-    "course_id": 5,
-    "date": "2026-07-30",
-    "hours": 4.0
-  },
-  {
-    "semester_id": 2,
-    "course_id": 6,
-    "date": "2026-07-31",
-    "hours": 6.0
-  },
-  {
-    "semester_id": 2,
-    "course_id": 5,
-    "date": "2026-08-01",
     "hours": 2.5
   },
   {
     "semester_id": 2,
     "course_id": 5,
+    "date": "2026-07-20",
+    "hours": 3.5
+  },
+  {
+    "semester_id": 2,
+    "course_id": 5,
+    "date": "2026-07-21",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 2,
+    "course_id": 5,
+    "date": "2026-07-22",
+    "hours": 0
+  },
+  {
+    "semester_id": 2,
+    "course_id": 6,
+    "date": "2026-07-23",
+    "hours": 1.0
+  },
+  {
+    "semester_id": 2,
+    "course_id": 8,
+    "date": "2026-07-23",
+    "hours": 1.0
+  },
+  {
+    "semester_id": 2,
+    "course_id": 7,
+    "date": "2026-07-23",
+    "hours": 1.25
+  },
+  {
+    "semester_id": 2,
+    "course_id": 5,
+    "date": "2026-07-24",
+    "hours": 5.0
+  },
+  {
+    "semester_id": 2,
+    "course_id": 6,
+    "date": "2026-07-25",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 2,
+    "course_id": 8,
+    "date": "2026-07-25",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 2,
+    "course_id": 8,
+    "date": "2026-07-26",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 2,
+    "course_id": 7,
+    "date": "2026-07-26",
+    "hours": 2.0
+  },
+  {
+    "semester_id": 2,
+    "course_id": 8,
+    "date": "2026-07-27",
+    "hours": 1.75
+  },
+  {
+    "semester_id": 2,
+    "course_id": 5,
+    "date": "2026-07-27",
+    "hours": 2.75
+  },
+  {
+    "semester_id": 2,
+    "course_id": 5,
+    "date": "2026-07-28",
+    "hours": 5.0
+  },
+  {
+    "semester_id": 2,
+    "course_id": 5,
+    "date": "2026-07-29",
+    "hours": 4.5
+  },
+  {
+    "semester_id": 2,
+    "course_id": 5,
+    "date": "2026-07-30",
+    "hours": 3.5
+  },
+  {
+    "semester_id": 2,
+    "course_id": 5,
+    "date": "2026-07-31",
+    "hours": 1.25
+  },
+  {
+    "semester_id": 2,
+    "course_id": 8,
+    "date": "2026-07-31",
+    "hours": 0.75
+  },
+  {
+    "semester_id": 2,
+    "course_id": 7,
+    "date": "2026-07-31",
+    "hours": 1.0
+  },
+  {
+    "semester_id": 2,
+    "course_id": 5,
+    "date": "2026-08-01",
+    "hours": 0
+  },
+  {
+    "semester_id": 2,
+    "course_id": 7,
+    "date": "2026-08-02",
+    "hours": 1.0
+  },
+  {
+    "semester_id": 2,
+    "course_id": 6,
     "date": "2026-08-02",
     "hours": 0.75
   },
@@ -963,43 +1017,31 @@
     "semester_id": 2,
     "course_id": 8,
     "date": "2026-08-02",
-    "hours": 0.25
-  },
-  {
-    "semester_id": 2,
-    "course_id": 7,
-    "date": "2026-08-02",
-    "hours": 0.25
+    "hours": 0.75
   },
   {
     "semester_id": 2,
     "course_id": 7,
     "date": "2026-08-03",
-    "hours": 2.0
+    "hours": 2.25
   },
   {
     "semester_id": 2,
     "course_id": 6,
     "date": "2026-08-03",
-    "hours": 1.5
-  },
-  {
-    "semester_id": 2,
-    "course_id": 8,
-    "date": "2026-08-03",
-    "hours": 1.5
+    "hours": 1.75
   },
   {
     "semester_id": 2,
     "course_id": 5,
     "date": "2026-08-04",
-    "hours": 4.5
+    "hours": 5.0
   },
   {
     "semester_id": 2,
     "course_id": 5,
     "date": "2026-08-05",
-    "hours": 7.5
+    "hours": 7.0
   },
   {
     "semester_id": 2,
@@ -1011,13 +1053,7 @@
     "semester_id": 2,
     "course_id": 5,
     "date": "2026-08-07",
-    "hours": 2.5
-  },
-  {
-    "semester_id": 2,
-    "course_id": 7,
-    "date": "2026-08-07",
-    "hours": 1.0
+    "hours": 7.0
   },
   {
     "semester_id": 2,
@@ -1027,81 +1063,69 @@
   },
   {
     "semester_id": 2,
-    "course_id": 7,
+    "course_id": 8,
     "date": "2026-08-09",
-    "hours": 0.25
+    "hours": 1.5
   },
   {
     "semester_id": 2,
     "course_id": 6,
     "date": "2026-08-09",
-    "hours": 0.5
-  },
-  {
-    "semester_id": 2,
-    "course_id": 5,
-    "date": "2026-08-09",
-    "hours": 0.75
+    "hours": 2.5
   },
   {
     "semester_id": 2,
     "course_id": 5,
     "date": "2026-08-10",
-    "hours": 8.0
+    "hours": 7.5
   },
   {
     "semester_id": 2,
     "course_id": 7,
     "date": "2026-08-11",
-    "hours": 1.0
+    "hours": 3.25
   },
   {
     "semester_id": 2,
     "course_id": 8,
     "date": "2026-08-11",
-    "hours": 0.75
-  },
-  {
-    "semester_id": 2,
-    "course_id": 5,
-    "date": "2026-08-11",
-    "hours": 2.25
+    "hours": 2.75
   },
   {
     "semester_id": 2,
     "course_id": 6,
     "date": "2026-08-12",
-    "hours": 7.0
+    "hours": 6.5
   },
   {
     "semester_id": 2,
     "course_id": 6,
     "date": "2026-08-13",
-    "hours": 4.5
+    "hours": 5.0
   },
   {
     "semester_id": 2,
     "course_id": 8,
     "date": "2026-08-14",
-    "hours": 1.75
-  },
-  {
-    "semester_id": 2,
-    "course_id": 7,
-    "date": "2026-08-14",
-    "hours": 3.75
+    "hours": 2.0
   },
   {
     "semester_id": 2,
     "course_id": 6,
+    "date": "2026-08-14",
+    "hours": 3.0
+  },
+  {
+    "semester_id": 2,
+    "course_id": 8,
     "date": "2026-08-15",
-    "hours": 1.0
+    "hours": 2.0
   },
   {
     "semester_id": 2,
     "course_id": 7,
-    "date": "2026-08-15",
-    "hours": 1.5
+    "date": "2026-08-16",
+    "hours": 1.75
   },
   {
     "semester_id": 2,
@@ -1112,26 +1136,14 @@
   {
     "semester_id": 2,
     "course_id": 7,
-    "date": "2026-08-16",
-    "hours": 1.25
-  },
-  {
-    "semester_id": 2,
-    "course_id": 6,
-    "date": "2026-08-16",
-    "hours": 1.0
-  },
-  {
-    "semester_id": 2,
-    "course_id": 6,
     "date": "2026-08-17",
-    "hours": 2.0
+    "hours": 3.0
   },
   {
     "semester_id": 2,
     "course_id": 8,
     "date": "2026-08-17",
-    "hours": 2.0
+    "hours": 2.5
   },
   {
     "semester_id": 2,
@@ -1143,43 +1155,43 @@
     "semester_id": 2,
     "course_id": 7,
     "date": "2026-08-18",
-    "hours": 2.5
+    "hours": 2.0
   },
   {
     "semester_id": 2,
-    "course_id": 8,
+    "course_id": 7,
     "date": "2026-08-19",
     "hours": 2.75
   },
   {
     "semester_id": 2,
-    "course_id": 7,
+    "course_id": 8,
     "date": "2026-08-19",
-    "hours": 3.25
-  },
-  {
-    "semester_id": 2,
-    "course_id": 7,
-    "date": "2026-08-20",
     "hours": 2.25
   },
   {
     "semester_id": 2,
-    "course_id": 8,
-    "date": "2026-08-20",
-    "hours": 1.75
-  },
-  {
-    "semester_id": 2,
     "course_id": 7,
-    "date": "2026-08-21",
+    "date": "2026-08-20",
     "hours": 3.0
   },
   {
     "semester_id": 2,
     "course_id": 8,
-    "date": "2026-08-22",
+    "date": "2026-08-20",
     "hours": 2.5
+  },
+  {
+    "semester_id": 2,
+    "course_id": 7,
+    "date": "2026-08-21",
+    "hours": 4.0
+  },
+  {
+    "semester_id": 2,
+    "course_id": 8,
+    "date": "2026-08-22",
+    "hours": 2.0
   },
   {
     "semester_id": 2,
@@ -1197,13 +1209,13 @@
     "semester_id": 2,
     "course_id": 8,
     "date": "2026-08-25",
-    "hours": 6.5
+    "hours": 6.0
   },
   {
     "semester_id": 2,
     "course_id": 8,
     "date": "2026-08-26",
-    "hours": 2.5
+    "hours": 3.75
   },
   {
     "semester_id": 4,
@@ -1315,135 +1327,153 @@
   },
   {
     "semester_id": 4,
+    "course_id": 9,
+    "date": "2026-12-31",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "course_id": 11,
+    "date": "2026-12-31",
+    "hours": 2.0
+  },
+  {
+    "semester_id": 4,
+    "course_id": 10,
+    "date": "2027-01-01",
+    "hours": 0.5
+  },
+  {
+    "semester_id": 4,
+    "course_id": 11,
+    "date": "2027-01-01",
+    "hours": 0.5
+  },
+  {
+    "semester_id": 4,
+    "course_id": 10,
+    "date": "2027-01-02",
+    "hours": 1.0
+  },
+  {
+    "semester_id": 4,
+    "course_id": 12,
+    "date": "2027-01-02",
+    "hours": 0.75
+  },
+  {
+    "semester_id": 4,
     "course_id": 11,
     "date": "2027-01-02",
-    "hours": 1.5
+    "hours": 1.0
   },
   {
     "semester_id": 4,
     "course_id": 9,
     "date": "2027-01-03",
-    "hours": 1.0
+    "hours": 2.75
   },
   {
     "semester_id": 4,
-    "course_id": 10,
+    "course_id": 12,
     "date": "2027-01-03",
-    "hours": 1.0
-  },
-  {
-    "semester_id": 4,
-    "course_id": 10,
-    "date": "2027-01-04",
-    "hours": 2.5
-  },
-  {
-    "semester_id": 4,
-    "course_id": 12,
-    "date": "2027-01-04",
-    "hours": 2.0
-  },
-  {
-    "semester_id": 4,
-    "course_id": 11,
-    "date": "2027-01-04",
-    "hours": 2.5
-  },
-  {
-    "semester_id": 4,
-    "course_id": 9,
-    "date": "2027-01-05",
-    "hours": 2.0
-  },
-  {
-    "semester_id": 4,
-    "course_id": 11,
-    "date": "2027-01-05",
-    "hours": 1.5
-  },
-  {
-    "semester_id": 4,
-    "course_id": 12,
-    "date": "2027-01-06",
     "hours": 1.75
   },
   {
     "semester_id": 4,
-    "course_id": 11,
-    "date": "2027-01-06",
-    "hours": 2.25
+    "course_id": 9,
+    "date": "2027-01-04",
+    "hours": 0
   },
   {
     "semester_id": 4,
     "course_id": 9,
-    "date": "2027-01-06",
+    "date": "2027-01-05",
     "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "course_id": 11,
+    "date": "2027-01-05",
+    "hours": 2.0
+  },
+  {
+    "semester_id": 4,
+    "course_id": 12,
+    "date": "2027-01-06",
+    "hours": 7.5
+  },
+  {
+    "semester_id": 4,
+    "course_id": 12,
+    "date": "2027-01-07",
+    "hours": 4.25
   },
   {
     "semester_id": 4,
     "course_id": 11,
     "date": "2027-01-07",
+    "hours": 5.25
+  },
+  {
+    "semester_id": 4,
+    "course_id": 12,
+    "date": "2027-01-08",
+    "hours": 2.5
+  },
+  {
+    "semester_id": 4,
+    "course_id": 9,
+    "date": "2027-01-08",
     "hours": 4.0
   },
   {
     "semester_id": 4,
-    "course_id": 12,
-    "date": "2027-01-08",
-    "hours": 3.25
-  },
-  {
-    "semester_id": 4,
-    "course_id": 11,
-    "date": "2027-01-08",
-    "hours": 4.25
-  },
-  {
-    "semester_id": 4,
-    "course_id": 12,
+    "course_id": 10,
     "date": "2027-01-09",
-    "hours": 0.75
+    "hours": 3.5
   },
   {
     "semester_id": 4,
     "course_id": 9,
-    "date": "2027-01-09",
+    "date": "2027-01-10",
+    "hours": 1.5
+  },
+  {
+    "semester_id": 4,
+    "course_id": 12,
+    "date": "2027-01-10",
+    "hours": 1.0
+  },
+  {
+    "semester_id": 4,
+    "course_id": 11,
+    "date": "2027-01-10",
     "hours": 1.25
   },
   {
     "semester_id": 4,
-    "course_id": 10,
-    "date": "2027-01-10",
+    "course_id": 11,
+    "date": "2027-01-11",
     "hours": 3.5
   },
   {
     "semester_id": 4,
     "course_id": 9,
     "date": "2027-01-11",
-    "hours": 3.5
-  },
-  {
-    "semester_id": 4,
-    "course_id": 12,
-    "date": "2027-01-11",
-    "hours": 2.25
-  },
-  {
-    "semester_id": 4,
-    "course_id": 11,
-    "date": "2027-01-11",
-    "hours": 2.75
+    "hours": 4.0
   },
   {
     "semester_id": 4,
     "course_id": 11,
     "date": "2027-01-12",
-    "hours": 6.0
+    "hours": 5.0
   },
   {
     "semester_id": 4,
     "course_id": 11,
     "date": "2027-01-13",
-    "hours": 5.0
+    "hours": 6.25
   },
   {
     "semester_id": 4,

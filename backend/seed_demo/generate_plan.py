@@ -52,7 +52,7 @@ SEMESTERS = [
     {
         "id": 1, "label": "HS25", "hours_per_week": 20, "seed": 25,
         "start": date(2025, 12, 21), "end": date(2026, 2, 14), "as_of": date(2026, 2, 14),
-        "profile": {"weekday": (3, 7), "weekend": (0, 3), "off": 0.22, "ramp": 0.10, "plan_days": 0.35, "keep": 0.55},
+        "profile": {"weekday": (3, 7), "weekend": (0, 3), "off": 0.22, "ramp": 0.10, "plan_days": 0.35, "keep": 0.55, "rest": 0.2},
         "holidays": {date(2025, 12, 24), date(2025, 12, 25), date(2025, 12, 31), date(2026, 1, 1)},
         "courses": [
             course(1, 0.25, date(2026, 1, 27), 60, 4.5, "Go through the recursion exercises again"),
@@ -64,7 +64,7 @@ SEMESTERS = [
     {
         "id": 2, "label": "FS26", "hours_per_week": 25, "seed": 26,
         "start": date(2026, 6, 1), "end": date(2026, 8, 31), "as_of": date(2026, 8, 31),
-        "profile": {"weekday": (2.5, 5), "weekend": (1, 3), "off": 0.10, "ramp": 0.03, "plan_days": 0.75, "keep": 0.85},
+        "profile": {"weekday": (2.5, 5), "weekend": (1, 3), "off": 0.10, "ramp": 0.03, "plan_days": 0.75, "keep": 0.85, "rest": 0.8},
         "holidays": {date(2026, 8, 1)},
         "courses": [
             course(5, 0.35, date(2026, 8, 11), 110, 5.0, "Series and uniform convergence, old exam 2024"),
@@ -76,7 +76,7 @@ SEMESTERS = [
     {
         "id": 4, "label": "HS26", "hours_per_week": 30, "seed": 27,
         "start": date(2026, 12, 21), "end": date(2027, 2, 14), "as_of": date(2027, 1, 20),
-        "profile": {"weekday": (5, 8), "weekend": (1.5, 4.5), "off": 0.08, "ramp": 0.12, "plan_days": 0.7, "keep": 0.75},
+        "profile": {"weekday": (5, 8), "weekend": (1.5, 4.5), "off": 0.08, "ramp": 0.12, "plan_days": 0.7, "keep": 0.75, "rest": 0.6},
         "holidays": {date(2026, 12, 24), date(2026, 12, 25), date(2026, 12, 31), date(2027, 1, 1)},
         "courses": [
             course(9, 0.30, date(2027, 1, 28), 90, 5.0, "Pumping lemma and reductions, exercises 7-9"),
@@ -136,6 +136,11 @@ def generate(semester):
         budget = daily_budget(rng, day, semester)
         live = {cid: weight_of[cid] * (1.6 if (exam_of[cid] - day).days < 10 else 1) for cid in exam_of if exam_of[cid] >= day}
         if not live:
+            continue
+        if not budget and rng.random() < profile["rest"]:
+            # A deliberate day off, recorded as 0 (the schedule's rest-day marker): the
+            # streak survives it, a day with no record at all does not.
+            hours.append({"semester_id": sid, "course_id": min(live), "date": day.isoformat(), "hours": 0})
             continue
         if day in planned_by_day and rng.random() < profile["keep"]:
             shares = {}
