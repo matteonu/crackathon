@@ -5,7 +5,7 @@ import { CourseHit, GeneratedPlan, Plan, PlanBlock, PlanSubject, Preferences, Se
 
 /** The habits of a semester nobody has configured, mirroring the server's defaults. */
 const DEFAULT_PREFERENCES: Preferences = {dayStart:'08:00', dayEnd:'20:00', lunch:['12:00','13:00'],
-  dinner:['18:00','19:00'], studyBlockSize:90, studyHoursPerWeek:null, alpha:.3, beta:5, daysOff:[]};
+  dinner:['18:00','19:00'], studyBlockSize:90, studyHoursPerWeek:35, alpha:.3, beta:5, daysOff:[]};
 
 /** The scheduler fields of one course that the setup form may change. */
 export type CoursePlanPatch = Partial<{priority:number; difficulty:number|null; maxStudyHours:number|null;
@@ -161,9 +161,14 @@ export class StudyStore {
     this.state.set(data); this.announce('Subject changes saved.');
     void this.write(url,this.json('PATCH',patch));
   }
-  /** The blocks of a generated plan on one day, earliest first. */
+  /** The study blocks of a generated plan on one day, earliest first. Meals are not shown:
+   *  the calendar is for what to study, and they only crowd the courses out. */
   planOn(date:string):PlanBlock[] {
-    return (this.generatedPlan()?.blocks ?? []).filter(block => block.date === date);
+    return (this.generatedPlan()?.blocks ?? []).filter(block => block.date === date && block.type !== 'meal');
+  }
+  /** Hours the plan asks for on one day, across every course. */
+  plannedDaily(date:string):number {
+    return studyHours((this.generatedPlan()?.blocks ?? []).filter(block => block.date === date));
   }
   /** Hours of study the plan holds for a subject, over the given dates or all of them. */
   planHoursFor(subjectId:string, dates?:readonly string[]):number {

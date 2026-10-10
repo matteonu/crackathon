@@ -36,6 +36,8 @@ export class CalendarComponent {
   subject(id:string){return this.store.subjects().find(s=>s.id===id)!;}
   onDay(date:string):PlannedSession[]{return this.sessions().filter(s=>s.date===date);}
   blocksOn(date:string):PlanBlock[]{return this.store.planOn(date);}
+  /** True when a day holds both kinds, so each gets its own half and they cannot overlap. */
+  twoLanes(date:string):boolean{return !!this.store.planOn(date).length&&!!this.onDay(date).length;}
   allowed(date:string):boolean{return this.store.dates().includes(date)&&date>=this.store.examSession().start&&date<=this.store.examSession().end;}
   hoursFor(id:string):number{return round(this.sessions().filter(s=>s.subjectId===id).reduce((sum,s)=>sum+s.hours,0));}
   start(s:PlannedSession):number{return Number(s.start.slice(0,2))+Number(s.start.slice(3))/60;}

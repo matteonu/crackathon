@@ -295,11 +295,16 @@ algorithm.
   difficulty from the scraped `course_ratings` rounded to 1-5, and the rest from you. Exam
   dates are not in the VVZ, so they default to the end of the study phase until you set them.
   A course marked finished is left out of the plan.
-- **`study_hours_per_week` is the brake.** Left empty, the scheduler fills every free slot
-  before your exams, which for a winter phase of 56 days at 08:00-20:00 is around 500 hours.
-  Set it and each week stops at that many hours, pro-rated over a part week. Recall blocks are
-  placed either way, so a tight week can end a little above the budget -- the same exemption
+- **`study_hours_per_week` is the brake, and it defaults to 35** (a full-time study week,
+  `planner.DEFAULT_HOURS_PER_WEEK`, used whenever the column is NULL). Without it the
+  scheduler fills every free slot before your exams, which over a 56-day winter phase at
+  08:00-20:00 is around 500 hours and no use to anyone. Each week stops at the budget,
+  pro-rated over a part week; raise it to 168 to get every slot back. Recall blocks are placed
+  either way, so a tight week can end a little above the budget -- the same exemption
   `max_study_hours` has.
+- **Generating sets each course's `target_hours`** to what the plan asks of it, over every
+  block held and not just the latest run, so the hours overview and the progress bars have
+  something to measure recorded hours against. A dry run changes nothing.
 - **The study phase itself** is fixed per semester in `planner.phase()`: HS runs 21 Dec to
   14 Feb, FS 1 Jun to 31 Aug. It is not user-settable yet; the VVZ API would be the place to
   get the real session dates from.

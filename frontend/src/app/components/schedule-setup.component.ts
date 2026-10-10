@@ -40,9 +40,9 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
       <label>Dinner<input type="time" [value]="habits().dinner[0]" (change)="setMeal('dinner',0,$any($event.target).value)"></label>
       <label>until<input type="time" [value]="habits().dinner[1]" (change)="setMeal('dinner',1,$any($event.target).value)"></label>
       <label>Study block (minutes)<input type="number" min="15" max="240" step="5" [value]="habits().studyBlockSize" (change)="setHabit({studyBlockSize:+$any($event.target).value})"></label>
-      <label>Hours a week<input type="number" min="0" max="168" step="1" placeholder="as many as fit" [value]="habits().studyHoursPerWeek ?? ''" (change)="setHabit({studyHoursPerWeek:number($any($event.target).value)})"></label>
+      <label>Hours a week<input type="number" min="0" max="168" step="1" [value]="habits().studyHoursPerWeek ?? ''" (change)="setHabit({studyHoursPerWeek:number($any($event.target).value)})"></label>
     </div>
-    <p class="field-hint">Leave the weekly hours empty and every free slot before your exams is filled — {{freeHours()}} h a week at these times. Set a number to study less than that.</p>
+    <p class="field-hint">These times leave {{freeHours()}} h of free slots a week. The plan uses the hours above instead, spread over the days before each exam; raise it to {{freeHours()}} to fill every slot.</p>
 
     <h3 class="setup-heading">Days off</h3>
     <div class="setup-days-off">@for(day of habits().daysOff;track $index){

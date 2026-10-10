@@ -15,7 +15,14 @@ export class ScheduleComponent {
   readonly weekday=(date:string)=>dayLabel(date,{weekday:'short'});
   readonly phaseLabel=computed(()=>`${dayLabel(this.store.dates()[0],{day:'numeric',month:'short',year:'numeric'})} – ${dayLabel(this.store.dates().at(-1)!,{day:'numeric',month:'short',year:'numeric'})} · recorded hours`);
   readonly weekLabel=computed(()=>`${dayLabel(this.store.week()[0])} – ${dayLabel(this.store.week()[6],{day:'numeric',month:'short',year:'numeric'})}`);
-  readonly weekSubjects=computed(()=>this.store.subjects().filter(s=>this.store.hours(s,this.store.week())>0));
+  readonly weekSubjects=computed(()=>this.store.subjects().filter(s=>this.store.hours(s,this.store.week())>0||this.store.planHoursFor(s.id,this.store.week())>0));
+  readonly plannedWeek=computed(()=>Math.round(this.store.week().reduce((sum,date)=>sum+this.store.plannedDaily(date),0)*100)/100);
+  /** Hours the plan asks of a subject on a day, 0 when it asks for none. */
+  planned(subjectId:string,date:string):number{return this.store.planHoursFor(subjectId,[date]);}
+  cellLabel(subject:{name:string;id:string;hours:Record<string,number|null>},date:string):string{
+    const recorded=subject.hours[date];const plan=this.planned(subject.id,date);
+    return `${subject.name}, ${dayLabel(date)}: ${recorded!=null?recorded+' hours recorded':plan?plan+' hours planned, none recorded':'unrecorded'}. Edit.`;
+  }
   constructor(){afterNextRender(()=>{if(!this.expanded()) {
     const index=this.store.dates().indexOf(this.store.week().find(d=>this.store.dates().includes(d))!);
     this.viewport()?.nativeElement.scrollTo({left:Math.max(0,index)*66});

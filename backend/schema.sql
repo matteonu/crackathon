@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS semesters (
     id INTEGER PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     label TEXT NOT NULL,              -- e.g. 'HS26'
-    study_hours_per_week INTEGER,     -- the week's study budget; NULL = fill every free slot
+    study_hours_per_week INTEGER,     -- the week's study budget; NULL = planner.DEFAULT_HOURS_PER_WEEK
     -- How the scheduler lays a day out (backend/schedule_planner/). Defaults make a new
     -- semester plannable before the user has said anything about their habits.
     day_start TEXT NOT NULL DEFAULT '08:00',

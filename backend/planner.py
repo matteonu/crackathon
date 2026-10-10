@@ -46,10 +46,15 @@ MAX_SESSIONS = 10000
 MAX_DAYS_OFF = 200
 # Used when neither the user nor the scraped course ratings say how hard a course is.
 DEFAULT_DIFFICULTY = 3
+# A full-time study week. Without it the scheduler fills every free slot before the exams,
+# which over a 56-day winter phase is around 500 hours and no use to anyone. A semester whose
+# study_hours_per_week is NULL is planned with this; the form shows it and can change it.
+DEFAULT_HOURS_PER_WEEK = 35
 # The habits of a semester that has no row yet, mirroring the defaults in schema.sql.
 DEFAULT_PREFERENCES = {"dayStart": "08:00", "dayEnd": "20:00", "lunch": ["12:00", "13:00"],
                        "dinner": ["18:00", "19:00"], "studyBlockSize": 90,
-                       "studyHoursPerWeek": None, "alpha": .3, "beta": 5, "daysOff": []}
+                       "studyHoursPerWeek": DEFAULT_HOURS_PER_WEEK, "alpha": .3, "beta": 5,
+                       "daysOff": []}
 # Colours of new subjects, in order of adding; the same family as the frontend's.
 COLORS = ("#2598A2", "#E4AC17", "#D56568", "#5586CA", "#DD792F", "#6E9A5A", "#9A6BB8", "#C2577E")
 
@@ -468,6 +473,11 @@ def semester_row(sid):
     return db.get_db().execute("SELECT * FROM semesters WHERE id = ?", (sid,)).fetchone()
 
 
+def hours_per_week(row):
+    """The week's study budget. A semester that has never said gets the full-time default."""
+    return DEFAULT_HOURS_PER_WEEK if row["study_hours_per_week"] is None else row["study_hours_per_week"]
+
+
 def preferences(sid):
     """How this semester's days are laid out, in the API's spelling."""
     row = semester_row(sid)
@@ -475,7 +485,7 @@ def preferences(sid):
             "lunch": [row["lunch_start"], row["lunch_end"]],
             "dinner": [row["dinner_start"], row["dinner_end"]],
             "studyBlockSize": row["study_block_size"],
-            "studyHoursPerWeek": row["study_hours_per_week"],
+            "studyHoursPerWeek": hours_per_week(row),
             "alpha": row["alpha"], "beta": row["beta"],
             "daysOff": [{"startDate": r["start_date"], "rangeLength": r["range_length"]}
                         for r in db.get_db().execute(
@@ -533,7 +543,7 @@ def scheduler_request(sid, semkez, from_date):
         "lunch_time": [row["lunch_start"], row["lunch_end"]],
         "dinner_time": [row["dinner_start"], row["dinner_end"]],
         "study_block_size": row["study_block_size"],
-        "study_hours_per_week": row["study_hours_per_week"],
+        "study_hours_per_week": hours_per_week(row),
         "alpha": row["alpha"], "beta": row["beta"],
     }, ids
 
@@ -555,7 +565,11 @@ def plan_payload(from_date, generated_at, plan, ids):
 
 
 def store_plan(sid, from_date, payload, result):
-    """Replace this semester's plan from `from_date` on. Earlier blocks stay as history."""
+    """Replace this semester's plan from `from_date` on. Earlier blocks stay as history.
+
+    A course's target hours become what the plan asks of it, so the hours overview and the
+    progress bars have something to measure recorded hours against.
+    """
     conn = db.get_db()
     rows = [(sid, block["courseId"], block["date"], block["start"], block["end"],
              block["type"], block["label"]) for block in result["blocks"]]
@@ -570,6 +584,14 @@ def store_plan(sid, from_date, payload, result):
                             input_json = excluded.input_json, summary_json = excluded.summary_json""",
                      (sid, result["generatedAt"], from_date, json.dumps(payload),
                       json.dumps(result["summary"])))
+        # Over every block held, not just this run's: earlier weeks are part of the target too.
+        hours = {}
+        for r in conn.execute("""SELECT course_id, start_time, end_time FROM plan_blocks
+                                 WHERE semester_id = ? AND type <> 'meal' AND course_id IS NOT NULL""", (sid,)):
+            hours[r["course_id"]] = hours.get(r["course_id"], 0.0) + (
+                minutes_of(r["end_time"]) - minutes_of(r["start_time"])) / 60
+        conn.executemany("UPDATE semester_courses SET target_hours = ? WHERE semester_id = ? AND course_id = ?",
+                         [(round(total, 2), sid, course_id) for course_id, total in hours.items()])
 
 
 def stored_plan(sid):

@@ -140,7 +140,7 @@ class PreferenceTests(ScheduleApiCase):
         self.assertEqual(self.plan()["preferences"],
                          {"dayStart": "08:00", "dayEnd": "20:00", "lunch": ["12:00", "13:00"],
                           "dinner": ["18:00", "19:00"], "studyBlockSize": 90,
-                          "studyHoursPerWeek": None, "alpha": .3, "beta": 5, "daysOff": []})
+                          "studyHoursPerWeek": 35, "alpha": .3, "beta": 5, "daysOff": []})
         self.add(1)      # adding a course creates the row; the defaults must survive it
         self.assertEqual(self.plan()["preferences"]["dayStart"], "08:00")
 
@@ -180,10 +180,21 @@ class PreferenceTests(ScheduleApiCase):
         self.add(1)
         self.add(2)
         self.generate()
-        full = self.studied()
+        default = self.studied()
         self.prefs({"studyHoursPerWeek": 14})
         self.generate()
-        self.assertLess(self.studied(), full)
+        self.assertLess(self.studied(), default)
+        # And raising it above what a week holds plans every free slot.
+        self.prefs({"studyHoursPerWeek": 168})
+        self.generate()
+        self.assertGreater(self.studied(), default)
+
+    def test_a_semester_that_never_said_gets_a_full_time_week(self):
+        self.add(1)
+        self.generate(fromDate="2027-02-01")
+        # Two weeks at 35 h, minus what the exam date and the block layout cut off.
+        self.assertLessEqual(self.studied() / 60, 2 * 35 + 1)
+        self.assertGreater(self.studied() / 60, 35)
 
     def test_the_day_window_and_block_size_reach_the_plan(self):
         self.add(1)
@@ -239,13 +250,15 @@ class CoursePreferenceTests(ScheduleApiCase):
     def test_priority_shifts_hours_between_courses(self):
         self.add(1)
         self.add(2)
-        self.generate()
-        self.assertEqual(len({entry["scheduledHours"] for entry in self.plan()["plan"]["summary"]}), 1)
+        # Alike in everything the scheduler weighs, so they come out close together.
+        even = {entry["subjectId"]: entry["scheduledHours"] for entry in self.generate().get_json()["summary"]}
+        self.assertAlmostEqual(even["course-1"], even["course-2"], delta=max(even.values()) / 3)
         self.patch({"priority": 1}, course_id=1)
         self.patch({"priority": 5}, course_id=2)
         summary = {entry["subjectId"]: entry["scheduledHours"]
                    for entry in self.generate().get_json()["summary"]}
         self.assertGreater(summary["course-1"], summary["course-2"])
+        self.assertGreater(summary["course-1"], even["course-1"])
 
     patch = GenerateTests.patch
 
@@ -271,3 +284,28 @@ class StoredTotalsTests(ScheduleApiCase):
 
     studied = PreferenceTests.studied
     minutes = GenerateTests.minutes
+
+
+class TargetHoursTests(ScheduleApiCase):
+
+    def test_generating_sets_what_each_course_asks_for(self):
+        self.add(1)
+        self.add(2)
+        self.assertEqual([s["targetHours"] for s in self.plan()["subjects"]], [0, 0])
+        plan = self.generate().get_json()
+        targets = {s["id"]: s["targetHours"] for s in self.plan()["subjects"]}
+        for entry in plan["summary"]:
+            self.assertAlmostEqual(targets[entry["subjectId"]], entry["scheduledHours"], places=2)
+        self.assertTrue(all(value > 0 for value in targets.values()))
+
+    def test_the_target_covers_weeks_kept_from_an_earlier_run(self):
+        self.add(1)
+        self.generate(fromDate="2027-02-01")
+        whole = self.plan()["subjects"][0]["targetHours"]
+        self.generate(fromDate="2027-02-08")
+        self.assertAlmostEqual(self.plan()["subjects"][0]["targetHours"], whole, places=2)
+
+    def test_a_dry_run_changes_no_target(self):
+        self.add(1)
+        self.generate(dryRun=True)
+        self.assertEqual(self.plan()["subjects"][0]["targetHours"], 0)
