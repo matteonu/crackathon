@@ -97,7 +97,19 @@ app-schedule, app-next, app-analytics, app-root { display: block; min-width: 0; 
 .semester-top { display: flex; gap: 10px; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .semester-top .eyebrow { font-size: 8px; letter-spacing: .07em; }
 .semester-top app-icon { color: #708965; width: 18px; height: 18px; }
-.semester-card > strong { font-size: 19px; font-weight: 600; }
+.semester-card { position: relative; }
+.semester-switch { display: inline-flex; align-items: center; gap: 6px; margin: -3px -6px; padding: 3px 6px; border: none; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.semester-switch strong { font-size: 19px; font-weight: 600; }
+.semester-switch app-icon { width: 14px; height: 14px; color: #708965; }
+.semester-switch:hover:not(:disabled), .semester-switch[aria-expanded=true] { background: #d9e1d2; }
+.semester-switch:focus-visible { outline: 2px solid #9fb596; outline-offset: 1px; }
+.semester-menu { position: absolute; left: 8px; right: 8px; bottom: calc(100% - 8px); z-index: 20; padding: 5px; background: white; border: 1px solid #dfe6d6; border-radius: 9px; box-shadow: 0 10px 30px #1e301e24; }
+.semester-menu [role=menuitemradio] { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: none; border-radius: 6px; background: transparent; color: #3d5134; font-size: 12px; text-align: left; cursor: pointer; }
+.semester-menu [role=menuitemradio]:hover, .semester-menu [role=menuitemradio]:focus-visible { background: #f2f6ed; }
+.semester-menu [role=menuitemradio] strong { font-weight: 600; min-width: 36px; }
+.semester-menu [role=menuitemradio] span { color: var(--muted); }
+.semester-menu [role=menuitemradio] em { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: 999px; background: #e6ecdf; color: #4d6a43; }
+.semester-menu [role=menuitemradio] app-icon { width: 14px; height: 14px; margin-left: auto; color: #4d6a43; }
 .semester-card p { font-size: 11px; color: #6c7867; margin-top: 3px; }
 .semester-progress { height: 4px; background: #d7dfcd; margin: 17px 0 8px; border-radius: 4px; overflow: hidden; }
 .semester-progress span { height: 100%; background: #769468; display: block; transition: width .3s; }

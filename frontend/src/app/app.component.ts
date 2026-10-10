@@ -8,6 +8,7 @@ import { IconComponent } from './shared/icon.component';
 import { HoursEditorComponent } from './shared/hours-editor.component';
 import { CourseSearchDialogComponent } from './components/course-search-dialog.component';
 import { Subject } from './models/study';
+import { semesterName } from './models/semester';
 
 @Component({selector:'app-root',standalone:true,imports:[RouterLink,RouterLinkActive,RouterOutlet,IconComponent,HoursEditorComponent,CourseSearchDialogComponent],templateUrl:'./app.component.html'})
 export class AppComponent {
@@ -19,15 +20,32 @@ export class AppComponent {
   readonly menuFor=signal<string|null>(null);
   toggleMenu(id:string,event:Event):void {
     event.stopPropagation();
+    this.semesterMenu.set(false);
     const opening=this.menuFor()!==id;this.menuFor.set(opening?id:null);
     // Move focus into the menu so it can be used from the keyboard.
     if(opening)requestAnimationFrame(()=>document.querySelector<HTMLElement>('.course-menu [role=menuitem]')?.focus());
   }
-  @HostListener('document:click') closeMenu():void {this.menuFor.set(null);}
+  @HostListener('document:click') closeMenu():void {this.menuFor.set(null);this.semesterMenu.set(false);}
   @HostListener('document:keydown.escape') closeMenuOnEscape():void {
+    if(this.semesterMenu()){this.semesterMenu.set(false);document.querySelector<HTMLElement>('.semester-switch')?.focus();return;}
     const id=this.menuFor();if(!id)return;
     this.menuFor.set(null);
     document.querySelector<HTMLElement>(`.sidebar-subject a[href$="${id}"] + .course-menu-button`)?.focus();
+  }
+  /** The semester picker in the sidebar's semester card. */
+  readonly semesterMenu=signal(false);
+  readonly semesterName=semesterName;
+  toggleSemesterMenu(event:Event):void {
+    event.stopPropagation();this.menuFor.set(null);
+    const opening=!this.semesterMenu();this.semesterMenu.set(opening);
+    if(opening)requestAnimationFrame(()=>document.querySelector<HTMLElement>('.semester-menu [aria-checked=true]')?.focus());
+  }
+  async chooseSemester(semkez:string):Promise<void> {
+    this.semesterMenu.set(false);
+    await this.store.selectSemester(semkez);
+    // A subject page of a course the new semester doesn't have would say "Subject not found".
+    const open=/^\/subject-tab\/(.+)$/.exec(this.router.url)?.[1];
+    if(open&&!this.store.subjects().some(s=>s.id===open))void this.router.navigate(['/']);
   }
   openSettings():void {this.settings()?.nativeElement.showModal();}
   async removeCourse(subject:Subject):Promise<void> {
