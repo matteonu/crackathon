@@ -24,6 +24,7 @@ def load_env_file(path=os.path.join(BACKEND_DIR, "..", ".env")):
 load_env_file()
 
 import shutil  # noqa: E402
+import sys  # noqa: E402
 from urllib.parse import quote  # noqa: E402
 
 import click  # noqa: E402
@@ -34,6 +35,8 @@ from auth import current_user  # noqa: E402
 import db  # noqa: E402
 import learning  # noqa: E402
 import materials  # noqa: E402
+import vvz.routes  # noqa: E402
+import vvz.sync  # noqa: E402
 from learning import RequestError, StudyJobs  # noqa: E402
 
 
@@ -69,11 +72,20 @@ def config_from_env():
         "SIGN_OUT_URL": os.environ.get("SIGN_OUT_URL", DEFAULT_SIGN_OUT_URL),
         "LEARNING_DIR": os.environ.get("LEARNING_DIR", os.path.join(data_dir, "learning")),
         "STATIC_DIR": os.environ.get("STATIC_DIR", os.path.join(BACKEND_DIR, "..", "frontend", "dist")),
+        # The local copy of the ETH course catalogue (see backend/vvz/). Built in a background
+        # thread at start and refreshed daily; VVZ_AUTO_SYNC=0 turns that off (tests, CLI).
+        "VVZ_DB_PATH": os.environ.get("VVZ_DB_PATH", os.path.join(data_dir, "vvz.db")),
+        "VVZ_AUTO_SYNC": os.environ.get("VVZ_AUTO_SYNC", "1").lower() not in {"0", "false", "no"},
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
         # 50 MB PDFs, with headroom for the request around them.
         "MAX_CONTENT_LENGTH": 70 * 1024 * 1024,
     }
+
+
+def _flask_cli():
+    """True under `flask --app app <command>`, where a background download would be a nuisance."""
+    return os.path.basename(sys.argv[0]) == "flask"
 
 
 def create_app(overrides=None):
@@ -95,6 +107,9 @@ def create_app(overrides=None):
     auth.init_app(app)
     app.register_blueprint(materials.bp)
     app.register_blueprint(learning.bp)
+    app.register_blueprint(vvz.routes.bp)
+    if app.config["VVZ_AUTO_SYNC"] and not app.testing and not _flask_cli():
+        vvz.sync.start_background(app.config["VVZ_DB_PATH"])
 
     @app.errorhandler(RequestError)
     def request_error(exc):

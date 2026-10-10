@@ -189,6 +189,24 @@ VSETH's Keycloak logout (which ends the single-sign-on session) redirecting to t
 in again. Keycloak has to come first: oauth2-proxy only redirects to `*.hackathon.ethz.ch`.
 Override it with `SIGN_OUT_URL` in `.env`, or set it empty to hide the button.
 
+## Course catalogue (VVZ)
+
+`backend/data/vvz.db` is a local copy of the ETH course catalogue: every unit (course) with ECTS, exam mode, Basisprüfung block, lecturers, programme sections, student ratings, and per lecture/exercise the weekly hours and timeslots with rooms. It is **not** part of the seed; it is built by `backend/vvz/sync.py` from the database dump of the community project [vvzapi.ch](https://vvzapi.ch) ([markbeep/vvzapi](https://github.com/markbeep/vvzapi), GPLv3; we use its data, not its code, and credit it here).
+
+- **Schema:** `backend/vvz/schema.sql` (tables `vvz_units`, `vvz_courses`, `vvz_timeslots`, `vvz_lecturers`, `vvz_unit_lecturers`, `vvz_unit_sections`, `vvz_ratings`, `vvz_meta`).
+- **Which semesters:** previous, current and the next two by default; override with `VVZ_SEMESTERS=2025W,2026S`.
+- **Refresh:** the app starts a background thread that builds the file at start and rebuilds it every 24 h (`VVZ_REFRESH_SECONDS`) when the upstream dump changed; `VVZ_AUTO_SYNC=0` turns that off. The build swaps the file in atomically, so the app never reads a half-built database. Until the first build is done, `/api/vvz/*` answers 503. The file lives in `data/` next to `app.db`, so it survives a redeploy.
+- **Known gap:** upstream has no timeslots for autumn 2026 yet, although VVZ itself lists them. For a unit without slots the sync copies the slots of the same unit one year earlier and marks them with `inherited_from`, so treat those as "probably" and show the flag in the UI.
+
+```bash
+.venv/bin/python -m vvz.sync                      # download the dump (~70 MB) and build data/vvz.db, run from backend/
+.venv/bin/python -m vvz.sync --force              # rebuild even if the dump is unchanged
+.venv/bin/python -m vvz.sync --dump database.db   # build from an already downloaded dump
+.venv/bin/python -m unittest tests.test_vvz       # tests run against a tiny fake dump, no network
+```
+
+Endpoints (need the proxy user like every `/api` route): `GET /api/vvz/status`, `GET /api/vvz/units?q=Analysis&semkez=2026W&section=Computer%20Science%20Bachelor`, `GET /api/vvz/units/<id>`, `GET /api/vvz/timetable?ids=1,2,3`. Python side: `vvz.queries.search_units`, `get_unit`, `weekly_timetable`.
+
 ## Deadlines
 
 - **Sunday noon:** we lose access to the VM, so the app must already be running on its own (Docker Compose with `restart: unless-stopped`).
