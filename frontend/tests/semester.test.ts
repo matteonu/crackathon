@@ -10,12 +10,17 @@ const plan: Plan = {
     id: 'course-3204', courseId: 3204, name: 'Algorithms and Data Structures', shortName: 'Algorithms and Data Structures',
     color: '#2598A2', targetHours: 65, examDate: '2027-02-14', completed: false, nextAction: '', ects: 7,
     lectureId: '252-0026-00L', homepage: 'https://www.vvz.ethz.ch/x', desiredGrade: null, hours: {'2027-01-05': 2.5},
+    priority: 3, difficulty: 4, maxStudyHours: null, lecturePerWeek: 6,
   }, {
     id: 'course-7', courseId: 7, name: 'Thesis', shortName: 'Thesis', color: '#E4AC17', targetHours: 0,
     examDate: '2027-02-14', completed: false, nextAction: '', ects: null, lectureId: '000-0000-00L', homepage: null,
     desiredGrade: null, hours: {},
+    priority: 3, difficulty: 3, maxStudyHours: 20, lecturePerWeek: null,
   }],
   sessions: [{id: 's1', subjectId: 'course-3204', date: '2027-01-05', start: '09:00', hours: 2}],
+  preferences: {dayStart: '08:00', dayEnd: '20:00', lunch: ['12:00', '13:00'], dinner: ['18:00', '19:00'],
+    studyBlockSize: 60, studyHoursPerWeek: null, alpha: .3, beta: 5, daysOff: [], studyDays: [0, 1, 2, 3, 4, 5, 6]},
+  plan: null,
 };
 
 test('semester labels and course ids', () => {

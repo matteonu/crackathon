@@ -144,9 +144,29 @@ CREATE TABLE IF NOT EXISTS semesters (
     id INTEGER PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     label TEXT NOT NULL,              -- e.g. 'HS26'
-    study_hours_per_week INTEGER,
+    study_hours_per_week INTEGER,     -- the week's study budget; NULL = every free slot
+    -- How the scheduler lays a day out (backend/schedule_planner/). Defaults make a new
+    -- semester plannable before the user has said anything about their habits.
+    day_start TEXT NOT NULL DEFAULT '08:00',
+    day_end TEXT NOT NULL DEFAULT '20:00',
+    lunch_start TEXT NOT NULL DEFAULT '12:00',
+    lunch_end TEXT NOT NULL DEFAULT '13:00',
+    dinner_start TEXT NOT NULL DEFAULT '18:00',
+    dinner_end TEXT NOT NULL DEFAULT '19:00',
+    study_block_size INTEGER NOT NULL DEFAULT 60,   -- minutes
+    alpha REAL NOT NULL DEFAULT 0.3,  -- weight of difficulty against priority
+    beta REAL NOT NULL DEFAULT 5,     -- how hard a near exam pulls hours forward
+    study_weekdays TEXT NOT NULL DEFAULT '0123456',  -- days studied, 0 = Monday ... 6 = Sunday
     UNIQUE (user_id, label),
     UNIQUE (id, user_id)              -- target for the statistics foreign key
+);
+
+-- Days the user does not study, as ranges: one row per holiday or break.
+CREATE TABLE IF NOT EXISTS semester_days_off (
+    semester_id INTEGER NOT NULL REFERENCES semesters(id) ON DELETE CASCADE,
+    start_date TEXT NOT NULL,         -- 'YYYY-MM-DD'
+    range_length INTEGER NOT NULL DEFAULT 1 CHECK (range_length >= 1),
+    PRIMARY KEY (semester_id, start_date)
 );
 
 -- Courses a user takes in a semester, plus their plan for it. In the app each one is a
@@ -161,6 +181,12 @@ CREATE TABLE IF NOT EXISTS semester_courses (
     completed INTEGER NOT NULL DEFAULT 0,
     next_action TEXT NOT NULL DEFAULT '',
     color TEXT,                       -- '#2598A2'
+    -- What the scheduler needs beyond the catalogue. NULL falls back to the VVZ value, or
+    -- to course_ratings.difficulty, or to the middle of the scale; see planner.py.
+    priority INTEGER NOT NULL DEFAULT 3,   -- 1 (most important) to 5
+    difficulty INTEGER,                    -- 1 (easy) to 5
+    max_study_hours REAL,                  -- cap on active learning; recall is exempt
+    lecture_per_week REAL,                 -- contact hours a week, else the offering's
     PRIMARY KEY (semester_id, course_id)
 );
 
@@ -184,6 +210,41 @@ CREATE TABLE IF NOT EXISTS study_sessions (
     hours REAL NOT NULL CHECK (hours > 0 AND hours <= 24),
     PRIMARY KEY (semester_id, id),
     FOREIGN KEY (semester_id, course_id) REFERENCES semester_courses(semester_id, course_id) ON DELETE CASCADE
+);
+
+-- The generated study plan of a semester, one row: regenerating replaces it.
+CREATE TABLE IF NOT EXISTS study_plans (
+    semester_id INTEGER PRIMARY KEY REFERENCES semesters(id) ON DELETE CASCADE,
+    generated_at TEXT NOT NULL,       -- ISO timestamp of the run
+    from_date TEXT NOT NULL,          -- first day this run planned; earlier blocks are history
+    input_json TEXT NOT NULL,         -- what went into generate_schedule(), so a run is reproducible
+    summary_json TEXT NOT NULL        -- the scheduler's summary block
+);
+
+-- The blocks of that plan. A meal block has no course. Dropping a course drops its blocks:
+-- SQLite does not enforce a composite foreign key when a column of it is NULL, so meals pass.
+CREATE TABLE IF NOT EXISTS plan_blocks (
+    id INTEGER PRIMARY KEY,
+    semester_id INTEGER NOT NULL REFERENCES semesters(id) ON DELETE CASCADE,
+    course_id INTEGER,
+    date TEXT NOT NULL,               -- 'YYYY-MM-DD'
+    start_time TEXT NOT NULL,         -- 'HH:MM'
+    end_time TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('active_learning', 'recall', 'meal')),
+    label TEXT,                       -- 'Lunch' for a meal block, 'Break' for one the user drew
+    -- 'manual' once the user created, moved or resized it: regenerating keeps it and plans
+    -- around it. Also in db.ADDED_COLUMNS.
+    source TEXT NOT NULL DEFAULT 'generated' CHECK (source IN ('generated', 'manual')),
+    FOREIGN KEY (semester_id, course_id) REFERENCES semester_courses(semester_id, course_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS plan_blocks_semester_date ON plan_blocks (semester_id, date);
+
+-- Lunch or dinner the user removed from a day, so generating that day again leaves it out.
+CREATE TABLE IF NOT EXISTS plan_meal_skips (
+    semester_id INTEGER NOT NULL REFERENCES semesters(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,               -- 'YYYY-MM-DD'
+    label TEXT NOT NULL,              -- 'Lunch' or 'Dinner'
+    PRIMARY KEY (semester_id, date, label)
 );
 
 -- Statistics per user and semester

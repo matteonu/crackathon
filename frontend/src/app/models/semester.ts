@@ -16,6 +16,69 @@ export interface PlanSubject {
   homepage: string | null;
   desiredGrade: number | null;
   hours: Record<string, number>;
+  /** What the scheduler uses. `difficulty` is already resolved from the course rating. */
+  priority: number;
+  difficulty: number;
+  maxStudyHours: number | null;
+  lecturePerWeek: number | null;
+}
+
+/** A stretch of days the user does not study. */
+export interface DayOff {
+  startDate: string;
+  rangeLength: number;
+}
+
+/** How the scheduler lays a day out, per semester. */
+export interface Preferences {
+  dayStart: string;
+  dayEnd: string;
+  lunch: [string, string];
+  dinner: [string, string];
+  studyBlockSize: number;
+  studyHoursPerWeek: number | null;
+  alpha: number;
+  beta: number;
+  daysOff: DayOff[];
+  /** Weekdays studied on, 0 = Monday ... 6 = Sunday. The others count as days off. */
+  studyDays: number[];
+}
+
+export type BlockType = 'active_learning' | 'recall' | 'meal';
+
+/** One block of a generated plan. A meal block has no subject. */
+export interface PlanBlock {
+  id: number | null;
+  subjectId: string | null;
+  courseId: number | null;
+  date: string;
+  start: string;
+  end: string;
+  type: BlockType;
+  label: string | null;
+  /** 'manual' once the user drew, moved or resized it: regenerating keeps it and plans around it. */
+  source: 'generated' | 'manual';
+}
+
+/** Lunch or dinner, as opposed to a break the user drew. */
+export function mealBlock(block: PlanBlock): boolean {
+  return block.type === 'meal' && (block.label === 'Lunch' || block.label === 'Dinner');
+}
+
+export interface PlanTotals {
+  subjectId: string;
+  courseId: number;
+  scheduledHours: number;
+  activeLearningHours: number;
+}
+
+/** What POST .../plan/generate returns and GET .../plan carries. */
+export interface GeneratedPlan {
+  /** null while the plan holds only slots the user drew and nothing was generated yet. */
+  generatedAt: string | null;
+  fromDate: string | null;
+  blocks: PlanBlock[];
+  summary: PlanTotals[];
 }
 
 /** The whole study plan of a semester. */
@@ -26,6 +89,9 @@ export interface Plan {
   end: string;
   subjects: PlanSubject[];
   sessions: PlannedSession[];
+  preferences: Preferences;
+  /** null until a schedule has been generated for this semester. */
+  plan: GeneratedPlan | null;
 }
 
 /** A search result from GET /api/courses. */
@@ -101,4 +167,30 @@ export function planToData(plan: Plan, today: string): StudyData {
 export function emptyData(today: string): StudyData {
   return {version: 1, semester: '', referenceDate: today, dates: [today], subjects: [], anki: [], notes: '',
     examSession: {start: today, end: today}, sessions: []};
+}
+
+/** Minutes a block covers. Blocks never cross midnight. */
+export function blockMinutes(block: PlanBlock): number {
+  return minutesOf(block.end) - minutesOf(block.start);
+}
+
+export function minutesOf(time: string): number {
+  return Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+}
+
+/** Hours of study a set of blocks holds. Meals are not study. */
+export function studyHours(blocks: readonly PlanBlock[]): number {
+  return Math.round(blocks.filter(b => b.type !== 'meal')
+    .reduce((sum, b) => sum + blockMinutes(b), 0) / 60 * 100) / 100;
+}
+
+/** 'active_learning' -> 'Learning'. What the legend and the tooltips say. */
+export function blockLabel(block: PlanBlock): string {
+  return block.type === 'meal' ? block.label ?? 'Break'
+    : block.type === 'recall' ? 'Recall' : 'Learning';
+}
+
+/** 'HH:MM' for minutes after midnight. */
+export function timeOf(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
