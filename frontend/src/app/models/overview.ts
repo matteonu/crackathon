@@ -7,11 +7,11 @@ export const OVERVIEW_QUOTES = [
   "If you don't like, go back to Dagestan",
 ] as const;
 
-export const MATERIAL_STATES: readonly {marker: MaterialMarker; key: string; icon: string; hint: string}[] = [
-  {marker: 'To read', key: 'unread', icon: 'book', hint: 'Up next'},
-  {marker: 'Revisit', key: 'revisit', icon: 'clock', hint: 'Needs another look'},
-  {marker: 'Done', key: 'done', icon: 'check', hint: 'Covered'},
-  {marker: 'Ignore', key: 'ignored', icon: 'minus', hint: 'Outside your study scope'},
+export const MATERIAL_STATES: readonly {marker: MaterialMarker; key: string; icon: string}[] = [
+  {marker: 'To read', key: 'unread', icon: 'book'},
+  {marker: 'Revisit', key: 'revisit', icon: 'clock'},
+  {marker: 'Done', key: 'done', icon: 'check'},
+  {marker: 'Ignore', key: 'ignored', icon: 'minus'},
 ];
 
 const isDocument = (file: Material): boolean => file.kind !== 'folder' && file.kind !== 'deck';

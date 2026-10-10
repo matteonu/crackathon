@@ -7,12 +7,10 @@
   <section class="panel overview-focus" aria-label="To-dos and progress">
     <div class="overview-todos">
       <div class="overview-section-heading">
-        <div><span class="eyebrow">YOUR NEXT STEPS</span><h2>To-dos <span class="overview-count">{{openTasks().length}}</span></h2></div>
-        <span class="overview-sort"><app-icon name="flag" /> Urgency first</span>
+        <h2>To-dos</h2>
       </div>
       @if (store.loaded() && store.subjects().length) {
         <form class="overview-add" (ngSubmit)="addTask()">
-          <input name="title" aria-label="New to-do" placeholder="What needs to get done?" [maxlength]="maxTitle" [(ngModel)]="draftTitle" [disabled]="adding()" />
           <div class="overview-add-options">
             <select name="course" aria-label="Course for new to-do" [ngModel]="draftCourse()" (ngModelChange)="draftCourse.set($event)" [disabled]="adding()">
               @for (subject of store.subjects(); track subject.id) { <option [value]="subject.id">{{subject.name}}</option> }
@@ -22,37 +20,38 @@
             </select>
             <button class="button primary" type="submit" [disabled]="adding() || !draftTitle.trim()"><app-icon name="plus" /> {{adding() ? 'Adding…' : 'Add'}}</button>
           </div>
+          <input name="title" aria-label="New to-do" placeholder="What needs to get done?" [maxlength]="maxTitle" [(ngModel)]="draftTitle" [disabled]="adding()" />
         </form>
       }
       @if (tasks.error()) { <p class="overview-error" role="alert">{{tasks.error()}}</p> }
       @if (tasks.loading() || !store.loaded()) {
         <p class="overview-empty" role="status">Loading your to-dos…</p>
       } @else {
-        <ul class="overview-task-list">
+        <div class="overview-task-scroll" tabindex="0" role="region" aria-label="To-do list">
+        <ul class="overview-task-list" aria-label="Open to-dos">
           @for (task of openTasks(); track task.id) {
             <li class="overview-task-row">
               <input class="overview-check" type="checkbox" [attr.aria-label]="'Complete ' + task.title" [ngModel]="task.done" (ngModelChange)="updateTask(task, {done: $event})" [ngModelOptions]="{standalone: true}" [disabled]="pendingTasks().has(task.id)" />
-              <div class="overview-task-copy"><span class="overview-task-title">{{task.title}}</span><a [routerLink]="['/subject-tab', task.subjectId]">{{subjectName(task.subjectId)}}</a>
+              <div class="overview-task-copy"><span class="overview-task-title">{{task.title}}</span>
                 @if (task.due) { <span class="overview-due" [class.overdue]="overdue(task)">{{dueText(task)}}</span> }
               </div>
-              <select class="overview-priority" [class]="'overview-priority priority-' + task.priority" [attr.aria-label]="'Urgency for ' + task.title" [ngModel]="task.priority" (ngModelChange)="updateTask(task, {priority: $event})" [ngModelOptions]="{standalone: true}" [disabled]="pendingTasks().has(task.id)">
-                @for (priority of priorities; track priority.value) { <option [value]="priority.value">{{priority.label}}</option> }
-              </select>
+              <div class="overview-task-meta"><a [routerLink]="['/subject-tab', task.subjectId]">{{subjectName(task.subjectId)}}</a><span [class]="'overview-priority priority-' + task.priority">{{priorityLabel(task.priority)}} priority</span></div>
             </li>
           } @empty {
             <li class="overview-empty"><span class="overview-empty-icon"><app-icon name="check" /></span><strong>Nothing waiting on you.</strong><span>{{store.subjects().length ? 'Add a to-do above when you have a next step.' : 'Add a course under Your subjects to get started.'}}</span></li>
           }
         </ul>
         @if (completedTasks().length) {
-          <button class="overview-completed-toggle" type="button" [attr.aria-expanded]="showDone()" (click)="showDone.set(!showDone())"><app-icon name="check" /> {{completedTasks().length}} completed <span>{{showDone() ? 'Hide' : 'Show'}}</span></button>
+          <button class="overview-completed-toggle" type="button" [attr.aria-expanded]="showDone()" (click)="showDone.set(!showDone())"><app-icon name="check" /> Completed today <span>{{showDone() ? 'Hide' : 'Show'}}</span></button>
           @if (showDone()) {
             <ul class="overview-task-list completed">
               @for (task of completedTasks(); track task.id) {
-                <li class="overview-task-row"><input class="overview-check" type="checkbox" [attr.aria-label]="'Reopen ' + task.title" [ngModel]="task.done" (ngModelChange)="updateTask(task, {done: $event})" [ngModelOptions]="{standalone: true}" [disabled]="pendingTasks().has(task.id)" /><div class="overview-task-copy"><span class="overview-task-title">{{task.title}}</span><a [routerLink]="['/subject-tab', task.subjectId]">{{subjectName(task.subjectId)}}</a></div></li>
+                <li class="overview-task-row"><input class="overview-check" type="checkbox" [attr.aria-label]="'Reopen ' + task.title" [ngModel]="task.done" (ngModelChange)="updateTask(task, {done: $event})" [ngModelOptions]="{standalone: true}" [disabled]="pendingTasks().has(task.id)" /><div class="overview-task-copy"><span class="overview-task-title">{{task.title}}</span></div><div class="overview-task-meta"><a [routerLink]="['/subject-tab', task.subjectId]">{{subjectName(task.subjectId)}}</a><span [class]="'overview-priority priority-' + task.priority">{{priorityLabel(task.priority)}} priority</span></div></li>
               }
             </ul>
           }
         }
+        </div>
       }
     </div>
 
@@ -75,25 +74,25 @@
   </section>
 
   <section class="panel overview-materials" aria-labelledby="overview-materials-title">
-    <div class="overview-section-heading overview-board-heading"><div><span class="eyebrow">EVERYTHING IN ITS PLACE</span><h2 id="overview-materials-title">Course materials</h2><p>See what’s next. Change a file’s state as you go.</p></div><select aria-label="Filter materials by course" [ngModel]="boardCourse()" (ngModelChange)="boardCourse.set($event)"><option value="">All courses</option>@for (subject of store.subjects(); track subject.id) { <option [value]="subject.id">{{subject.name}}</option> }</select></div>
+    <div class="overview-section-heading overview-board-heading"><h2 id="overview-materials-title">Course materials</h2><select aria-label="Filter materials by course" [ngModel]="boardCourse()" (ngModelChange)="boardCourse.set($event)"><option value="">All courses</option>@for (subject of store.subjects(); track subject.id) { <option [value]="subject.id">{{subject.name}}</option> }</select></div>
     @if (materials.error()) { <p class="overview-error" role="alert">{{materials.error()}}</p> }
     @if (!ready()) { <p class="overview-empty" role="status">Loading your materials…</p> }
     @else {
-      <div class="overview-state-board">
+      <p class="sr-only" id="overview-move-help">Drag a file into another state. You can also focus its move button and use the left and right arrow keys.</p>
+      <div class="overview-state-board" cdkDropListGroup>
         @for (column of columns(); track column.marker) {
           <section [class]="'overview-state-column state-' + column.key" [attr.aria-label]="column.marker + ' materials'">
-            <div class="overview-state-heading"><h3><app-icon [name]="column.icon" />{{column.marker}}</h3><span>{{column.files.length}}</span></div><p class="overview-state-hint">{{column.hint}}</p>
-            <ul class="overview-file-list">
-              @for (file of (expandedStates().has(column.marker) ? column.files : column.files.slice(0, 6)); track file.id) {
-                <li class="overview-file-card"><span class="overview-file-type"><app-icon name="file" />{{typeLabel(file)}}</span>
-                  @if (kind(file) === 'pdf') { <a class="overview-file-name" [routerLink]="['/pdf', file.id]" [queryParams]="{page: 1}" target="_blank" rel="noopener" [attr.aria-label]="file.name + ' (opens in a new tab)'">{{file.name}}</a> }
-                  @else { <span class="overview-file-name">{{file.name}}</span> }
-                  <a class="overview-file-course" [routerLink]="['/subject-tab', file.subjectId]">{{subjectName(file.subjectId)}}</a>
-                  <select [attr.aria-label]="'State for ' + file.name" [ngModel]="file.marker" (ngModelChange)="setMarker(file, $event)" [disabled]="pendingFiles().has(file.id)">@for (state of states; track state.marker) { <option [value]="state.marker">{{state.marker}}</option> }</select>
+            <div class="overview-state-heading"><h3><app-icon [name]="column.icon" />{{column.marker}}</h3><span>{{column.files.length}}</span></div>
+            <ul class="overview-file-list" cdkScrollable cdkDropList [cdkDropListData]="column.marker" [cdkDropListSortingDisabled]="true" (cdkDropListDropped)="dropMaterial($event)" tabindex="0" [attr.aria-label]="column.marker + ' files'">
+              @for (file of column.files; track file.id) {
+                <li class="overview-file-card" cdkDrag [cdkDragData]="file" [cdkDragDisabled]="pendingFiles().has(file.id)" [cdkDragStartDelay]="{touch: 160, mouse: 0}" [attr.aria-busy]="pendingFiles().has(file.id)">
+                  <div class="overview-file-top"><span class="overview-file-type"><app-icon name="file" />{{typeLabel(file)}}</span><button class="overview-file-move" type="button" [attr.data-move-file]="file.id" [attr.aria-label]="'Move ' + file.name" aria-describedby="overview-move-help" title="Drag to change state · Arrow keys when focused" [disabled]="pendingFiles().has(file.id)" (keydown)="moveMaterialWithKeyboard($event, file)"><app-icon name="menu" /></button></div>
+                  @if (kind(file) === 'pdf') { <a class="overview-file-name" [routerLink]="['/pdf', file.id]" [queryParams]="{page: 1}" target="_blank" rel="noopener" draggable="false" [title]="file.name" [attr.aria-label]="file.name + ' (opens in a new tab)'">{{file.name}}</a> }
+                  @else { <span class="overview-file-name" [title]="file.name">{{file.name}}</span> }
+                  <a class="overview-file-course" [routerLink]="['/subject-tab', file.subjectId]" draggable="false" [title]="subjectName(file.subjectId)">{{subjectName(file.subjectId)}}</a>
                 </li>
               } @empty { <li class="overview-state-empty">No files here</li> }
             </ul>
-            @if (column.files.length > 6) { <button class="overview-show-all" type="button" [attr.aria-expanded]="expandedStates().has(column.marker)" (click)="toggleState(column.marker)">{{expandedStates().has(column.marker) ? 'Show fewer' : 'Show all ' + column.files.length}}</button> }
           </section>
         }
       </div>

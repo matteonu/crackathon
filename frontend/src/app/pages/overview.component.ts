@@ -1,4 +1,6 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, signal } from '@angular/core';
+import { CdkDrag, CdkDragDrop, CdkDropList, CdkDropListGroup } from '@angular/cdk/drag-drop';
+import { CdkScrollable } from '@angular/cdk/scrolling';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { StudyStore } from '../services/study-store';
@@ -11,7 +13,7 @@ import { MATERIAL_STATES, OVERVIEW_QUOTES, materialCoverage, overviewMaterials, 
 
 @Component({
   standalone: true,
-  imports: [FormsModule, RouterLink, IconComponent],
+  imports: [FormsModule, RouterLink, IconComponent, CdkDrag, CdkDropList, CdkDropListGroup, CdkScrollable],
   templateUrl: './overview.component.html',
   styleUrl: './overview.component.css',
 })
@@ -19,6 +21,7 @@ export class OverviewComponent {
   readonly store = inject(StudyStore);
   readonly tasks = inject(TaskStore);
   readonly materials = inject(MaterialStore);
+  private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly quote = OVERVIEW_QUOTES[Math.floor(Math.random() * OVERVIEW_QUOTES.length)];
   readonly priorities = PRIORITIES;
   readonly states = MATERIAL_STATES;
@@ -39,7 +42,6 @@ export class OverviewComponent {
   readonly columns = computed(() => this.states.map(state => ({...state, files: this.filteredFiles().filter(file => file.marker === state.marker)})));
   readonly ready = computed(() => this.store.loaded() && !this.materials.loading());
   readonly showDone = signal(false);
-  readonly expandedStates = signal(new Set<MaterialMarker>());
   readonly pendingTasks = signal(new Set<string>());
   readonly pendingFiles = signal(new Set<string>());
   readonly adding = signal(false);
@@ -57,6 +59,7 @@ export class OverviewComponent {
   }
 
   subjectName(id: string): string { return this.subjectsById().get(id)?.name ?? ''; }
+  priorityLabel(priority: Priority): string { return this.priorities.find(item => item.value === priority)!.label; }
   private today(): string {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -73,7 +76,7 @@ export class OverviewComponent {
     } finally { this.adding.set(false); }
   }
 
-  async updateTask(task: Task, patch: {done?: boolean; priority?: Priority}): Promise<void> {
+  async updateTask(task: Task, patch: {done: boolean}): Promise<void> {
     if (this.pendingTasks().has(task.id)) return;
     this.pendingTasks.update(ids => new Set(ids).add(task.id));
     try {
@@ -89,8 +92,22 @@ export class OverviewComponent {
     } finally { this.pendingFiles.update(ids => { const next = new Set(ids); next.delete(file.id); return next; }); }
   }
 
-  toggleState(marker: MaterialMarker): void {
-    this.expandedStates.update(ids => { const next = new Set(ids); next.has(marker) ? next.delete(marker) : next.add(marker); return next; });
+  dropMaterial(event: CdkDragDrop<MaterialMarker, MaterialMarker, Material>): void {
+    if (event.isPointerOverContainer) void this.setMarker(event.item.data, event.container.data);
+  }
+
+  async moveMaterialWithKeyboard(event: KeyboardEvent, file: Material): Promise<void> {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const index = this.states.findIndex(state => state.marker === file.marker);
+    const target = this.states[index + (event.key === 'ArrowRight' ? 1 : -1)];
+    if (!target || this.pendingFiles().has(file.id)) return;
+    await this.setMarker(file, target.marker);
+    // The card moves between lists, so restore keyboard focus after Angular renders it.
+    setTimeout(() => {
+      const buttons = this.element.nativeElement.querySelectorAll<HTMLButtonElement>('[data-move-file]');
+      Array.from(buttons).find(button => button.dataset['moveFile'] === file.id)?.focus();
+    });
   }
 }
 
