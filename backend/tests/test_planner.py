@@ -164,7 +164,7 @@ class PlanTests(PlannerCase):
         self.assertEqual(first, {
             "id": "course-1", "courseId": 1, "name": "Algorithms and Data Structures",
             "shortName": "Algorithms and Data Structures", "color": "#2598A2", "targetHours": 0,
-            "examDate": "2027-02-14", "completed": False, "nextAction": "", "ects": 7,
+            "examDate": "2027-02-14", "examStart": None, "examEnd": None, "completed": False, "nextAction": "", "ects": 7,
             "lectureId": "252-0026-00L", "homepage": first["homepage"], "desiredGrade": None, "hours": {},
             "priority": 3, "difficulty": 3, "maxStudyHours": None, "lecturePerWeek": 6})
         self.assertIn("lerneinheitId=900", first["homepage"])
@@ -196,6 +196,35 @@ class PlanTests(PlannerCase):
         self.assertEqual(self.plan()["subjects"][0]["hours"], {})
         self.assertEqual(self.hours("2026-11-01", 1).status_code, 400)            # outside the study phase
         self.assertEqual(self.hours("2027-01-06", 25).status_code, 400)
+
+    def test_exam_time_ranges_round_trip_update_and_clear(self):
+        self.add(1)
+        self.assertEqual(self.patch({"examStart": "09:00", "examEnd": "11:00"}).status_code, 200)
+        subject = self.plan()["subjects"][0]
+        self.assertEqual((subject["examStart"], subject["examEnd"]), ("09:00", "11:00"))
+        self.assertEqual(self.patch({"examEnd": "11:30"}).status_code, 200)
+        self.patch({"nextAction": "Review notes"})
+        self.assertEqual(self.plan()["subjects"][0]["examEnd"], "11:30")
+        self.assertEqual(self.patch({"examStart": None, "examEnd": None}).status_code, 200)
+        subject = self.plan()["subjects"][0]
+        self.assertEqual((subject["examStart"], subject["examEnd"]), (None, None))
+
+    def test_invalid_exam_times_are_rejected_without_partial_updates(self):
+        self.add(1)
+        for body in ({"examStart": "09:00"}, {"examEnd": "11:00"},
+                     {"examStart": "9:00", "examEnd": "11:00"},
+                     {"examStart": "09:00", "examEnd": "24:00"},
+                     {"examStart": "11:00", "examEnd": "09:00"},
+                     {"examStart": "09:00", "examEnd": "09:00"},
+                     {"examStart": 9, "examEnd": 11}):
+            before = self.plan()
+            self.assertEqual(self.patch({"examDate": "2027-02-05", **body}).status_code, 400, body)
+            self.assertEqual(self.plan(), before)
+        self.patch({"examStart": "09:00", "examEnd": "11:00"})
+        before = self.plan()
+        self.assertEqual(self.patch({"examStart": None}).status_code, 400)
+        self.assertEqual(self.patch({"examStart": "09:30", "examEnd": "12:00"}, user=BOB).status_code, 404)
+        self.assertEqual(self.plan(), before)
 
     def test_save_sessions(self):
         self.add(1)
@@ -292,8 +321,8 @@ class SchemaUpgradeTests(unittest.TestCase):
             old.close()
             app = build_app(temp)
             with app.app_context():
-                row = db.get_db().execute("SELECT target_hours, completed, next_action, exam_date FROM semester_courses").fetchone()
-            self.assertEqual(tuple(row), (0, 0, "", None))
+                row = db.get_db().execute("SELECT target_hours, completed, next_action, exam_date, exam_start, exam_end FROM semester_courses").fetchone()
+            self.assertEqual(tuple(row), (0, 0, "", None, None, None))
 
     def test_an_old_tasks_table_gets_a_medium_priority(self):
         with tempfile.TemporaryDirectory() as temp:
