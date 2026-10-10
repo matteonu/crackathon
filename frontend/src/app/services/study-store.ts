@@ -1,7 +1,7 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { StudyData, Subject, PlannedSession, validSession, sessionsOverlap, addDays, dailyTotal, mondayOf, round, sumHours, validateData, weekDays } from '../models/study';
-import { CourseHit, GeneratedPlan, Plan, PlanBlock, PlanSubject, Preferences, courseIdOf, emptyData,
-  planToData, studyHours } from '../models/semester';
+import { CourseHit, GeneratedPlan, Plan, PlanBlock, PlanSubject, Preferences, SemesterOption, Semesters,
+  courseIdOf, emptyData, planToData, studyHours } from '../models/semester';
 
 /** The habits of a semester nobody has configured, mirroring the server's defaults. */
 const DEFAULT_PREFERENCES: Preferences = {dayStart:'08:00', dayEnd:'20:00', lunch:['12:00','13:00'],
@@ -22,6 +22,11 @@ export class StudyStore {
   readonly loaded = signal(false);
   readonly loadError = signal('');
   readonly semkez = signal('');
+  /** The semesters the user can switch to, and today's semester. */
+  readonly semesters = signal<SemesterOption[]>([]);
+  readonly currentSemkez = signal('');
+  /** Whether courses can be added to the shown semester (it is in the course catalogue). */
+  readonly inCatalogue = computed(() => this.semesters().find(s => s.semkez === this.semkez())?.inCatalogue ?? true);
   private readonly state = signal<StudyData>(emptyData(today()));
   readonly data = this.state.asReadonly();
   readonly subjects = computed(() => this.data().subjects);
@@ -69,13 +74,16 @@ export class StudyStore {
     return {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)};
   }
 
-  /** Loads the current semester's plan. Keeps the shown week when it is still in range. */
-  async load():Promise<void> {
+  /** Loads the selected semester's plan (the server remembers the choice). Keeps the shown week
+   *  when it is still in range, unless `newSemester` says the user just switched. */
+  async load(newSemester=false):Promise<void> {
     try {
-      if (!this.semkez()) this.semkez.set((await this.request<{current:string}>('/api/semesters')).current);
+      const semesters = await this.request<Semesters>('/api/semesters');
+      this.semesters.set(semesters.available); this.currentSemkez.set(semesters.current);
+      if (!this.semkez()) this.semkez.set(semesters.selected);
       const plan = await this.request<Plan>(`/api/semesters/${this.semkez()}/plan`);
       const data = planToData(plan, today());
-      const first = !this.loaded();
+      const first = !this.loaded() || newSemester;
       this.state.set(data);
       this.planSubjects.set(plan.subjects);
       this.preferences.set(plan.preferences ?? DEFAULT_PREFERENCES);
@@ -226,6 +234,17 @@ export class StudyStore {
     this.state.update(d=>({...d,sessions}));
     this.announce('Planned sessions saved.');
     void this.write(`/api/semesters/${this.semkez()}/sessions`,this.json('PUT',sessions));
+  }
+
+  /** Shows another semester. Pending changes are saved first; the choice is stored on the server. */
+  async selectSemester(semkez:string):Promise<void> {
+    if (semkez === this.semkez()) return;
+    await this.writes;
+    try { await this.request('/api/semesters/selected', this.json('PUT', {semkez})); }
+    catch (e) { this.announce(e instanceof Error ? e.message : 'Could not switch the semester.'); return; }
+    this.editor.set(null);
+    this.semkez.set(semkez);
+    await this.load(true);
   }
 
   /** Courses offered this semester whose code or title contains q (at least 2 characters). */

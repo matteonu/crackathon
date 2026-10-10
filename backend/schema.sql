@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
     display_name TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     birth_date TEXT,                  -- 'YYYY-MM-DD'; age is computed from it
-    study_start TEXT                  -- 'YYYY-MM-DD'
+    study_start TEXT,                 -- 'YYYY-MM-DD'
+    selected_semkez TEXT              -- the semester the app shows, e.g. '2026W'; NULL = the current one
 );
 
 -- Course catalog, shared by all users. One row per ETH unit number (code), across semesters.

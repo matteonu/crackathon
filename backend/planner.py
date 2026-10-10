@@ -1,6 +1,7 @@
 """The caller's study plan on top of the VVZ catalogue: which courses they take in a semester.
 
-    GET    /api/semesters                              current, available and the caller's semesters
+    GET    /api/semesters                              current, selected, available and the caller's semesters
+    PUT    /api/semesters/selected          {semkez}   the semester the caller is looking at
     GET    /api/semesters/<semkez>/courses             the caller's courses in that semester
     POST   /api/semesters/<semkez>/courses  {courseId} add one (creates the semester row on first use)
     DELETE /api/semesters/<semkez>/courses/<courseId>  remove one
@@ -103,11 +104,26 @@ def available():
         "SELECT DISTINCT semkez FROM course_offerings ORDER BY semkez")]
 
 
+def own_semesters(user_id):
+    """The semesters the user has a plan for, as VVZ keys."""
+    labels = (r[0] for r in db.get_db().execute("SELECT label FROM semesters WHERE user_id = ?", (user_id,)))
+    return sorted(filter(None, map(semkez_of, labels)))
+
+
 def checked(semkez):
-    """The semester key, if it is well-formed and the catalogue has offerings for it."""
+    """A semester the caller can open: in the catalogue, or one they already have a plan for.
+    The latter keeps old plans reachable once the VVZ sync stops importing their semester."""
+    semkez = (semkez or "").upper()
+    if not SEMKEZ.fullmatch(semkez) or (semkez not in available() and semkez not in own_semesters(current_user()["id"])):
+        raise RequestError(400, "This semester is not available.")
+    return semkez
+
+
+def in_catalogue(semkez):
+    """A semester the catalogue has offerings for: only there can courses be searched and added."""
     semkez = (semkez or "").upper()
     if not SEMKEZ.fullmatch(semkez) or semkez not in available():
-        raise RequestError(400, "This semester is not in the course catalogue.")
+        raise RequestError(400, "Courses can only be added to semesters in the course catalogue.")
     return semkez
 
 
@@ -143,9 +159,13 @@ def entries(user_id, semkez, course_id=None):
 
 @bp.get("/semesters")
 def semesters():
-    options = available()
+    catalogue = available()
+    user = current_user()
     today = semester_of(dt.date.today())
-    current = today if today in options or not options else options[-1]
+    current = today if today in catalogue or not catalogue else catalogue[-1]
+    offered = sorted(set(catalogue) | set(own_semesters(user["id"])))
+    stored = user["selected_semkez"] if "selected_semkez" in user.keys() else None
+    selected = stored if stored in offered else current
     mine = []
     for r in db.get_db().execute(
         """SELECT s.label, count(sc.course_id) AS courseCount, coalesce(sum(c.ects), 0) AS ectsTotal
@@ -158,8 +178,19 @@ def semesters():
         semkez = semkez_of(r["label"])
         if semkez:
             mine.append({"semkez": semkez, **dict(r)})
-    return jsonify(current=current, available=[{"semkez": s, "label": label_of(s)} for s in options],
+    return jsonify(current=current, selected=selected,
+                   available=[{"semkez": s, "label": label_of(s), "inCatalogue": s in catalogue} for s in offered],
                    mine=sorted(mine, key=lambda m: m["semkez"]))
+
+
+@bp.put("/semesters/selected")
+def select_semester():
+    """Remembers which semester the caller is looking at, across devices."""
+    semkez = checked((request.get_json(silent=True) or {}).get("semkez"))
+    conn = db.get_db()
+    with conn:
+        conn.execute("UPDATE users SET selected_semkez = ? WHERE id = ?", (semkez, current_user()["id"]))
+    return jsonify(selected=semkez)
 
 
 @bp.get("/semesters/<semkez>/courses")
@@ -169,7 +200,7 @@ def list_courses(semkez):
 
 @bp.post("/semesters/<semkez>/courses")
 def add_course(semkez):
-    semkez = checked(semkez)
+    semkez = in_catalogue(semkez)
     body = request.get_json(silent=True) or {}
     course_id = body.get("courseId")
     if not isinstance(course_id, int) or isinstance(course_id, bool):
@@ -207,7 +238,7 @@ def remove_course(semkez, course_id):
 
 @bp.get("/courses")
 def search():
-    semkez = checked(request.args.get("semkez"))
+    semkez = in_catalogue(request.args.get("semkez"))
     q = (request.args.get("q") or "").strip()
     if len(q) < 2:
         raise RequestError(400, "Type at least 2 characters to search.")

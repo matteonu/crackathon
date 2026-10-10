@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { courseIdOf, dateRange, emptyData, planToData, semesterLabel } from '../src/app/models/semester.ts';
+import { courseIdOf, dateRange, emptyData, planToData, semesterLabel, semesterName } from '../src/app/models/semester.ts';
 import type { Plan } from '../src/app/models/semester.ts';
 import { validateData, validSession } from '../src/app/models/study.ts';
 
@@ -53,4 +53,9 @@ test('a plan from the server becomes valid study data', () => {
 test('no courses yet is valid, before and after loading', () => {
   assert.equal(validateData(emptyData('2026-10-10')), true);
   assert.equal(validateData(planToData({...plan, subjects: [], sessions: []}, '2026-10-10')), true);
+});
+
+test('semester names', () => {
+  assert.equal(semesterName('2026W'), 'Autumn 2026');
+  assert.equal(semesterName('2027S'), 'Spring 2027');
 });

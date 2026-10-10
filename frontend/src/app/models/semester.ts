@@ -97,6 +97,25 @@ export interface CourseHit {
   added: boolean;
 }
 
+/** A semester the user can switch to, from GET /api/semesters. */
+export interface SemesterOption {
+  semkez: string;
+  label: string;
+  /** False for an old semester the VVZ sync no longer imports: its plan opens, but no courses can be added. */
+  inCatalogue: boolean;
+}
+
+export interface Semesters {
+  current: string;
+  selected: string;
+  available: SemesterOption[];
+}
+
+/** '2026W' -> 'Autumn 2026', '2027S' -> 'Spring 2027'. */
+export function semesterName(semkez: string): string {
+  return `${semkez.endsWith('W') ? 'Autumn' : 'Spring'} ${semkez.slice(0, 4)}`;
+}
+
 /** '2026W' -> 'HS26', '2027S' -> 'FS27'. */
 export function semesterLabel(semkez: string): string {
   return `${semkez.endsWith('W') ? 'HS' : 'FS'}${semkez.slice(2, 4)}`;

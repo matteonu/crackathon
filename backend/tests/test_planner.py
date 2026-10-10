@@ -59,7 +59,9 @@ class PlannerTests(PlannerCase):
     def test_semesters_lists_current_and_available(self):
         body = self.get("/api/semesters").get_json()
         self.assertEqual(body["current"], "2026W")
-        self.assertEqual(body["available"], [{"semkez": "2026W", "label": "HS26"}, {"semkez": "2027S", "label": "FS27"}])
+        self.assertEqual(body["available"], [{"semkez": "2026W", "label": "HS26", "inCatalogue": True},
+                                             {"semkez": "2027S", "label": "FS27", "inCatalogue": True}])
+        self.assertEqual(body["selected"], "2026W")   # nothing chosen yet: the current semester
         self.assertEqual(body["mine"], [])
 
     def test_current_falls_back_to_the_latest_imported_semester(self):
@@ -233,6 +235,50 @@ class PlanTests(PlannerCase):
                                          "hours": 1}], user=BOB).status_code, 400)
 
 
+class SelectedSemesterTests(PlannerCase):
+    def select(self, semkez, user=ALICE):
+        return self.client.put("/api/semesters/selected", json={"semkez": semkez}, headers=user)
+
+    def test_the_choice_is_stored_per_user(self):
+        self.assertEqual(self.select("2027S").get_json(), {"selected": "2027S"})
+        self.assertEqual(self.get("/api/semesters").get_json()["selected"], "2027S")
+        self.assertEqual(self.get("/api/semesters", user=BOB).get_json()["selected"], "2026W")
+
+    def test_only_offered_semesters_can_be_chosen(self):
+        for bad in ("2019W", "nonsense", None):
+            self.assertEqual(self.select(bad).status_code, 400, bad)
+        self.assertEqual(self.get("/api/semesters").get_json()["selected"], "2026W")
+
+    def test_an_old_semester_stays_reachable_after_the_catalogue_drops_it(self):
+        self.add(2, "2027S")
+        self.client.put("/api/semesters/2027S/courses/2/hours/2027-06-03", json={"hours": 2}, headers=ALICE)
+        self.select("2027S")
+        with self.app.app_context():   # the sync moves on: 2027S has no offerings anymore
+            conn = db.get_db()
+            with conn:
+                conn.execute("DELETE FROM course_offerings WHERE semkez = '2027S'")
+        body = self.get("/api/semesters").get_json()
+        self.assertIn({"semkez": "2027S", "label": "FS27", "inCatalogue": False}, body["available"])
+        self.assertEqual(body["selected"], "2027S")
+        plan = self.get("/api/semesters/2027S/plan").get_json()
+        self.assertEqual(plan["subjects"][0]["hours"], {"2027-06-03": 2})
+        self.assertEqual(self.client.patch("/api/semesters/2027S/courses/2", json={"targetHours": 5}, headers=ALICE).status_code, 200)
+        # Without the catalogue there is nothing to search or add.
+        self.assertEqual(self.get("/api/courses?q=algebra&semkez=2027S").status_code, 400)
+        self.assertEqual(self.add(2, "2027S").get_json()["error"],
+                         "Courses can only be added to semesters in the course catalogue.")
+        # Bob has no plan there, so for him it is simply unavailable.
+        self.assertEqual(self.get("/api/semesters/2027S/plan", user=BOB).status_code, 400)
+
+    def test_a_stored_choice_that_is_no_longer_offered_falls_back_to_current(self):
+        self.select("2027S")
+        with self.app.app_context():
+            conn = db.get_db()
+            with conn:
+                conn.execute("DELETE FROM course_offerings WHERE semkez = '2027S'")
+        self.assertEqual(self.get("/api/semesters").get_json()["selected"], "2026W")
+
+
 class SchemaUpgradeTests(unittest.TestCase):
     def test_an_old_semester_courses_table_gets_the_plan_columns(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -248,6 +294,23 @@ class SchemaUpgradeTests(unittest.TestCase):
             with app.app_context():
                 row = db.get_db().execute("SELECT target_hours, completed, next_action, exam_date FROM semester_courses").fetchone()
             self.assertEqual(tuple(row), (0, 0, "", None))
+
+    def test_an_old_users_table_gets_the_selected_semester(self):
+        with tempfile.TemporaryDirectory() as temp:
+            import sqlite3
+            from pathlib import Path
+            old = sqlite3.connect(Path(temp) / "app.db")
+            old.executescript("""CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL COLLATE NOCASE,
+                                 display_name TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                                 birth_date TEXT, study_start TEXT);
+                                 INSERT INTO users (email) VALUES ('alice@ethz.ch');""")
+            old.commit()
+            old.close()
+            app = build_app(temp)
+            add_catalogue(app)
+            with patch("planner.semester_of", return_value="2026W"):
+                body = app.test_client().get("/api/semesters", headers=ALICE).get_json()
+            self.assertEqual(body["selected"], "2026W")
 
 
 if __name__ == "__main__":

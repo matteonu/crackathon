@@ -51,7 +51,6 @@ app-schedule, app-next, app-analytics, app-root { display: block; min-width: 0; 
 .primary-nav a { display: flex; align-items: center; gap: 13px; padding: 12px 13px; border-radius: 9px; color: #67736a; font-size: 13px; min-height: 44px; transition: background .18s, color .18s; }
 .primary-nav a:hover { background: #e5eadf; color: var(--green); }
 .primary-nav a.active { background: #dce5d5; color: var(--green); font-weight: 650; }
-.primary-nav a.active::after { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #668360; margin-left: auto; }
 .primary-nav app-icon { width: 18px; height: 18px; }
 .sidebar-subjects { margin-top: 34px; }
 .sidebar-subjects nav { display: grid; gap: 4px; }
@@ -59,7 +58,8 @@ app-schedule, app-next, app-analytics, app-root { display: block; min-width: 0; 
 .sidebar-subjects a:hover, .sidebar-subjects a.active { background: #e2e8dc; color: #304735; }
 .nav-label-actions { display: inline-flex; align-items: center; gap: 8px; }
 /* Notion-like section header: the row tints on hover, the + is a bare icon with its own hover tint. */
-.sidebar-subjects > .nav-label { margin: 0 0 8px; padding: 4px 6px 4px 12px; min-height: 30px; border-radius: 7px; transition: background .15s; }
+/* Controls on the right of sidebar rows (the +, ⋯ and the chevrons) are centred 15.5px from the row's edge. */
+.sidebar-subjects > .nav-label { margin: 0 0 8px; padding: 4px 3.5px 4px 12px; min-height: 30px; border-radius: 7px; transition: background .15s; }
 .sidebar-subjects > .nav-label:hover { background: #e2e8dc; }
 .sidebar-subjects .add-course { width: 24px; height: 24px; border: none; border-radius: 5px; background: transparent; color: #7d8a7c; }
 .sidebar-subjects .add-course:hover:not(:disabled) { background: #d3dccb; border: none; color: #304735; }
@@ -68,7 +68,7 @@ app-schedule, app-next, app-analytics, app-root { display: block; min-width: 0; 
 .sidebar-subject { position: relative; display: flex; align-items: center; min-width: 0; }
 .sidebar-subject > a { flex: 1; min-width: 0; padding-right: 30px; }
 .sidebar-subject > a > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.course-menu-button { position: absolute; right: 6px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; border-radius: 5px; background: transparent; color: #68756c; opacity: 0; cursor: pointer; }
+.course-menu-button { position: absolute; right: 4.5px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; border-radius: 5px; background: transparent; color: #68756c; opacity: 0; cursor: pointer; }
 .course-menu-button app-icon { width: 14px; height: 14px; }
 .sidebar-subject:hover .course-menu-button, .course-menu-button:focus-visible, .sidebar-subject.menu-open .course-menu-button { opacity: 1; }
 .course-menu-button:hover, .sidebar-subject.menu-open .course-menu-button { background: #d9e1d2; color: #304735; }
@@ -93,23 +93,36 @@ app-schedule, app-next, app-analytics, app-root { display: block; min-width: 0; 
 .course-hit .button { flex: 0 0 auto; }
 .subject-dot { display: inline-block; flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; }
 .sidebar-bottom { margin-top: auto; padding-top: 40px; }
-.semester-card { border: 1px solid #d9e1d2; padding: 15px; border-radius: 12px; background: #e6ecdf; }
-.semester-top { display: flex; gap: 10px; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.semester-top .eyebrow { font-size: 8px; letter-spacing: .07em; }
-.semester-top app-icon { color: #708965; width: 18px; height: 18px; }
-.semester-card > strong { font-size: 19px; font-weight: 600; }
-.semester-card p { font-size: 11px; color: #6c7867; margin-top: 3px; }
-.semester-progress { height: 4px; background: #d7dfcd; margin: 17px 0 8px; border-radius: 4px; overflow: hidden; }
-.semester-progress span { height: 100%; background: #769468; display: block; transition: width .3s; }
-.semester-card small { font-size: 9px; color: #6b7864; }
-.settings-link { width: 100%; display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 18px 10px; font-size: 11px; color: #727d71; }
-.settings-link:hover { color: var(--green); }
-.settings-link app-icon { width: 16px; height: 16px; }
-.profile { padding: 17px 5px 0; border-top: 1px solid #dce2d6; display: flex; gap: 10px; align-items: center; }
+.semester-picker { position: relative; }
+.semester-switch { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 9px 10px 10px; border: none; border-radius: 9px; background: transparent; color: #67736a; font-size: 12px; text-align: left; cursor: pointer; transition: background .18s, color .18s; }
+.semester-switch app-icon { width: 16px; height: 16px; }
+.semester-switch strong { font-weight: 650; color: #304735; }
+.semester-switch .chevron { width: 13px; height: 13px; margin-left: auto; transition: transform .18s; }
+.semester-switch[aria-expanded=true] .chevron { transform: rotate(180deg); }
+.semester-switch:hover:not(:disabled), .semester-switch[aria-expanded=true] { background: #e5eadf; color: var(--green); }
+.semester-switch:focus-visible { outline: 2px solid #9fb596; outline-offset: 1px; }
+.semester-menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 4px); z-index: 20; padding: 5px; background: white; border: 1px solid #dfe6d6; border-radius: 9px; box-shadow: 0 10px 30px #1e301e24; }
+.semester-menu [role=menuitemradio] { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: none; border-radius: 6px; background: transparent; color: #3d5134; font-size: 12px; text-align: left; cursor: pointer; }
+.semester-menu [role=menuitemradio]:hover, .semester-menu [role=menuitemradio]:focus-visible { background: #f2f6ed; }
+.semester-menu [role=menuitemradio] strong { font-weight: 600; min-width: 36px; }
+.semester-menu [role=menuitemradio] span { color: var(--muted); white-space: nowrap; }
+.semester-menu [role=menuitemradio] app-icon { width: 14px; height: 14px; margin-left: auto; color: #4d6a43; }
+.profile { position: relative; padding: 12px 0 0; border-top: 1px solid #dce2d6; display: flex; gap: 6px; align-items: center; }
+.profile-button { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 6px 9px 6px 6px; border: none; border-radius: 9px; background: transparent; color: inherit; text-align: left; cursor: pointer; transition: background .18s; }
+.profile-button:hover, .profile-button[aria-expanded=true] { background: #e5eadf; }
+.profile-button:focus-visible { outline: 2px solid #9fb596; outline-offset: 1px; }
+.profile-button .avatar { flex: none; }
+.profile-text { min-width: 0; }
+.profile-text strong { display: block; font-size: 12px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-text span { display: block; font-size: 9px; color: #83907f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-button .chevron { width: 13px; height: 13px; margin-left: auto; color: #83907f; transition: transform .18s; }
+.profile-button[aria-expanded=true] .chevron { transform: rotate(180deg); }
+.profile-menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 4px); z-index: 20; padding: 5px; background: white; border: 1px solid #dfe6d6; border-radius: 9px; box-shadow: 0 10px 30px #1e301e24; }
+.profile-menu [role=menuitem] { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: none; border-radius: 6px; background: transparent; color: #3d5134; font-size: 12px; text-align: left; cursor: pointer; }
+.profile-menu [role=menuitem] app-icon { width: 15px; height: 15px; }
+.profile-menu [role=menuitem]:hover, .profile-menu [role=menuitem]:focus-visible { background: #f2f6ed; }
 .avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; color: var(--green); background: #dce5d5; font-weight: 600; }
-.profile strong { display: block; font-size: 12px; font-weight: 550; }
 .profile .sign-out { margin-left: auto; flex: none; }
-.profile div > span { display: block; font-size: 9px; color: #83907f; }
 .mobile-settings { display: none !important; }
 main { min-width: 0; width: 100%; max-width: 1900px; margin: 0 auto; padding: 30px 32px 20px; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 111px; padding-bottom: 30px; }
@@ -329,7 +342,6 @@ textarea { resize: vertical; line-height: 1.7; }
   .primary-nav { display: flex; justify-content: space-between; gap: 6px; padding-bottom: 12px; }
   .primary-nav a { padding: 8px 9px; gap: 6px; font-size: 10px; min-height: 36px; white-space: nowrap; }
   .primary-nav a app-icon { width: 15px; height: 15px; }
-  .primary-nav a.active::after { display: none; }
   .mobile-settings { display: inline-flex !important; position: absolute; top: 17px; right: 16px; background: #e7eddf; }
   main { padding: 23px 14px 18px; }
   .page-heading { padding-bottom: 25px; min-height: 0; align-items: flex-start; flex-wrap: wrap; gap: 15px; }
