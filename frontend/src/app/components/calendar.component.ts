@@ -121,10 +121,7 @@ export class CalendarComponent {
     try{if(await this.store.planDay(date))this.store.announce(`${dayLabel(date,{weekday:'long',day:'numeric',month:'short'})} is planned.`);}
     finally{this.planningDay.set(null);}
   }
-  clearDay(date:string):void{
-    if(!confirm(`Clear ${dayLabel(date,{weekday:'long',day:'numeric',month:'long'})}? Every slot on it goes, the ones you placed yourself and lunch and dinner too.`))return;
-    void this.store.clearDay(date);
-  }
+  clearDay(date:string):void{void this.store.clearDay(date);}
   open(block:PlanBlock):void{if(block.subjectId)void this.router.navigate(['/subject-tab',block.subjectId]);}
   async choose(kind:'course'|'break',courseId?:number):Promise<void>{
     const p=this.pending();if(!p)return;this.chooser()?.nativeElement.close();this.pending.set(null);
