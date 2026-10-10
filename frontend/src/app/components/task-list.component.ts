@@ -17,10 +17,10 @@ import { IconComponent } from '../shared/icon.component';
     @if(store.loading()){<p class="muted task-empty">Loading your tasks…</p>}
     <ul class="task-list" [attr.aria-label]="'Open tasks'">
       @for(t of open();track t.id;let i=$index){
-        <li class="task" [class.task-editing]="editingId()===t.id">
+        <li class="task" [class.task-editing]="editingId()===t.id" (click)="rowClick($event,t)">
           <input type="checkbox" class="task-check" [checked]="t.done" (change)="store.toggle(t.id)" [attr.aria-label]="'Mark '+t.title+' as done'">
           @if(editingId()===t.id){
-            <form class="task-edit" (ngSubmit)="saveEdit(t)">
+            <div class="task-expand"><form class="task-edit" (ngSubmit)="saveEdit(t)">
               <label class="sr-only" for="edit-title">Title</label>
               <input #titleBox id="edit-title" name="title" [(ngModel)]="editTitle" [maxlength]="maxTitle" required (keydown.escape)="cancelEdit()">
               <label class="sr-only" for="edit-notes">Notes</label>
@@ -29,7 +29,7 @@ import { IconComponent } from '../shared/icon.component';
                 <label class="task-due-field">Due<input type="date" name="due" [(ngModel)]="editDue"></label>
                 <div class="action-buttons"><button class="button primary" type="submit" [disabled]="!editTitle.trim()">Save</button><button class="text-button" type="button" (click)="cancelEdit()">Cancel</button></div>
               </div>
-            </form>
+            </form></div>
           } @else {
             <div class="task-body">
               <button type="button" class="task-title" (click)="startEdit(t)" [attr.aria-label]="'Edit '+t.title">{{t.title}}</button>
@@ -48,6 +48,7 @@ import { IconComponent } from '../shared/icon.component';
     @if(done().length){
       <details class="task-completed" [open]="showDone()" (toggle)="showDone.set($any($event.target).open)">
         <summary>Completed ({{done().length}})</summary>
+        <div class="task-expand"><div>
         <ul class="task-list">
           @for(t of done();track t.id){
             <li class="task task-done">
@@ -58,6 +59,7 @@ import { IconComponent } from '../shared/icon.component';
           }
         </ul>
         <button type="button" class="text-button" (click)="store.clearCompleted(subjectId())"><app-icon name="trash" /> Delete all completed</button>
+        </div></div>
       </details>
     }
   </section>
@@ -80,6 +82,11 @@ export class TaskListComponent {
     if(!(await this.store.add(this.subjectId(),title)))this.draft=title;
   }
   startEdit(t:Task):void {this.editingId.set(t.id);this.editTitle=t.title;this.editNotes=t.notes;this.editDue=t.due??'';}
+  /** Clicking anywhere on a row opens it, except on its own controls (checkbox, tools, the editor). */
+  rowClick(event:Event,t:Task):void {
+    if(this.editingId()===t.id||(event.target as HTMLElement).closest('input, button, textarea, label, form'))return;
+    this.startEdit(t);
+  }
   cancelEdit():void {this.editingId.set(null);}
   async saveEdit(t:Task):Promise<void>{
     if(await this.store.update(t.id,{title:this.editTitle,notes:this.editNotes,due:this.editDue||null}))this.editingId.set(null);
