@@ -72,7 +72,8 @@ noon and only revert after that. Never `ssh` in and edit files on the VM -- the 
 
 Flask (`backend/`) serves the API under `/api` and the built Angular app (`frontend/`) for every
 other path — one process, one port. The PDF pipeline (lecture PDF → summary → flashcards → Anki
-deck) lives in `backend/learning/`; see [LEARNING_VIEW.md](LEARNING_VIEW.md) for how it works.
+deck) lives in `backend/learning/`; see its [module README](backend/learning/README.md) for how
+it works.
 
 **Deploy:** every push to `main` runs the frontend and backend checks, then deploys to the VM
 (`.github/workflows/deploy.yml`): `git reset --hard origin/main` and
