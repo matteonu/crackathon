@@ -126,8 +126,6 @@ app-schedule, app-next, app-analytics, app-root { display: block; min-width: 0; 
 .mobile-settings { display: none !important; }
 main { min-width: 0; width: 100%; max-width: 1900px; margin: 0 auto; padding: 30px 32px 20px; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 111px; padding-bottom: 30px; }
-.breadcrumb { display: flex; gap: 9px; align-items: center; font-size: 9px; letter-spacing: .08em; color: #7b897b; margin-bottom: 13px; }
-.breadcrumb span { color: #b4bdb1; }
 .page-heading p { color: var(--muted); font-size: 12px; margin-top: 10px; }
 .page-stack { display: grid; gap: 20px; }
 .panel { padding: 22px 22px 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; min-width: 0; box-shadow: 0 2px 3px #25321d02; }
@@ -334,7 +332,6 @@ textarea { resize: vertical; line-height: 1.7; }
   .page-heading { padding-bottom: 25px; min-height: 0; align-items: flex-start; flex-wrap: wrap; gap: 15px; }
   h1 { font-size: 28px; max-width: 540px; }
   .page-heading p { font-size: 11px; line-height: 1.7; }
-  .breadcrumb { font-size: 8px; margin-bottom: 11px; }
   .page-stack { gap: 16px; }
   .panel { padding: 18px 13px 0; border-radius: 13px; }
   .panel-heading { gap: 12px; margin-bottom: 18px; align-items: flex-start; }

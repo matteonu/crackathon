@@ -12,7 +12,7 @@ import { TaskListComponent } from '../components/task-list.component';
 
 @Component({standalone:true,imports:[RouterLink,IconComponent,MaterialLibraryComponent,TaskListComponent],template:`
   @if(subject();as s){
-    <header class="page-heading"><div><div class="breadcrumb">YOUR WORKSPACE <span>/</span> SUBJECTS</div><h1><span class="subject-dot heading-dot" [style.background]="s.color"></span>{{s.name}}<span>.</span></h1>
+    <header class="page-heading"><div><h1><span class="subject-dot heading-dot" [style.background]="s.color"></span>{{s.name}}<span>.</span></h1>
       <div class="subject-meta"><span>{{s.lectureId || 'Lecture ID not set'}}</span><span>{{s.ects===undefined?'ECTS not set':s.ects+' ECTS'}}</span>@if(s.homepage){<a [href]="s.homepage" target="_blank" rel="noopener noreferrer">Course catalogue ↗</a>}</div>
     </div><button class="button primary" (click)="store.openEditor(s.id)"><app-icon name="plus" /> Record hours</button></header>
     <section class="panel subject-progress" aria-labelledby="progress-title"><div class="panel-heading"><h2 id="progress-title">Your progress</h2></div><div class="subject-progress-grid">
