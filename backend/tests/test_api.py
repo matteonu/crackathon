@@ -52,6 +52,17 @@ class AuthTests(unittest.TestCase):
             self.assertEqual(client.get('/api/me', headers={'X-User-Id': 'bob@ethz.ch'}).get_json()['email'],
                              'bob@ethz.ch')
 
+    def test_sign_out_is_offered_only_to_a_request_from_the_proxy(self):
+        with tempfile.TemporaryDirectory() as temp:
+            app = build_app(temp, DEV_USER='alice@ethz.ch', SIGN_OUT_URL='https://auth.example/logout')
+            client = app.test_client()
+            self.assertNotIn('signOutUrl', client.get('/api/me').get_json())
+            through_proxy = client.get('/api/me', headers={'X-User-Id': 'alice@ethz.ch'}).get_json()
+            self.assertEqual(through_proxy['signOutUrl'], 'https://auth.example/logout')
+            # Configuring it empty hides the button everywhere.
+            silent = build_app(temp, SIGN_OUT_URL='').test_client()
+            self.assertNotIn('signOutUrl', silent.get('/api/me', headers={'X-User-Id': 'a@ethz.ch'}).get_json())
+
     def test_a_seeded_user_keeps_their_data(self):
         with tempfile.TemporaryDirectory() as temp:
             client = build_app(temp, seed=True).test_client()

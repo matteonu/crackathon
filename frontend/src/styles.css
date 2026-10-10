@@ -74,6 +74,7 @@ app-schedule, app-next, app-analytics, app-root { display: block; min-width: 0; 
 .profile { padding: 17px 5px 0; border-top: 1px solid #dce2d6; display: flex; gap: 10px; align-items: center; }
 .avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; color: var(--green); background: #dce5d5; font-weight: 600; }
 .profile strong { display: block; font-size: 12px; font-weight: 550; }
+.profile .sign-out { margin-left: auto; flex: none; }
 .profile div > span { display: block; font-size: 9px; color: #83907f; }
 .mobile-settings { display: none !important; }
 main { min-width: 0; width: 100%; max-width: 1900px; margin: 0 auto; padding: 30px 32px 20px; }

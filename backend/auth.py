@@ -33,6 +33,7 @@ def init_app(app):
     @app.before_request
     def load_user():
         g.user = None
+        g.via_proxy = bool(request.headers.get("X-User-Id"))
         if not request.path.startswith("/api/") or request.path in PUBLIC_PATHS:
             return None
         email, name = identity()
@@ -46,3 +47,8 @@ def init_app(app):
 def current_user():
     """The caller's user row. Only valid after load_user has run for an /api path."""
     return g.user
+
+
+def via_proxy():
+    """Whether this request carried the proxy's headers, rather than falling back to DEV_USER."""
+    return getattr(g, "via_proxy", False)

@@ -182,6 +182,13 @@ Locally there is no proxy. `python backend/app.py` stands in as `alice@ethz.ch`;
 `DEV_USER=bob@ethz.ch` in `.env` to be someone else. A real header always wins over it, and
 on the VM `DEV_USER` is unset, so a request that bypasses the proxy gets 401.
 
+**Signing out** is the login provider's job, so the server hands the frontend a URL and the
+sidebar shows the button only for a request that came through the proxy. The default chain is
+VSETH's Keycloak logout (which ends the single-sign-on session) redirecting to the proxy's
+`/oauth2/sign_out` (which clears its cookie) and back to us, where the browser is asked to log
+in again. Keycloak has to come first: oauth2-proxy only redirects to `*.hackathon.ethz.ch`.
+Override it with `SIGN_OUT_URL` in `.env`, or set it empty to hide the button.
+
 ## Deadlines
 
 - **Sunday noon:** we lose access to the VM, so the app must already be running on its own (Docker Compose with `restart: unless-stopped`).
