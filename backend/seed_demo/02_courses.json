@@ -38,5 +38,61 @@
     "term": "FS",
     "ects": 8,
     "professor": "Prof. Example E"
+  },
+  {
+    "id": 6,
+    "code": "252-0029-00L",
+    "title": "Parallel Programming",
+    "term": "FS",
+    "ects": 7,
+    "professor": null
+  },
+  {
+    "id": 7,
+    "code": "252-0030-00L",
+    "title": "Algorithms and Probability",
+    "term": "FS",
+    "ects": 7,
+    "professor": null
+  },
+  {
+    "id": 8,
+    "code": "401-0614-00L",
+    "title": "Probability and Statistics",
+    "term": "FS",
+    "ects": 5,
+    "professor": null
+  },
+  {
+    "id": 9,
+    "code": "252-0057-00L",
+    "title": "Theoretical Computer Science",
+    "term": "HS",
+    "ects": 7,
+    "professor": null
+  },
+  {
+    "id": 10,
+    "code": "252-0061-00L",
+    "title": "Systems Programming and Computer Architecture",
+    "term": "HS",
+    "ects": 7,
+    "professor": null
+  },
+  {
+    "id": 11,
+    "code": "401-0663-00L",
+    "title": "Numerical Methods for Computer Science",
+    "term": "HS",
+    "ects": 7,
+    "professor": null
+  },
+  {
+    "id": 12,
+    "code": "401-0213-16L",
+    "title": "Analysis II",
+    "term": "HS",
+    "ects": 5,
+    "professor": null
   }
 ]

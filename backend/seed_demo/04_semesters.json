@@ -16,5 +16,11 @@
     "user_id": 2,
     "label": "HS25",
     "study_hours_per_week": 15
+  },
+  {
+    "id": 4,
+    "user_id": 1,
+    "label": "HS26",
+    "study_hours_per_week": 30
   }
 ]
