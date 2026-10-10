@@ -76,6 +76,7 @@ ADDED_COLUMNS = {
         ("beta", "REAL NOT NULL DEFAULT 5"), ("study_weekdays", "TEXT NOT NULL DEFAULT '0123456'"),
     ),
     "plan_blocks": (("source", "TEXT NOT NULL DEFAULT 'generated'"),),
+    "tasks": (("priority", "TEXT NOT NULL DEFAULT 'medium'"),),
 }
 
 

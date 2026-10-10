@@ -15,6 +15,17 @@ function formatDay(iso: string, options: Intl.DateTimeFormatOptions): string {
   return new Intl.DateTimeFormat('en-GB', {...options, timeZone: 'UTC'}).format(new Date(iso + 'T12:00:00Z'));
 }
 
+export type Priority = 'high' | 'medium' | 'low';
+
+/** Highest first: open tasks sort in this order, then by their manual position. */
+export const PRIORITIES: readonly {value: Priority; label: string}[] = [
+  {value: 'high', label: 'High'}, {value: 'medium', label: 'Medium'}, {value: 'low', label: 'Low'},
+];
+
+export function priorityRank(priority: Priority): number {
+  return PRIORITIES.findIndex(p => p.value === priority);
+}
+
 /** One to-do in a subject's list. Stored on the server; see services/task-store.ts. */
 export interface Task {
   id: string;
@@ -22,9 +33,10 @@ export interface Task {
   title: string;
   notes: string;
   due: string | null;        // 'YYYY-MM-DD'
+  priority: Priority;
   done: boolean;
   completedAt: number | null;
-  position: number;          // manual order among open tasks, ascending
+  position: number;          // manual order among open tasks of the same priority, ascending
   createdAt: number;
 }
 
@@ -38,7 +50,7 @@ export function cleanTitle(value: string): string {
 
 export function openTasks(tasks: readonly Task[], subjectId: string): Task[] {
   return tasks.filter(t => t.subjectId === subjectId && !t.done)
-    .sort((a, b) => a.position - b.position || b.createdAt - a.createdAt);
+    .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || a.position - b.position || b.createdAt - a.createdAt);
 }
 
 export function doneTasks(tasks: readonly Task[], subjectId: string): Task[] {
@@ -52,13 +64,16 @@ export function topPosition(tasks: readonly Task[], subjectId: string): number {
   return (positions.length ? Math.min(...positions) : 0) - 1;
 }
 
-/** The position that puts a task just before or after its neighbour in the open list. */
+/** The position that puts a task just before or after its neighbour in the open list. A task
+ *  only moves among tasks of its own priority, so it stops at the edge of its group. */
 export function movedPosition(open: readonly Task[], id: string, direction: -1 | 1): number | null {
-  const index = open.findIndex(t => t.id === id);
+  const priority = open.find(t => t.id === id)?.priority;
+  const group = open.filter(t => t.priority === priority);
+  const index = group.findIndex(t => t.id === id);
   const target = index + direction;
-  if (index < 0 || target < 0 || target >= open.length) return null;
-  const neighbour = open[target].position;
-  const beyond = open[target + direction]?.position;
+  if (index < 0 || target < 0 || target >= group.length) return null;
+  const neighbour = group[target].position;
+  const beyond = group[target + direction]?.position;
   return beyond === undefined ? neighbour + direction : (neighbour + beyond) / 2;
 }
 
@@ -85,7 +100,7 @@ export function validTask(value: unknown): value is Task {
   return typeof t.id === 'string' && !!t.id && typeof t.subjectId === 'string' && !!t.subjectId
     && typeof t.title === 'string' && !!t.title && t.title.length <= MAX_TASK_TITLE
     && typeof t.notes === 'string' && t.notes.length <= MAX_TASK_NOTES
-    && (t.due === null || isIsoDate(t.due)) && typeof t.done === 'boolean'
+    && (t.due === null || isIsoDate(t.due)) && PRIORITIES.some(p => p.value === t.priority) && typeof t.done === 'boolean'
     && (t.completedAt === null || Number.isFinite(t.completedAt))
     && Number.isFinite(t.position) && Number.isFinite(t.createdAt);
 }

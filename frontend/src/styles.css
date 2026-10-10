@@ -817,6 +817,7 @@ html:has(.file-viewer-dialog[open]) { overflow:hidden; }
 .task-add { display: flex; gap: 8px; margin-bottom: 10px; }
 .task-add input { flex: 1; min-width: 0; }
 .task-add .button { min-width: 42px; padding: 0 12px; gap: 0; }
+.task-add .task-priority-select { flex: 0 0 auto; width: 96px; font-size: 12px; }
 .task-list { list-style: none; margin: 0; padding: 0; display: grid; }
 /* Rows reach 10px past the text on both sides so the hover wash has room for its corners. The
    hairline between rows is the row's top border; it fades out next to a highlighted row. */
@@ -839,6 +840,14 @@ html:has(.file-viewer-dialog[open]) { overflow:hidden; }
 .task-due.today { color: var(--green); font-weight: 600; }
 .task-due.tomorrow { color: var(--green); }
 .task-due.overdue { color: #9f453f; font-weight: 600; }
+.task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 2px; }
+.task-meta .task-due { margin-top: 0; }
+/* Priority: high stands out in the overdue red, medium in the app's green, low recedes. */
+.task-priority { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; }
+.task-priority app-icon { width: 12px; height: 12px; }
+.task-priority.high { color: #9f453f; font-weight: 600; }
+.task-priority.medium { color: var(--green); }
+.task-priority.low { color: #98a294; }
 /* Tools are bare icons that appear with the wash; no box, no border, just a darker wash on hover. */
 .task-tools { display: flex; gap: 1px; opacity: 0; transition: opacity .22s ease; }
 .task:hover .task-tools, .task:focus-within .task-tools { opacity: 1; }
@@ -853,11 +862,12 @@ html:has(.file-viewer-dialog[open]) { overflow:hidden; }
 .task-fade { animation: task-fade .22s ease-out; }
 .task-editing { grid-template-columns: auto minmax(0,1fr); }
 .task-edit { display: grid; gap: 8px; }
-.task-edit input, .task-edit textarea { background: #fff; }
+.task-edit input, .task-edit textarea, .task-edit select { background: #fff; }
 .task-edit textarea { min-height: 0; line-height: 1.5; }
 .task-edit-row { display: flex; justify-content: space-between; align-items: end; gap: 10px; flex-wrap: wrap; }
 .task-due-field { display: grid; gap: 4px; font-size: 10px; color: var(--muted); }
-.task-due-field input { min-height: 36px; padding: 6px 10px; width: auto; }
+.task-due-field input, .task-due-field select { min-height: 36px; padding: 6px 10px; width: auto; }
+.task-edit-fields { display: flex; gap: 10px; flex-wrap: wrap; }
 .task-edit .action-buttons { display: flex; gap: 10px; align-items: center; }
 .task-done .task-title { color: var(--muted); text-decoration: line-through; }
 .task-empty { padding: 10px 0 4px; font-size: 12px; }
