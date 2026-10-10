@@ -148,8 +148,11 @@ class PlanTests(PlannerCase):
         return self.client.put("/api/semesters/2026W/sessions", json=sessions, headers=user)
 
     def test_an_empty_plan_has_the_study_phase(self):
-        self.assertEqual(self.plan(), {"semkez": "2026W", "label": "HS26", "start": "2026-12-21", "end": "2027-02-14",
-                                       "subjects": [], "sessions": []})
+        body = self.plan()
+        self.assertEqual({key: body[key] for key in ("semkez", "label", "start", "end", "subjects", "sessions")},
+                         {"semkez": "2026W", "label": "HS26", "start": "2026-12-21", "end": "2027-02-14",
+                          "subjects": [], "sessions": []})
+        self.assertIsNone(body["plan"])
         self.assertEqual(self.get("/api/semesters/2027S/plan").get_json()["start"], "2027-06-01")
 
     def test_an_added_course_is_a_subject_with_defaults(self):
@@ -160,7 +163,8 @@ class PlanTests(PlannerCase):
             "id": "course-1", "courseId": 1, "name": "Algorithms and Data Structures",
             "shortName": "Algorithms and Data Structures", "color": "#2598A2", "targetHours": 0,
             "examDate": "2027-02-14", "completed": False, "nextAction": "", "ects": 7,
-            "lectureId": "252-0026-00L", "homepage": first["homepage"], "desiredGrade": None, "hours": {}})
+            "lectureId": "252-0026-00L", "homepage": first["homepage"], "desiredGrade": None, "hours": {},
+            "priority": 3, "difficulty": 3, "maxStudyHours": None, "lecturePerWeek": 6})
         self.assertIn("lerneinheitId=900", first["homepage"])
         self.assertEqual(second["color"], "#E4AC17")   # the next colour
 

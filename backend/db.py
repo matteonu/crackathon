@@ -62,7 +62,15 @@ ADDED_COLUMNS = {
     "semester_courses": (
         ("target_hours", "REAL NOT NULL DEFAULT 0"), ("exam_date", "TEXT"),
         ("completed", "INTEGER NOT NULL DEFAULT 0"), ("next_action", "TEXT NOT NULL DEFAULT ''"),
-        ("color", "TEXT"),
+        ("color", "TEXT"), ("priority", "INTEGER NOT NULL DEFAULT 3"), ("difficulty", "INTEGER"),
+        ("max_study_hours", "REAL"), ("lecture_per_week", "REAL"),
+    ),
+    "semesters": (
+        ("day_start", "TEXT NOT NULL DEFAULT '08:00'"), ("day_end", "TEXT NOT NULL DEFAULT '20:00'"),
+        ("lunch_start", "TEXT NOT NULL DEFAULT '12:00'"), ("lunch_end", "TEXT NOT NULL DEFAULT '13:00'"),
+        ("dinner_start", "TEXT NOT NULL DEFAULT '18:00'"), ("dinner_end", "TEXT NOT NULL DEFAULT '19:00'"),
+        ("study_block_size", "INTEGER NOT NULL DEFAULT 90"), ("alpha", "REAL NOT NULL DEFAULT 0.3"),
+        ("beta", "REAL NOT NULL DEFAULT 5"),
     ),
 }
 

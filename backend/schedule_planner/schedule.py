@@ -26,7 +26,8 @@ class Schedule:
     def __init__(self, user_input: dict, start_time: str, end_time: str,
                  lunch_time: tuple[str, str], dinner_time: tuple[str, str],
                  alpha: float = .3, beta: float = 5,
-                 weeks_in_semester: int = WEEKS_IN_SEMESTER):
+                 weeks_in_semester: int = WEEKS_IN_SEMESTER,
+                 hours_per_week_budget: float | None = None):
         # ---------- Inputs ----------
         self.user_input = user_input
         self.subjects = user_input["subjects"]
@@ -42,6 +43,11 @@ class Schedule:
         self.alpha = alpha
         self.beta = beta
         self.weeks_in_semester = weeks_in_semester
+        # A week's study budget. None fills every free slot, which is the notebook's behaviour.
+        self.hours_per_week_budget = hours_per_week_budget
+        if (hours_per_week_budget is not None
+                and (not isinstance(hours_per_week_budget, (int, float)) or hours_per_week_budget < 0)):
+            raise ValueError("The weekly study budget must be a non-negative number of hours.")
         self.study_block_size = user_input.get("study_block_size", 90)
         if type(self.study_block_size) is not int or self.study_block_size <= 0:
             raise ValueError("study_block_size must be a positive integer.")
@@ -54,7 +60,11 @@ class Schedule:
         # ---------- State ----------
         self.hours_per_week = 0.0
         # Scheduled history, keyed by date so a regenerated week is not counted twice.
+        # Seeded from `history` so a run that starts mid-session knows what came before.
         self.study_history: dict[dt.date, list[tuple[str, str, float]]] = {}
+        for entry in user_input.get("history", []):
+            self.study_history.setdefault(entry["date"], []).append(
+                (entry["subject"], entry["type"], entry["hours"]))
         self.block_types: dict[dt.date, dict[tuple[str, str], str]] = {}
         self.schedule: dict[dt.date, dict[tuple[str, str], str]] = {}
         self.current_week: DayRange | None = None
@@ -92,7 +102,7 @@ class Schedule:
         self.hours_per_subject_this_week = {name: None for name in self.subjects}
         self.schedule = {day: {} for day in week}
         self.block_types = {day: {} for day in week}
-        self.hours_per_week = self._available_hours()
+        self.hours_per_week = self._budget_hours()
 
     def next_week(self) -> None:
         """Advance to the next week of the exam session, if one remains."""
@@ -150,9 +160,25 @@ class Schedule:
     def _is_day_off(self, day: dt.date) -> bool:
         return any(day in day_range for day_range in self.days_off_this_week)
 
+    def _study_days(self) -> int:
+        return sum(1 for day in self.current_week if not self._is_day_off(day))
+
     def _available_hours(self) -> float:
+        """Hours of free slots this week, days off excluded. What the week physically offers."""
         minutes = sum(b - a for a, b, meal in self._time_slots() if meal is None)
-        return sum(minutes / 60 for day in self.current_week if not self._is_day_off(day))
+        return minutes / 60 * self._study_days()
+
+    def _budget_hours(self) -> float:
+        """Hours the week may plan: the free slots, or the user's budget if that is lower.
+
+        A budget is pro-rated over the days of a part week, so a two-day week gets two
+        sevenths of it. Recall blocks are placed regardless, as they are for max_study_hours,
+        so a week with a tight budget can end slightly above it.
+        """
+        free = self._available_hours()
+        if self.hours_per_week_budget is None:
+            return free
+        return min(free, self.hours_per_week_budget * len(self.current_week) / 7)
 
     # ---------- Allocation ----------
 
@@ -179,8 +205,8 @@ class Schedule:
                 for name in self.subjects}
 
     def generate_hours_per_subject_per_week(self) -> dict[str, float]:
-        """Split the week's available hours over the subjects by weight."""
-        self.hours_per_week = self._available_hours()
+        """Split the week's plannable hours over the subjects by weight."""
+        self.hours_per_week = self._budget_hours()
         weights = {}
         for name, subject in self.subjects.items():
             days = self.get_days_until_exam(name)
@@ -220,6 +246,10 @@ class Schedule:
         def deficit(name, extra=0.0):
             return self.hours_per_subject_this_week[name] - assigned[name] - extra
 
+        def days_left(from_day):
+            return sum(1 for day in self.current_week
+                       if day >= from_day and not self._is_day_off(day))
+
         def put(day, a, b, name, kind):
             slot = (self._to_time(a), self._to_time(b))
             self.schedule[day][slot] = name
@@ -251,7 +281,14 @@ class Schedule:
             reserved = {name: (b - a) / 60 for name, (a, b) in zip(selected, recall_slots)}
 
             # Hand out block counts by deficit, then lay them out subject by subject.
+            # With a budget, the day stops early rather than filling every free slot; the
+            # recall blocks are reserved already and are always placed.
+            day_budget = None if self.hours_per_week_budget is None else max(
+                0.0, self._budget_hours() - sum(assigned.values())
+                - sum(reserved.values())) / max(1, days_left(day))
             for _ in learning_slots:
+                if day_budget is not None and sum(allocations.values()) * block_hours >= day_budget:
+                    break
                 candidates = [name for name in selected
                               if (remaining(name) - allocations[name] * block_hours) * 60 >= 1]
                 if not candidates:
@@ -306,6 +343,7 @@ class Schedule:
                 "end_date": self.current_week.end_date.isoformat(),
                 "range_length": len(self.current_week),
                 "available_hours": self._available_hours(),
+                "budget_hours": self._budget_hours(),
                 "target_hours_per_subject": dict(self.hours_per_subject_this_week),
                 "scheduled_hours_per_subject": scheduled,
                 "active_learning_hours_per_subject": active,

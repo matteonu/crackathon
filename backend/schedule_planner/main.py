@@ -15,7 +15,7 @@ import json
 import re
 import sys
 
-from .dayrange import DayRange
+from .dayrange import DayRange, iso_date
 from .schedule import Schedule, WEEKS_IN_SEMESTER
 
 TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
@@ -76,6 +76,29 @@ def _subject(name, subject):
             "examdate": DayRange.from_value(subject["examdate"])}
 
 
+BLOCK_TYPES = ("active_learning", "recall")
+
+
+def _history(value, subjects):
+    """Hours already planned before this run, so a mid-session run keeps its past."""
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("history must be a list of {subject, type, date, hours}.")
+    entries = []
+    for entry in value:
+        if not isinstance(entry, dict):
+            raise ValueError("Every history entry must be an object.")
+        if entry.get("subject") not in subjects:
+            raise ValueError(f"history mentions {entry.get('subject')!r}, which is not a subject here.")
+        if entry.get("type") not in BLOCK_TYPES:
+            raise ValueError(f"A history entry's type must be one of {', '.join(BLOCK_TYPES)}.")
+        hours = _number(entry.get("hours"), "history: hours")
+        if hours < 0:
+            raise ValueError("history: hours cannot be negative.")
+        entries.append({"subject": entry["subject"], "type": entry["type"],
+                        "date": iso_date(entry.get("date")), "hours": hours})
+    return entries
+
+
 def validated(data):
     """Check a request and return it as the arguments Schedule takes. Never touches `data`."""
     if not isinstance(data, dict):
@@ -97,8 +120,17 @@ def validated(data):
     if beta <= 0:
         raise ValueError("beta must be greater than 0.")
 
+    budget = data.get("study_hours_per_week")
+    if budget is not None:
+        budget = _number(budget, "study_hours_per_week")
+        if budget < 0:
+            raise ValueError("study_hours_per_week cannot be negative.")
+
+    prepared = {name: _subject(name, subject) for name, subject in subjects.items()}
     return {
-        "subjects": {name: _subject(name, subject) for name, subject in subjects.items()},
+        "subjects": prepared,
+        "history": _history(data.get("history", []), prepared),
+        "study_hours_per_week": budget,
         "exam_session": DayRange.from_value(data["exam_session"]),
         "days_off": [DayRange.from_value(value) for value in days_off],
         "study_block_size": _whole(option("study_block_size"), "study_block_size"),
@@ -116,10 +148,12 @@ def generate_schedule(data: dict) -> dict:
     options = validated(data)
     planner = Schedule(
         {"subjects": options["subjects"], "days_off": options["days_off"],
-         "exam_session": options["exam_session"], "study_block_size": options["study_block_size"]},
+         "exam_session": options["exam_session"], "study_block_size": options["study_block_size"],
+         "history": options["history"]},
         options["day_start"], options["day_end"], options["lunch_time"], options["dinner_time"],
         alpha=options["alpha"], beta=options["beta"],
-        weeks_in_semester=options["weeks_in_semester"])
+        weeks_in_semester=options["weeks_in_semester"],
+        hours_per_week_budget=options["study_hours_per_week"])
     planner.generate_schedule()
     while planner.current_week.end_date < planner.exam_session.end_date:
         planner.next_week()

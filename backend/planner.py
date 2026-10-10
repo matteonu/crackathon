@@ -11,6 +11,9 @@
     PUT    /api/semesters/<semkez>/courses/<courseId>/hours/<date>  {hours} recorded on a day (null clears)
     PUT    /api/semesters/<semkez>/sessions            [{id, subjectId, date, start, hours}] replaces them all
 
+    PUT    /api/semesters/<semkez>/preferences         study habits and days off
+    POST   /api/semesters/<semkez>/plan/generate       build a schedule proposal from them
+
 In the app each course is a subject with id 'course-<courseId>'. A semester's study phase -- the
 days hours can be recorded and sessions planned for -- is its Lernphase before the exams.
 
@@ -27,6 +30,7 @@ from flask import Blueprint, jsonify, request
 from auth import current_user
 import db
 from errors import RequestError
+from schedule_planner.main import generate_schedule
 from vvz.sync import semester_of, term_of
 
 bp = Blueprint("planner", __name__, url_prefix="/api")
@@ -38,6 +42,13 @@ COLOR = re.compile(r"#[0-9a-fA-F]{6}")
 START = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
 MAX_RESULTS = 50
 MAX_SESSIONS = 10000
+MAX_DAYS_OFF = 200
+# Used when neither the user nor the scraped course ratings say how hard a course is.
+DEFAULT_DIFFICULTY = 3
+# The habits of a semester that has no row yet, mirroring the defaults in schema.sql.
+DEFAULT_PREFERENCES = {"dayStart": "08:00", "dayEnd": "20:00", "lunch": ["12:00", "13:00"],
+                       "dinner": ["18:00", "19:00"], "studyBlockSize": 90,
+                       "studyHoursPerWeek": None, "alpha": .3, "beta": 5, "daysOff": []}
 # Colours of new subjects, in order of adding; the same family as the frontend's.
 COLORS = ("#2598A2", "#E4AC17", "#D56568", "#5586CA", "#DD792F", "#6E9A5A", "#9A6BB8", "#C2577E")
 
@@ -235,11 +246,15 @@ def subjects(sid, semkez, course_id=None):
         hours.setdefault(r["course_id"], {})[r["date"]] = r["hours"]
     sql = """SELECT c.id, c.code, coalesce(c.title_english, o.title, c.title) AS title, coalesce(o.ects, c.ects) AS ects,
                     o.id AS offering_id, sc.target_hours, sc.exam_date, sc.completed, sc.next_action, sc.color,
-                    sc.desired_grade
+                    sc.desired_grade, sc.priority, sc.max_study_hours,
+                    -- What the scheduler will use: the user's value, else the scraped rating, else the middle.
+                    coalesce(sc.difficulty, cast(round(r.difficulty) AS INTEGER), ?) AS difficulty,
+                    coalesce(sc.lecture_per_week, o.weekly_hours, c.weekly_hours) AS lecture_per_week
              FROM semester_courses sc JOIN courses c ON c.id = sc.course_id
              LEFT JOIN course_offerings o ON o.course_id = c.id AND o.semkez = ?
+             LEFT JOIN course_ratings r ON r.code = c.code
              WHERE sc.semester_id = ?"""
-    params = [semkez, sid]
+    params = [DEFAULT_DIFFICULTY, semkez, sid]
     if course_id is not None:
         sql += " AND c.id = ?"
         params.append(course_id)
@@ -252,6 +267,8 @@ def subjects(sid, semkez, course_id=None):
             "nextAction": r["next_action"], "ects": r["ects"], "lectureId": r["code"],
             "homepage": vvz_url(semkez, r["offering_id"]), "desiredGrade": r["desired_grade"],
             "hours": hours.get(r["id"], {}),
+            "priority": r["priority"], "difficulty": min(5, max(1, r["difficulty"])),
+            "maxStudyHours": r["max_study_hours"], "lecturePerWeek": r["lecture_per_week"],
         })
     return result
 
@@ -276,7 +293,9 @@ def plan(semkez):
             "SELECT id, course_id, date, start, hours FROM study_sessions WHERE semester_id = ? ORDER BY date, start",
             (sid,))]
     return jsonify(semkez=semkez, label=label_of(semkez), start=start, end=end,
-                   subjects=[] if sid is None else subjects(sid, semkez), sessions=sessions)
+                   subjects=[] if sid is None else subjects(sid, semkez), sessions=sessions,
+                   preferences=DEFAULT_PREFERENCES if sid is None else preferences(sid),
+                   plan=None if sid is None else stored_plan(sid))
 
 
 @bp.patch("/semesters/<semkez>/courses/<int:course_id>")
@@ -307,6 +326,25 @@ def update_course(semkez, course_id):
         if not isinstance(body["color"], str) or not COLOR.fullmatch(body["color"]):
             raise RequestError(400, "Choose a colour like #2598A2.")
         fields["color"] = body["color"]
+    if "priority" in body:
+        if not isinstance(body["priority"], int) or isinstance(body["priority"], bool) or not 1 <= body["priority"] <= 5:
+            raise RequestError(400, "Priority goes from 1 (most important) to 5.")
+        fields["priority"] = body["priority"]
+    if "difficulty" in body:
+        value = body["difficulty"]
+        if value is not None and (not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 5):
+            raise RequestError(400, "Difficulty goes from 1 (easy) to 5, or leave it empty.")
+        fields["difficulty"] = value
+    if "maxStudyHours" in body:
+        value = body["maxStudyHours"]
+        if value is not None and (not number(value) or not 0 <= value <= 5000):
+            raise RequestError(400, "Enter a cap from 0 to 5000 hours, or leave it empty.")
+        fields["max_study_hours"] = None if value is None else round(value, 2)
+    if "lecturePerWeek" in body:
+        value = body["lecturePerWeek"]
+        if value is not None and (not number(value) or not 0 <= value <= 60):
+            raise RequestError(400, "Enter the weekly contact hours from 0 to 60, or leave it empty.")
+        fields["lecture_per_week"] = None if value is None else round(value, 2)
     if "desiredGrade" in body:
         grade = body["desiredGrade"]
         if grade is not None and (not number(grade) or not 1 <= grade <= 6):
@@ -386,3 +424,247 @@ def save_sessions(semkez):
             conn.execute("DELETE FROM study_sessions WHERE semester_id = ?", (sid,))
             conn.executemany("INSERT INTO study_sessions (semester_id, id, course_id, date, start, hours) VALUES (?, ?, ?, ?, ?, ?)", rows)
     return jsonify(saved=len(rows))
+
+
+# ------------------------------------------------------- study habits and the generated plan
+
+def minutes_of(time_str):
+    """'14:15' -> 855."""
+    return 60 * int(time_str[:2]) + int(time_str[3:])
+
+
+def semester_row(sid):
+    return db.get_db().execute("SELECT * FROM semesters WHERE id = ?", (sid,)).fetchone()
+
+
+def preferences(sid):
+    """How this semester's days are laid out, in the API's spelling."""
+    row = semester_row(sid)
+    return {"dayStart": row["day_start"], "dayEnd": row["day_end"],
+            "lunch": [row["lunch_start"], row["lunch_end"]],
+            "dinner": [row["dinner_start"], row["dinner_end"]],
+            "studyBlockSize": row["study_block_size"],
+            "studyHoursPerWeek": row["study_hours_per_week"],
+            "alpha": row["alpha"], "beta": row["beta"],
+            "daysOff": [{"startDate": r["start_date"], "rangeLength": r["range_length"]}
+                        for r in db.get_db().execute(
+                            """SELECT start_date, range_length FROM semester_days_off
+                               WHERE semester_id = ? ORDER BY start_date""", (sid,))]}
+
+
+def scheduler_request(sid, semkez, from_date):
+    """The schedule_planner request for one semester, and the course id behind each subject.
+
+    Subjects are keyed by course code: unique, stable, and short enough to read in a dump.
+    A finished course is left out, a missing difficulty falls back to the scraped course
+    rating, and blocks already planned before `from_date` go in as history so the hours they
+    used still count against a course's cap.
+    """
+    conn = db.get_db()
+    row = semester_row(sid)
+    end = phase(semkez)[1]
+    courses = conn.execute(
+        """SELECT c.id, c.code, coalesce(o.ects, c.ects, 0) AS ects,
+                  coalesce(sc.lecture_per_week, o.weekly_hours, c.weekly_hours, 0) AS lectures,
+                  coalesce(sc.difficulty, cast(round(r.difficulty) AS INTEGER), ?) AS difficulty,
+                  sc.priority, sc.max_study_hours, coalesce(sc.exam_date, ?) AS exam_date
+           FROM semester_courses sc JOIN courses c ON c.id = sc.course_id
+           LEFT JOIN course_offerings o ON o.course_id = c.id AND o.semkez = ?
+           LEFT JOIN course_ratings r ON r.code = c.code
+           WHERE sc.semester_id = ? AND sc.completed = 0
+           ORDER BY c.code""", (DEFAULT_DIFFICULTY, end, semkez, sid)).fetchall()
+    if not courses:
+        raise RequestError(400, "Add a course you have not finished yet, then generate a plan.")
+    ids = {r["code"]: r["id"] for r in courses}
+    subjects_input = {r["code"]: {
+        "ects": r["ects"], "lecture_per_week": r["lectures"],
+        "difficulty": min(5, max(1, r["difficulty"])), "priority": r["priority"],
+        "max_study_hours": r["max_study_hours"], "examdate": r["exam_date"]} for r in courses}
+    if all(subject["examdate"] <= from_date for subject in subjects_input.values()):
+        raise RequestError(400, "Every exam is on or before this date. Set a later exam date first.")
+
+    codes = {course_id: code for code, course_id in ids.items()}
+    history = [{"subject": codes[r["course_id"]], "type": r["type"], "date": r["date"],
+                "hours": (minutes_of(r["end_time"]) - minutes_of(r["start_time"])) / 60}
+               for r in conn.execute(
+                   """SELECT course_id, date, start_time, end_time, type FROM plan_blocks
+                      WHERE semester_id = ? AND date < ? AND type <> 'meal' ORDER BY date, start_time""",
+                   (sid, from_date))
+               if r["course_id"] in codes]
+    length = (dt.date.fromisoformat(end) - dt.date.fromisoformat(from_date)).days + 1
+    return {
+        "subjects": subjects_input,
+        "history": history,
+        "exam_session": {"start_date": from_date, "range_length": length},
+        "days_off": [{"start_date": day["startDate"], "range_length": day["rangeLength"]}
+                     for day in preferences(sid)["daysOff"]],
+        "day_start": row["day_start"], "day_end": row["day_end"],
+        "lunch_time": [row["lunch_start"], row["lunch_end"]],
+        "dinner_time": [row["dinner_start"], row["dinner_end"]],
+        "study_block_size": row["study_block_size"],
+        "study_hours_per_week": row["study_hours_per_week"],
+        "alpha": row["alpha"], "beta": row["beta"],
+    }, ids
+
+
+def plan_payload(from_date, generated_at, plan, ids):
+    """A generated plan in the shape the app reads, whether or not it was stored."""
+    scheduled = plan["summary"]["scheduled_hours_per_subject"]
+    active = plan["summary"]["active_learning_hours_per_subject"]
+    blocks = [{"id": None, "subjectId": None if block["subject"] is None else f"course-{ids[block['subject']]}",
+               "courseId": None if block["subject"] is None else ids[block["subject"]],
+               "date": day["date"], "start": block["start_time"], "end": block["end_time"],
+               "type": block["type"], "label": block["label"]}
+              for week in plan["weeks"] for day in week["days"] for block in day["blocks"]]
+    return {"generatedAt": generated_at, "fromDate": from_date, "blocks": blocks,
+            "summary": [{"subjectId": f"course-{ids[code]}", "courseId": ids[code],
+                         "scheduledHours": round(hours, 2),
+                         "activeLearningHours": round(active.get(code, 0.0), 2)}
+                        for code, hours in scheduled.items()]}
+
+
+def store_plan(sid, from_date, payload, result):
+    """Replace this semester's plan from `from_date` on. Earlier blocks stay as history."""
+    conn = db.get_db()
+    rows = [(sid, block["courseId"], block["date"], block["start"], block["end"],
+             block["type"], block["label"]) for block in result["blocks"]]
+    with conn:
+        conn.execute("DELETE FROM plan_blocks WHERE semester_id = ? AND date >= ?", (sid, from_date))
+        conn.executemany("""INSERT INTO plan_blocks (semester_id, course_id, date, start_time, end_time, type, label)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)""", rows)
+        conn.execute("""INSERT INTO study_plans (semester_id, generated_at, from_date, input_json, summary_json)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT (semester_id) DO UPDATE SET
+                            generated_at = excluded.generated_at, from_date = excluded.from_date,
+                            input_json = excluded.input_json, summary_json = excluded.summary_json""",
+                     (sid, result["generatedAt"], from_date, json.dumps(payload),
+                      json.dumps(result["summary"])))
+
+
+def stored_plan(sid):
+    """The plan held for a semester, or None if none was generated."""
+    conn = db.get_db()
+    row = conn.execute("""SELECT generated_at, from_date, summary_json FROM study_plans
+                          WHERE semester_id = ?""", (sid,)).fetchone()
+    if row is None:
+        return None
+    return {"generatedAt": row["generated_at"], "fromDate": row["from_date"],
+            "summary": json.loads(row["summary_json"]),
+            "blocks": [{"id": r["id"],
+                        "subjectId": None if r["course_id"] is None else f"course-{r['course_id']}",
+                        "courseId": r["course_id"], "date": r["date"], "start": r["start_time"],
+                        "end": r["end_time"], "type": r["type"], "label": r["label"]}
+                       for r in conn.execute(
+                           """SELECT id, course_id, date, start_time, end_time, type, label
+                              FROM plan_blocks WHERE semester_id = ?
+                              ORDER BY date, start_time, end_time, type""", (sid,))]}
+
+
+@bp.put("/semesters/<semkez>/preferences")
+def save_preferences(semkez):
+    """Study habits, and the days the user does not study. Every field is optional."""
+    semkez = checked(semkez)
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        raise RequestError(400, "Send the preferences as a JSON object.")
+    sid = semester_id(current_user()["id"], semkez, create=True)
+    row = semester_row(sid)
+    fields = {}
+
+    for key, column in (("dayStart", "day_start"), ("dayEnd", "day_end")):
+        if key in body:
+            if not isinstance(body[key], str) or not START.fullmatch(body[key]):
+                raise RequestError(400, f"{key} must be a time of day like 08:00.")
+            fields[column] = body[key]
+    for key, columns in (("lunch", ("lunch_start", "lunch_end")),
+                         ("dinner", ("dinner_start", "dinner_end"))):
+        if key in body:
+            value = body[key]
+            if (not isinstance(value, list) or len(value) != 2
+                    or not all(isinstance(t, str) and START.fullmatch(t) for t in value)
+                    or value[0] >= value[1]):
+                raise RequestError(400, f"{key} must be a start and an end time, like [\"12:00\", \"13:00\"].")
+            fields[columns[0]], fields[columns[1]] = value
+    if fields.get("day_start", row["day_start"]) >= fields.get("day_end", row["day_end"]):
+        raise RequestError(400, "The day has to end after it starts.")
+    if "studyBlockSize" in body:
+        size = body["studyBlockSize"]
+        if not isinstance(size, int) or isinstance(size, bool) or not 15 <= size <= 240:
+            raise RequestError(400, "Choose a study block of 15 to 240 minutes.")
+        fields["study_block_size"] = size
+    if "studyHoursPerWeek" in body:
+        value = body["studyHoursPerWeek"]
+        if value is not None and (not isinstance(value, int) or isinstance(value, bool)
+                                  or not 0 <= value <= 7 * 24):
+            raise RequestError(400, "Enter whole hours a week from 0 to 168, or leave it empty for no limit.")
+        fields["study_hours_per_week"] = value
+    for key, column, low, high in (("alpha", "alpha", 0, 5), ("beta", "beta", 1e-6, 100)):
+        if key in body:
+            if not number(body[key]) or not low <= body[key] <= high:
+                raise RequestError(400, f"{key} must be a number between {low} and {high}.")
+            fields[column] = float(body[key])
+
+    days_off = None
+    if "daysOff" in body:
+        value = body["daysOff"]
+        if not isinstance(value, list) or len(value) > MAX_DAYS_OFF:
+            raise RequestError(400, f"Send up to {MAX_DAYS_OFF} days off as a list.")
+        days_off, seen = [], set()
+        for item in value:
+            if not isinstance(item, dict) or not iso_date(item.get("startDate")):
+                raise RequestError(400, "Every day off needs a startDate like 2026-12-24.")
+            length = item.get("rangeLength", 1)
+            if not isinstance(length, int) or isinstance(length, bool) or not 1 <= length <= 400:
+                raise RequestError(400, "A day off can span 1 to 400 days.")
+            if item["startDate"] in seen:
+                raise RequestError(400, f"{item['startDate']} is listed twice.")
+            seen.add(item["startDate"])
+            days_off.append((sid, item["startDate"], length))
+
+    if not fields and days_off is None:
+        raise RequestError(400, "Nothing to change.")
+    conn = db.get_db()
+    with conn:
+        if fields:
+            conn.execute(f"UPDATE semesters SET {', '.join(f'{k} = ?' for k in fields)} WHERE id = ?",
+                         [*fields.values(), sid])
+        if days_off is not None:
+            conn.execute("DELETE FROM semester_days_off WHERE semester_id = ?", (sid,))
+            conn.executemany("INSERT INTO semester_days_off (semester_id, start_date, range_length) VALUES (?, ?, ?)",
+                             days_off)
+    return jsonify(preferences(sid))
+
+
+@bp.post("/semesters/<semkez>/plan/generate")
+def generate_plan(semkez):
+    """Build a schedule proposal for the rest of the study phase.
+
+    `fromDate` is the first day to plan, defaulting to today clamped into the study phase, so
+    pressing the button again next week keeps the weeks already behind. `dryRun` returns the
+    proposal without storing it, which is what the preview dialog asks for.
+    """
+    semkez = checked(semkez)
+    body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict):
+        raise RequestError(400, "Send the options as a JSON object.")
+    sid = semester_id(current_user()["id"], semkez)
+    if sid is None:
+        raise RequestError(400, f"Add a course to your {label_of(semkez)} first.")
+    start, end = phase(semkez)
+    from_date = body.get("fromDate")
+    if from_date is None:
+        from_date = min(max(dt.date.today().isoformat(), start), end)
+    elif not iso_date(from_date) or not start <= from_date <= end:
+        raise RequestError(400, f"fromDate must be a date in the study phase, {start} to {end}.")
+
+    payload, ids = scheduler_request(sid, semkez, from_date)
+    try:
+        result = generate_schedule(payload)
+    except ValueError as exc:
+        # Every rejection from the scheduler is already a sentence a user can act on.
+        raise RequestError(400, str(exc)) from None
+    plan = plan_payload(from_date, dt.datetime.now().astimezone().isoformat(timespec="seconds"), result, ids)
+    if not body.get("dryRun"):
+        store_plan(sid, from_date, payload, plan)
+        plan = stored_plan(sid)
+    return jsonify(plan)
