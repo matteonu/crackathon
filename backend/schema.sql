@@ -226,3 +226,36 @@ CREATE TABLE IF NOT EXISTS materials (
 -- where parent_id is NULL and NULLs would otherwise all count as different.
 CREATE UNIQUE INDEX IF NOT EXISTS materials_unique_name
     ON materials (user_id, subject_id, ifnull(parent_id, ''), lower(name));
+
+-- Deliberately survives material deletion: remote cleanup must survive crashes too.
+CREATE TABLE IF NOT EXISTS document_indexes (
+    document_id TEXT PRIMARY KEY,
+    resource_key TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'queued',
+    file_id TEXT,
+    vector_store_id TEXT,
+    error TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt REAL NOT NULL DEFAULT 0,
+    lease_until REAL NOT NULL DEFAULT 0,
+    lease_token TEXT
+);
+CREATE INDEX IF NOT EXISTS document_indexes_work ON document_indexes(status, next_attempt);
+CREATE TRIGGER IF NOT EXISTS materials_delete_context AFTER DELETE ON materials
+BEGIN
+    UPDATE document_indexes SET status = 'deleting', error = NULL, next_attempt = 0,
+        attempts = 0 WHERE document_id = OLD.id AND status <> 'deleted';
+END;
+
+CREATE TABLE IF NOT EXISTS document_chat_turns (
+    id INTEGER PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
+    request_id TEXT NOT NULL,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    page INTEGER NOT NULL,
+    pages TEXT NOT NULL,
+    searched INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(document_id, request_id)
+);

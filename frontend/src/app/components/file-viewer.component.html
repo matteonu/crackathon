@@ -12,14 +12,14 @@
   </form>
   @if(error()||materials.error()){<p class="form-error" role="alert">{{error()||materials.error()}}</p>}@if(notice()){<p class="viewer-notice" aria-live="polite">{{notice()}}</p>}
   @if(file.processing?.error){<p class="form-error" role="alert">{{file.processing!.error}}</p>}
-  <div class="file-viewer-columns" [class.summary-only]="!allowsCards()">
+  <div class="file-viewer-columns" [class.summary-only]="!allowsCards()&&!allowsChat()">
     <section #stage class="file-stage" aria-label="File and flashcard viewer">
       <div class="file-stage-toolbar">
         <div class="source-toolbar-label"><button type="button" class="source-file-button" [attr.aria-label]="kind()==='pdf'?'Back to PDF':'Back to file'" [attr.aria-pressed]="!card()" (click)="returnToFile()"><app-icon name="file" />{{card()?'Back to '+kind().toUpperCase():kind().toUpperCase()}}</button><span>{{file.category}}</span></div>
         <div class="source-toolbar-actions">@if(!card()&&kind()!=='pdf'){<button class="text-button" (click)="editing.set(!editing())">{{editing()?'Preview':'Edit file'}}</button>}<a class="text-button" [href]="fileUrl()" [download]="file.name"><app-icon name="download" />Download</a></div>
       </div>
       <div [hidden]="!!card()" class="source-pane">
-        @if(kind()==='pdf'){<app-pdf-preview [url]="fileUrl()" [name]="file.name" />}
+        @if(kind()==='pdf'){<app-pdf-preview [url]="fileUrl()" [name]="file.name" (pageChange)="pageContext.set($event)" />}
         @else if(editing()){
           <label class="sr-only" for="text-content">File content</label><textarea id="text-content" class="text-file-editor" [formControl]="content" spellcheck="false"></textarea><div class="action-buttons"><button class="button primary" (click)="saveContent()">Save file</button><button class="text-button" (click)="cancelContent()">Discard changes</button></div>
         }@else{
@@ -32,7 +32,15 @@
       </div>
       @if(card();as card){<article class="flashcard-stage" aria-label="Selected flashcard"><div class="flashcard-stage-top"><span class="eyebrow">QUESTION</span>@if(card.demo){<span class="demo-badge">Demo card</span>}</div><h2>{{card.question}}</h2>@if(revealed()){<div class="flashcard-answer"><span class="eyebrow">ANSWER</span><p>{{card.answer}}</p></div>}@else{<button class="button primary" (click)="revealed.set(true)">Reveal answer</button>}<p class="field-hint">Click outside this card, press Escape, or click Back to PDF above to return to your source.</p></article>}
     </section>
-    @if(allowsCards()){<aside class="flashcard-panel" aria-label="File flashcards"><div class="tool-heading"><div><span class="eyebrow">ACTIVE RECALL</span><h3>Flashcards <span class="card-count">{{cards().length}}</span></h3></div><app-icon name="book" /></div>
+    @if(allowsCards()||allowsChat()){<aside class="flashcard-panel" aria-label="Document study tools">
+      @if(allowsCards()&&allowsChat()){
+        <div class="document-tool-tabs" [class.chat-active]="panel()==='chat'" role="tablist" aria-label="Document study tools">
+          <button #cardsTab type="button" id="document-cards-tab" role="tab" aria-controls="document-cards-panel" [attr.aria-selected]="panel()==='flashcards'" [tabIndex]="panel()==='flashcards'?0:-1" (click)="choosePanel('flashcards')" (keydown.arrowright)="choosePanel('chat');chatTab.focus();$event.preventDefault()" (keydown.arrowleft)="choosePanel('chat');chatTab.focus();$event.preventDefault()" (keydown.end)="choosePanel('chat');chatTab.focus();$event.preventDefault()"><span>Flashcards</span><span class="document-tab-count">{{cards().length}}</span></button>
+          <button #chatTab type="button" id="document-chat-tab" role="tab" aria-controls="document-chat-panel" [attr.aria-selected]="panel()==='chat'" [tabIndex]="panel()==='chat'?0:-1" (click)="choosePanel('chat')" (keydown.arrowleft)="choosePanel('flashcards');cardsTab.focus();$event.preventDefault()" (keydown.arrowright)="choosePanel('flashcards');cardsTab.focus();$event.preventDefault()" (keydown.home)="choosePanel('flashcards');cardsTab.focus();$event.preventDefault()">Q&A Chat</button>
+        </div>
+      }@else{<h3 class="document-panel-title">{{panel()==='chat'?'Q&A Chat':'Flashcards'}}</h3>}
+      @if(allowsChat()){<div id="document-chat-panel" [attr.role]="allowsCards()?'tabpanel':null" [attr.aria-labelledby]="allowsCards()?'document-chat-tab':null" [hidden]="panel()!=='chat'"><app-document-chat [documentId]="fileId()" [page]="pageContext().page" [totalPages]="pageContext().total" /></div>}
+      <div id="document-cards-panel" [attr.role]="allowsChat()&&allowsCards()?'tabpanel':null" [attr.aria-labelledby]="allowsChat()&&allowsCards()?'document-cards-tab':null" [hidden]="panel()!=='flashcards'">
       @if(kind()==='pdf'){
         <div class="generation-settings">
           <app-learning-mode label="Mode" [mode]="selectedMode()" [disabled]="generating()" (modeChange)="selectedMode.set($event)" />
@@ -47,6 +55,7 @@
       <div class="flashcard-list">@for(card of cards();track card.id){<button class="flashcard-choice" [class.selected]="selectedCard()===card.id" [attr.aria-pressed]="selectedCard()===card.id" (click)="selectCard(card.id!)"><span class="flashcard-number">{{ $index+1 }}</span><span><strong>{{card.question}}</strong><small>{{card.generated?'Generated from PDF':card.demo?'Demo card':'Your card'}} · Click to review</small></span><app-icon name="right" /></button>}@empty{<div class="empty-state">@if(generating()&&!summaryRunning()){<app-loading-dots label="Preparing your flashcards" />}@else{No flashcards yet.}</div>}</div>
       <button class="text-button" (click)="addingCard.set(!addingCard())"><app-icon name="plus" /> Add a flashcard</button>
       @if(addingCard()){<form class="add-card-form" [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><button class="button secondary" type="submit">Save flashcard</button></form>}
+      </div>
     </aside>}
   </div>
 </div>
