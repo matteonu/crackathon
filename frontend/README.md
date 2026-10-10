@@ -32,7 +32,6 @@ keep navigation and refresh working without server rewrite rules.
 - Weekly navigation covers the complete December 2024–February 2025 study phase, including partial weeks at its edges.
 - Select any date/subject cell to edit its recorded hours. The modal uses a native dialog for focus containment, Escape dismissal, and focus return.
 - Totals, hours remaining, subject progress, and weekly summaries recalculate immediately.
-- Exam view supports All, Still to do, and Completed filters. Click a status to change it.
 - Subject pages let you edit a target, exam date, next action, and completion status.
 - PDF uploads generate a one-sentence summary from Python JSON. Choose Slides, Exercises, Solutions, Exams, or Scripts in the upload dropdown. Slides, Solutions, and Scripts offer optional flashcards: open the PDF, choose Shallow or Deep and 5–300 cards, then click Generate flashcards.
 - Generation labels animate through one, two, and three dots, respecting reduced-motion preferences.
