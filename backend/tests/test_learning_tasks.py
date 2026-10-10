@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 import uuid
 
 from learning import pdf_study
+from learning.config import reasoning_for
 from learning.jobs import StudyJobs
 from tests.support import build_app
 from tests.test_learning import FIXTURE, fake_model
@@ -76,11 +77,15 @@ class LearningTaskTests(unittest.TestCase):
             args = argparse.Namespace(pdfs=[str(FIXTURE)], output=str(Path(temp) / 'summary.json'),
                                       sentences=1, questions=0, language='English', model=pdf_study.SUMMARY_MODEL,
                                       timeout=10, allow_empty_pages=False, deep_mode=True,
-                                      task='summary', reasoning_effort='none')
+                                      task='summary', reasoning_effort=reasoning_for('summary'))
             pdf_study.run(args)
             request = provider.responses.create.call_args.kwargs
             self.assertEqual(request['model'], pdf_study.SUMMARY_MODEL)
-            self.assertEqual(request['reasoning'], {'effort': 'none'})
+            summary_reasoning = reasoning_for('summary')
+            if summary_reasoning:
+                self.assertEqual(request['reasoning'], {'effort': summary_reasoning})
+            else:
+                self.assertNotIn('reasoning', request)
             self.assertEqual(request['text']['format']['schema'], pdf_study.SUMMARY_SCHEMA)
             self.assertEqual(request['input'][0]['content'][0]['type'], 'input_file')
             result = json.loads(Path(args.output).read_text())['documents'][0]

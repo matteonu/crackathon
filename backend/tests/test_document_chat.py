@@ -15,7 +15,7 @@ import httpx
 from openai import NotFoundError
 from pypdf import PdfReader, PdfWriter
 
-from learning.document_chat import DocumentChat, page_context
+from learning.document_chat import CHAT_MODEL, CHAT_REASONING_EFFORT, DocumentChat, page_context
 from tests.support import build_app
 import db
 
@@ -137,13 +137,16 @@ class DocumentChatTests(unittest.TestCase):
         self.service.ensure_index(id)
         self.assertIs(self.service.thread, worker)
 
-    def test_chat_uses_flagship_model_and_high_reasoning_with_room_to_answer(self):
+    def test_chat_uses_shared_provider_config_with_room_to_answer(self):
         id = self.create()
         response = self.ask(id)
         self.assertEqual(response.status_code, 200)
         args = self.provider.client.responses.create.call_args.kwargs
-        self.assertEqual(args['model'], 'gpt-6-astra')
-        self.assertEqual(args['reasoning'], {'effort': 'high'})
+        self.assertEqual(args['model'], CHAT_MODEL)
+        if CHAT_REASONING_EFFORT:
+            self.assertEqual(args['reasoning'], {'effort': CHAT_REASONING_EFFORT})
+        else:
+            self.assertNotIn('reasoning', args)
         self.assertGreaterEqual(args['max_output_tokens'], 16000)
         self.assertGreaterEqual(args['timeout'], 180)
 
