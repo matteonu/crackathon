@@ -2,7 +2,9 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
   workflow_dispatch:
 
 concurrency:
@@ -14,6 +16,7 @@ jobs:
   # commits, so identical content counts: what must not reach the VM is a change that
   # was never on dev at all, such as a fix committed straight onto main.
   from-dev:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +64,9 @@ jobs:
           pip install -r backend/requirements.txt
           cd backend && python -m unittest discover -s tests -t . -v
 
+  # Only a push to main deploys; a pull request or a push to dev just runs the checks.
   deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [from-dev, check]
     runs-on: ubuntu-latest
     steps:
