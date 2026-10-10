@@ -17,8 +17,6 @@ from .dayrange import DayRange
 
 # Subjects per day are capped at a third of the day's blocks, so learning stays grouped.
 BLOCKS_PER_SUBJECT = 3
-# What is left of a block after busy time is cut out of it must be at least this long to use.
-MIN_SLOT_MINUTES = 15
 # The workload estimate: ECTS times this, minus the lectures already attended.
 HOURS_PER_ECTS = 30
 WEEKS_IN_SEMESTER = 13
@@ -33,7 +31,12 @@ class Schedule:
         # ---------- Inputs ----------
         self.user_input = user_input
         self.subjects = user_input["subjects"]
-        self.days_off = user_input["days_off"]
+        exam_days_off = user_input.get("exam_days_off", True)
+        if not isinstance(exam_days_off, bool):
+            raise ValueError("exam_days_off must be true or false.")
+        self.days_off = list(user_input["days_off"])
+        if exam_days_off:
+            self.days_off += [DayRange.from_date(subject["examdate"].start_date) for subject in self.subjects.values()]
         self.exam_session = user_input["exam_session"]
 
         self.start_time = start_time
@@ -67,12 +70,13 @@ class Schedule:
         for entry in user_input.get("history", []):
             self.study_history.setdefault(entry["date"], []).append(
                 (entry["subject"], entry["type"], entry["hours"]))
-        # Time the user has already filled, by day: [(start, end, subject or None)] in minutes.
+        # Time the user has already filled, by day, in minutes.
         # Nothing is planned on top of it, and a busy block with a subject counts as studying it.
-        self.busy: dict[dt.date, list[tuple[int, int, str | None]]] = {}
-        for entry in user_input.get("busy", []):
-            self.busy.setdefault(entry["date"], []).append(
-                (entry["start"], entry["end"], entry.get("subject")))
+        self.busy: dict[dt.date, list[dict]] = {}
+        for index, entry in enumerate(user_input.get("busy", [])):
+            self.busy.setdefault(entry["date"], []).append(dict(
+                entry, index=index, original_start=entry["start"], original_end=entry["end"],
+                type=entry.get("type", "active_learning" if entry.get("subject") else "meal")))
         self.block_types: dict[dt.date, dict[tuple[str, str], str]] = {}
         self.schedule: dict[dt.date, dict[tuple[str, str], str]] = {}
         self.current_week: DayRange | None = None
@@ -173,13 +177,63 @@ class Schedule:
 
     def _free_slots(self, day: dt.date, slots: list[tuple[int, int]]) -> list[tuple[int, int]]:
         """The day's study slots with the user's busy time cut out of them."""
-        for x, y, _ in self.busy.get(day, []):
+        for entry in self.busy.get(day, []):
+            x, y = entry["start"], entry["end"]
             slots = [piece for s, e in slots
                      for piece in ((s, min(e, x)), (max(s, y), e)) if piece[1] > piece[0]]
-        return [(a, b) for a, b in slots if b - a >= MIN_SLOT_MINUTES]
+        return [(a, b) for a, b in slots if b - a >= self.study_block_size]
 
-    def _busy_hours(self, subject: str, days) -> float:
-        return sum((b - a) / 60 for day in days for a, b, name in self.busy.get(day, []) if name == subject)
+    def _busy_hours(self, subject: str, days, active_only: bool = False) -> float:
+        return sum((entry["end"] - entry["start"]) / 60
+                   for day in days for entry in self.busy.get(day, [])
+                   if entry.get("subject") == subject and entry["type"] != "meal"
+                   and (not active_only or entry["type"] == "active_learning"))
+
+    def _committed_hours(self) -> float:
+        """Custom study this week, including courses no longer eligible for generation."""
+        return sum((entry["end"] - entry["start"]) / 60
+                   for day in self.current_week for entry in self.busy.get(day, [])
+                   if entry["type"] != "meal")
+
+    def _extend_busy_blocks(self) -> None:
+        """Absorb short adjoining fragments into custom study, respecting fixed time and caps."""
+        slots = [(a, b) for a, b, meal in self._time_slots() if meal is None]
+        for day in self.current_week:
+            if self._is_day_off(day):
+                continue
+            entries = self.busy.get(day, [])
+            for entry in sorted(entries, key=lambda item: item["start"]):
+                name = entry.get("subject")
+                if name not in self.subjects or entry["type"] == "meal":
+                    continue
+                if day >= self.subjects[name]["examdate"].start_date:
+                    continue
+                for edge in ("start", "end"):
+                    point = entry[edge]
+                    slot = next(((a, b) for a, b in slots if a < point < b), None)
+                    if slot is None:
+                        continue
+                    target = slot[0 if edge == "start" else 1]
+                    # An adjoining custom course, break or moved meal is a hard boundary.
+                    for other in entries:
+                        if other is entry:
+                            continue
+                        if edge == "start" and other["start"] < point and other["end"] > target:
+                            target = max(target, min(point, other["end"]))
+                        elif edge == "end" and other["end"] > point and other["start"] < target:
+                            target = min(target, max(point, other["start"]))
+                    extra = abs(point - target) / 60
+                    if self.hours_per_week_budget is not None:
+                        budget = self.hours_per_week_budget * len(self.current_week) / 7
+                        if self._committed_hours() + extra > budget + 1e-8:
+                            continue
+                    limit = self.subjects[name].get("max_study_hours")
+                    if limit is not None and entry["type"] == "active_learning":
+                        active = (self._previous_hours(name, active_only=True)
+                                  + self._busy_hours(name, self.current_week, active_only=True))
+                        if active + extra > limit + 1e-8:
+                            continue
+                    entry[edge] = target
 
     def _available_hours(self) -> float:
         """Hours of free slots this week, days off and busy time excluded."""
@@ -188,16 +242,18 @@ class Schedule:
                    for a, b in self._free_slots(day, slots)) / 60
 
     def _budget_hours(self) -> float:
-        """Hours the week may plan: the free slots, or the user's budget if that is lower.
+        """The week's total study allocation, with custom study already charged to it.
 
         A budget is pro-rated over the days of a part week, so a two-day week gets two
-        sevenths of it. Recall blocks are placed regardless, as they are for max_study_hours,
-        so a week with a tight budget can end slightly above it.
+        sevenths of it. Custom study is kept even if it already exceeds that budget;
+        in that case no additional study is generated.
         """
         free = self._available_hours()
+        committed = self._committed_hours()
         if self.hours_per_week_budget is None:
-            return free
-        return min(free, self.hours_per_week_budget * len(self.current_week) / 7)
+            return committed + free
+        remaining = max(0.0, self.hours_per_week_budget * len(self.current_week) / 7 - committed)
+        return committed + min(free, remaining)
 
     # ---------- Allocation ----------
 
@@ -217,7 +273,8 @@ class Schedule:
                       for name, kind, hours in blocks
                       if name == subject and (not active_only or kind == "active_learning"))
         # The user's own slots on days before this week are study done, like planned history.
-        return planned + self._busy_hours(subject, [day for day in self.busy if day < self.current_week.start_date])
+        return planned + self._busy_hours(subject, [day for day in self.busy if day < self.current_week.start_date],
+                                         active_only=active_only)
 
     @property
     def hours_studied_per_subject(self) -> dict[str, float]:
@@ -226,24 +283,39 @@ class Schedule:
                 for name in self.subjects}
 
     def generate_hours_per_subject_per_week(self) -> dict[str, float]:
-        """Split the week's plannable hours over the subjects by weight."""
+        """Split the week's total hours by weight, crediting each subject's custom study first."""
         self.hours_per_week = self._budget_hours()
+        own = {name: self._busy_hours(name, self.current_week) for name in self.subjects}
         weights = {}
         for name, subject in self.subjects.items():
             days = self.get_days_until_exam(name)
             if days <= 0:
                 weights[name] = 0.0
                 continue
-            studied = self._previous_hours(name)
+            studied = self._previous_hours(name) + own[name]
             workload = max(0, HOURS_PER_ECTS * subject["ects"]
                            - self.weeks_in_semester * subject["lecture_per_week"] - studied)
             # Keep a recall allocation once the learning workload is exhausted.
             weights[name] = max(self.study_block_size / 60, workload)
             weights[name] *= (subject["difficulty"] / subject["priority"]) ** self.alpha
             weights[name] *= self.beta ** (-1 / (days + studied))
-        total = sum(weights.values())
-        return {name: weight / total * self.hours_per_week if total else 0.0
-                for name, weight in weights.items()}
+        targets = dict(own)
+        remaining = max(0.0, self.hours_per_week - self._committed_hours())
+        eligible = {name: weight for name, weight in weights.items() if weight > 0}
+        # A heavily prefilled subject can already exceed its weighted share. Keep its
+        # commitment and redistribute only the remaining hours to the other subjects.
+        while eligible and remaining > 1e-8:
+            pool = remaining + sum(own[name] for name in eligible)
+            total = sum(weights[name] for name in eligible)
+            filled = [name for name in eligible if own[name] >= pool * weights[name] / total]
+            if filled:
+                for name in filled:
+                    del eligible[name]
+                continue
+            for name in eligible:
+                targets[name] = pool * weights[name] / total
+            break
+        return targets
 
     # ---------- Generation ----------
 
@@ -254,11 +326,14 @@ class Schedule:
         """
         self.schedule = {day: {} for day in self.current_week}
         self.block_types = {day: {} for day in self.current_week}
+        self._extend_busy_blocks()
         self.hours_per_subject_this_week = self.generate_hours_per_subject_per_week()
         # The user's own slots this week count towards each subject's share and its cap.
         own = {name: self._busy_hours(name, self.current_week) for name in self.subjects}
         assigned = dict(own)
-        active = {name: self._previous_hours(name, active_only=True) + own[name] for name in self.subjects}
+        active = {name: self._previous_hours(name, active_only=True)
+                       + self._busy_hours(name, self.current_week, active_only=True) for name in self.subjects}
+        committed = self._committed_hours()
         day_slots = [(a, b) for a, b, meal in self._time_slots() if meal is None]
         block_hours = self.study_block_size / 60
 
@@ -290,15 +365,20 @@ class Schedule:
                         if day < subject["examdate"].start_date]
             if not eligible:
                 continue
+            generated = sum(assigned[name] - own[name] for name in self.subjects)
+            remaining_budget = max(0.0, self.hours_per_week - committed - generated)
+            affordable = min(len(slots), int((remaining_budget + 1e-8) / block_hours))
+            if not affordable:
+                continue
             eligible.sort(key=deficit, reverse=True)
 
             # Reserve an evening recall for every subject taken on, and normally keep at
             # least BLOCKS_PER_SUBJECT learning blocks together before switching subject.
-            count = min(len(eligible), max(1, len(slots) // BLOCKS_PER_SUBJECT))
+            count = min(len(eligible), affordable, max(1, len(slots) // BLOCKS_PER_SUBJECT))
             selected = eligible[:count]
-            if all(remaining(name) * 60 < 1 for name in eligible):
+            if all(remaining(name) + 1e-8 < block_hours for name in eligible):
                 # Nothing left to learn: recall as many subjects as the day holds.
-                selected = eligible[:len(slots)]
+                selected = eligible[:affordable]
             recall_slots = slots[-len(selected):]
             learning_slots = slots[:-len(selected)]
             allocations = {name: 0 for name in selected}
@@ -306,15 +386,16 @@ class Schedule:
 
             # Hand out block counts by deficit, then lay them out subject by subject.
             # With a budget, the day stops early rather than filling every free slot; the
-            # recall blocks are reserved already and are always placed.
+            # recall blocks are included in the same budget as learning.
             day_budget = None if self.hours_per_week_budget is None else max(
-                0.0, self._budget_hours() - sum(assigned.values())
-                - sum(reserved.values())) / max(1, days_left(day))
+                0.0, remaining_budget - sum(reserved.values())) / max(1, days_left(day))
             for _ in learning_slots:
+                if sum(allocations.values()) + len(selected) >= affordable:
+                    break
                 if day_budget is not None and sum(allocations.values()) * block_hours >= day_budget:
                     break
                 candidates = [name for name in selected
-                              if (remaining(name) - allocations[name] * block_hours) * 60 >= 1]
+                              if remaining(name) - allocations[name] * block_hours + 1e-8 >= block_hours]
                 if not candidates:
                     break
                 allocations[max(candidates, key=lambda name: deficit(
@@ -325,12 +406,7 @@ class Schedule:
                 for _ in range(allocations[name]):
                     a, b = learning_slots[index]
                     index += 1
-                    # A partial block enforces the cap to the minute.
-                    minutes = remaining(name) * 60
-                    if minutes < b - a:
-                        b = a + int(minutes + 1e-9)
-                    if b > a:
-                        put(day, a, b, name, "active_learning")
+                    put(day, a, b, name, "active_learning")
             for name, (a, b) in zip(selected, recall_slots):
                 put(day, a, b, name, "recall")
 
@@ -389,6 +465,10 @@ class Schedule:
         return {"exam_session": {"start_date": self.exam_session.start_date.isoformat(),
                                 "range_length": len(self.exam_session)},
                 "study_block_size": self.study_block_size,
+                "busy_adjustments": [{"index": entry["index"], "start_time": self._to_time(entry["start"]),
+                                      "end_time": self._to_time(entry["end"])}
+                                     for entries in self.busy.values() for entry in entries
+                                     if (entry["start"], entry["end"]) != (entry["original_start"], entry["original_end"])],
                 "weeks": weeks,
                 "summary": {"scheduled_hours_per_subject": total,
                             "active_learning_hours_per_subject": total_active}}

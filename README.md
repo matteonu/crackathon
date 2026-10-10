@@ -296,9 +296,14 @@ algorithm.
 - **Generating** is `POST /api/semesters/<semkez>/plan/generate`, and it plans **one week**:
   the one open in the calendar, which the frontend sends as `fromDate`/`toDate` (defaults:
   today clamped into the study phase, and a week after it). Only generated slots in those days
-  are replaced; other weeks and your own slots stay. Blocks before `fromDate` go to the
+  are replaced; other weeks stay. Custom study slots can expand into short adjoining gaps,
+  with that extra time credited to their subject before new hours are allocated.
+  Generation saves directly into the calendar and keeps custom slot IDs.
+  Blocks before `fromDate` go to the
   scheduler as history, so the hours they used still count against a course's cap.
-  `dryRun: true` returns the proposal without storing it, which is what the preview shows.
+  `dryRun: true` remains available in the API to return the candidate without storing it.
+  With `onlyDate`, the scheduler still computes that whole window but saves only the selected
+  day's generated slots and custom time extensions; other days are untouched.
 - **Reading** is `GET /api/semesters/<semkez>/plan`, which carries the subjects, your own
   sessions, the habits the plan was built from, and `plan: null` until one has been generated.
   Its totals are added up from the stored blocks, not from the last run, because earlier weeks
@@ -308,7 +313,8 @@ algorithm.
   (`active_learning`, `recall`, `meal`). A meal block has no course, which the composite
   foreign key tolerates because SQLite does not enforce one when a column is NULL -- so
   deleting a course still takes its blocks with it. Generated blocks are kept apart from
-  `study_sessions`, which is yours: regenerating never touches what you typed.
+  custom slots by their `source` (`generated` or `manual`). Custom slots keep their identity
+  when generation expands their start or end.
 - **Preferences** are split in two. How a day is laid out belongs to the semester
   (`day_start`, `day_end`, meals, `study_block_size`, `study_hours_per_week`, `alpha`, `beta`)
   and is saved with `PUT /api/semesters/<semkez>/preferences`, along with `semester_days_off`.
@@ -323,7 +329,10 @@ algorithm.
 - **Defaults:** a study block is 60 minutes, and `study_hours_per_week` left empty means
   every free hour between day start and end, lunch and dinner excluded (70 h a week at
   08:00-20:00). Set it to study less; each week stops at the budget, pro-rated over a part week.
-  Recall blocks are placed either way, the same exemption `max_study_hours` has.
+  Custom study, generated learning and recall share this budget. If custom study already
+  exhausts it, nothing more is generated. Recall remains exempt from `max_study_hours`,
+  which limits active learning only. Generated study blocks are always a full
+  `study_block_size`; shorter meal-boundary or cap remainders stay empty.
 - **The calendar is one layer of slots.** Drag on empty space to draw one (a course, or a
   break that keeps the time free), drag a slot to move it, its edges to resize it, × to delete
   it; a click opens the course. `POST/PATCH/DELETE /api/semesters/<semkez>/plan/blocks`. A slot
@@ -334,13 +343,47 @@ algorithm.
   morning of study is one slot to drag, not three. Lunch and dinner are slots too, placed
   from the habits, and move or delete like any other; one you moved, deleted (remembered in
   `plan_meal_skips`) or drew over is left out of that day when it is generated again.
-- **Per day:** the + over a day plans just that day around what is on it (generate with
-  `fromDate = toDate`), and the bin empties it, your own slots and meals included
+  Generation absorbs short adjoining gaps into custom course slots where meals, other custom
+  slots, the weekly budget and the course's cap allow it. The pure scheduler returns these
+  time changes in `busy_adjustments`, keyed by the original busy-entry index; the API saves
+  them together with the generated blocks. A small visual gap separates calendar blocks
+  without changing their actual times.
+- **Per day:** the + over a day uses the same open-week calculation as Generate schedule,
+  including every custom block in that week, then takes only that day (`onlyDate`, with the
+  same `fromDate`/`toDate` as weekly generation). The bin empties it, your own slots and meals included
   (`DELETE /api/semesters/<semkez>/plan/days/<date>`), so generating it again starts over.
-- **Study days** (`semesters.study_weekdays`, Mon-Sun in the setup) apply to every week: a
-  week's proposal treats the other weekdays as days off. The + on a single day plans it anyway.
-- **The hours overview** colours each cell by its hours: recorded hours in the course colour,
-  deeper the more there are, and hours only planned as a light wash with the number shown.
+- **Study days** (`semesters.study_weekdays`, Mon-Sun in the setup) apply to both generation
+  actions: the other weekdays and explicit days off receive no generated slots.
+  "Count exam days as days off" in Study setup defaults to enabled and is saved per
+  semester (`examDaysOff` / `semesters.exam_days_off`). Enabled, every subject's exam date
+  reserves the whole day, including courses marked complete. Disabled, other subjects
+  can be planned that day, around any known exam start/end times. Explicit days off and
+  unselected study weekdays still apply. Existing custom slots are kept in either mode.
+  Study setup accepts optional exam start and end times (`examStart`,
+  `examEnd`, stored as `semester_courses.exam_start` / `exam_end` and migrated at startup).
+  Set both times with the end after the start, or leave both empty. Known exam times appear
+  as exam events in the calendar and do not contribute to planned study hours.
+- **Calendar indicators:** gray headers and columns follow the same configured days off
+  as Hours overview. An amber flag marks a day once it has actual hours recorded and
+  any subject differs from its planned learning and recall total. Hover the flag to see
+  each difference; unrecorded days are not flagged, and meals do not count as study.
+  Exam dates tint their headers and columns with the subject's colour in both calendar
+  and Hours overview. Multiple exams on one day share the column in coloured stripes;
+  hover its header to see the subjects. Exam colours take precedence over days-off gray.
+- **The hours overview** uses three fixed shades of each course's colour, independent of
+  the number of hours: light for planned, medium for planned hover or recorded study,
+  and dark for recorded study hover.
+  Gray day columns follow the configured study weekdays and explicit days-off ranges;
+  weekends are treated like any other day.
+  The check at the top-right of a day's header records the planned learning and recall totals for each subject
+  (custom and generated slots included, meals excluded). Existing records for planned
+  subjects are replaced; other subjects and days are unchanged. The save is transactional
+  via `PUT /api/semesters/<semkez>/plan/days/<date>/fulfill`, and repeating it does not add hours.
+  A day's check indicates completion once every planned subject's recorded hours meet its own planned total;
+  recorded hours remain editable and continue to drive the analytics.
+  Clear week's hours, left of Record hours, removes actual study records for the displayed
+  Monday-Sunday week via `DELETE /api/semesters/<semkez>/hours/weeks/<monday>`; planned
+  slots, targets, other weeks, other semesters, and other users' records stay unchanged.
 - **Targets:** a course whose `target_hours` is still 0 gets the scheduler's workload estimate
   (30 h per ECTS, less 13 weeks of its lecture hours) the first time slots are planned. A target
   you set, or the seed set, is never overwritten -- it is a semester goal, not what one week holds.

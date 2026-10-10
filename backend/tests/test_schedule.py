@@ -69,7 +69,7 @@ class ScheduleTests(unittest.TestCase):
         result = generate_schedule(self.data)
         self.assertEqual(result['weeks'][0]['available_hours'], 0)
         self.assertEqual(result['weeks'][1]['range_length'], 2)
-        self.assertEqual(result['weeks'][1]['available_hours'], 20)
+        self.assertEqual(result['weeks'][1]['available_hours'], 15)
         self.assertTrue(all(value == 0 for value in result['summary']['active_learning_hours_per_subject'].values()))
 
     def test_regeneration_and_week_history(self):
@@ -90,7 +90,8 @@ class ScheduleTests(unittest.TestCase):
     def test_invalid_input(self):
         for field, value in [('study_block_size', 0), ('day_start', 'bad'),
                              ('day_end', '07:00'), ('alpha', float('nan')),
-                             ('beta', 0), ('days_off', 'bad'), ('subjects', {})]:
+                             ('beta', 0), ('days_off', 'bad'), ('subjects', {}),
+                             ('exam_days_off', 'false'), ('exam_days_off', 0), ('exam_days_off', None)]:
             with self.subTest(field=field), self.assertRaises(ValueError):
                 generate_schedule(dict(self.data, **{field: value}))
         for field, value in [('priority', 0), ('max_study_hours', -1), ('examdate', 'bad')]:
@@ -98,6 +99,48 @@ class ScheduleTests(unittest.TestCase):
             data['subjects']['Geometry'][field] = value
             with self.subTest(field=field), self.assertRaises(ValueError):
                 generate_schedule(data)
+
+    def test_each_exam_reserves_the_whole_day_for_all_subjects(self):
+        result = generate_schedule(self.data)
+        days = {day['date']: day for week in result['weeks'] for day in week['days']}
+        for date in ('2026-11-18', '2026-11-20'):
+            self.assertTrue(days[date]['is_day_off'])
+            self.assertEqual(days[date]['blocks'], [])
+        self.assertTrue(days['2026-11-17']['blocks'])
+        explicit = dict(self.data, days_off=[*self.data['days_off'], '2026-11-18', '2026-11-20'])
+        self.assertEqual(result, generate_schedule(explicit))
+
+    def test_exam_day_can_still_plan_other_subjects_when_option_is_off(self):
+        data = copy.deepcopy(self.data)
+        data.update(exam_days_off=False, days_off=[],
+                    exam_session={'start_date': '2026-11-17', 'range_length': 3})
+        data['subjects']['Number Theory']['max_study_hours'] = None
+        result = generate_schedule(data)
+        day = next(day for week in result['weeks'] for day in week['days'] if day['date'] == '2026-11-18')
+        self.assertFalse(day['is_day_off'])
+        self.assertTrue(any(block['subject'] == 'Number Theory' for block in day['blocks']))
+        self.assertFalse(any(block['subject'] == 'Geometry' for block in day['blocks']))
+        result = generate_schedule(dict(data, days_off=['2026-11-18']))
+        day = next(day for week in result['weeks'] for day in week['days'] if day['date'] == '2026-11-18')
+        self.assertTrue(day['is_day_off'])
+        self.assertEqual(day['blocks'], [])
+
+    def test_exam_time_stays_free_without_counting_as_study_or_being_extended(self):
+        data = copy.deepcopy(self.data)
+        data.update(exam_days_off=False, days_off=[],
+                    exam_session={'start_date': '2026-11-18', 'range_length': 1},
+                    busy=[{'date': '2026-11-18', 'start_time': '09:00', 'end_time': '11:00',
+                           'type': 'meal', 'subject': None}])
+        data['subjects']['Number Theory']['max_study_hours'] = None
+        result = generate_schedule(data)
+        day = result['weeks'][0]['days'][0]
+        self.assertFalse(day['is_day_off'])
+        self.assertTrue(any(block['subject'] == 'Number Theory' for block in day['blocks']))
+        self.assertEqual(result['busy_adjustments'], [])
+        for block in day['blocks']:
+            self.assertTrue(block['end_time'] <= '09:00' or block['start_time'] >= '11:00', block)
+        total = sum(block['duration_minutes'] / 60 for block in day['blocks'] if block['type'] != 'meal')
+        self.assertAlmostEqual(total, sum(result['summary']['scheduled_hours_per_subject'].values()))
 
     def test_date_range_and_cli(self):
         r = DayRange.from_value({'start_date': '2026-12-30', 'range_length': 4})
