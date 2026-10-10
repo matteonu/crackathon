@@ -1,6 +1,18 @@
 import { bootstrapApplication } from '@angular/platform-browser';
-import { appConfig } from './app/app.config';
+import { provideBrowserGlobalErrorListeners, provideZonelessChangeDetection } from '@angular/core';
+import { provideRouter, withHashLocation, withViewTransitions } from '@angular/router';
 import { AppComponent } from './app/app.component';
+import { routes } from './app/app.routes';
 
-bootstrapApplication(AppComponent, appConfig)
-  .catch((err) => console.error(err));
+bootstrapApplication(AppComponent, {
+  providers:[
+    provideBrowserGlobalErrorListeners(),
+    provideZonelessChangeDetection(),
+    provideRouter(routes,withHashLocation(),withViewTransitions({
+      skipInitialTransition:true,
+      onViewTransitionCreated:({transition})=>{
+        if(matchMedia('(prefers-reduced-motion: reduce)').matches)transition.skipTransition();
+      }
+    }))
+  ]
+}).catch(error=>console.error(error));

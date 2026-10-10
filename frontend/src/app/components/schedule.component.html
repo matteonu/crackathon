@@ -1,0 +1,41 @@
+<section class="panel schedule-panel" [class.expanded]="expanded()" aria-labelledby="schedule-title">
+  <div class="panel-heading">
+    <div><div class="section-label"><span class="tiny-square"></span> YOUR STUDY PHASE</div><h2 id="schedule-title">{{expanded() ? 'Hours overview' : 'Full schedule'}}</h2><p>{{expanded() ? weekLabel() : phaseLabel()}}</p></div>
+    @if(expanded()) {<a class="button secondary" routerLink="/" aria-label="Close hours overview"><app-icon name="close" /> Close</a>}
+    @else {<a class="button primary" routerLink="/schedule">Full detail <app-icon name="expand" /></a>}
+  </div>
+  @if(expanded()) {
+    <div class="week-toolbar">
+      <div class="week-navigation"><button class="icon-button" aria-label="Previous week" [disabled]="!store.canGoBack()" (click)="store.moveWeek(-1)"><app-icon name="left" /></button><span aria-live="polite">{{weekLabel()}}</span><button class="icon-button" aria-label="Next week" [disabled]="!store.canGoNext()" (click)="store.moveWeek(1)"><app-icon name="right" /></button></div>
+      <span class="week-total"><strong>{{store.weekHours()}} h</strong> recorded this week</span>
+      <button class="button primary" (click)="store.openEditor()"><app-icon name="plus" /> Record hours</button>
+    </div>
+  }
+  <div #scheduleViewport class="horizontal-scroll schedule-viewport" tabindex="0" role="region" [attr.aria-label]="expanded() ? 'Weekly hours table, scroll horizontally' : 'Full schedule, scroll horizontally'">
+    <table class="schedule-table" [class.week-table]="expanded()">
+      <caption class="sr-only">Recorded study hours by subject and date. Select a cell to edit it. A dash means no record.</caption>
+      <thead><tr><th scope="col" class="subject-col">Subject</th><th scope="col" class="remaining-col">{{expanded()?'This week':'Hours left'}}</th>@for(date of visibleDates();track date){<th scope="col" [class.weekend]="weekday(date)==='Sat'||weekday(date)==='Sun'"><span>{{weekday(date)}}</span><strong>{{dateLabel(date)}}</strong></th>}</tr></thead>
+      <tbody>@for(subject of store.subjects();track subject.id){
+        <tr [style.--subject-color]="subject.color">
+          <th class="subject-col" scope="row"><a [routerLink]="['/subject-tab',subject.id]"><span class="subject-dot" [style.background]="subject.color"></span><span>{{subject.shortName}}</span></a></th>
+          <td class="remaining-col" [class.over-target]="!expanded()&&store.remaining(subject)<0">{{expanded()?store.hours(subject,store.week()):store.remaining(subject)}}</td>
+          @for(date of visibleDates();track date){<td [class.weekend]="weekday(date)==='Sat'||weekday(date)==='Sun'">
+            @if(store.dates().includes(date)){<button class="hour-cell" [class.recorded]="subject.hours[date]!=null" [style.background]="subject.hours[date]!=null ? subject.color+'28' : null" [attr.aria-label]="subject.name+', '+dateLabel(date)+': '+(subject.hours[date]??'unrecorded')+' hours. Edit.'" (click)="store.openEditor(subject.id,date)">{{subject.hours[date]??'—'}}</button>}
+            @else {<span class="outside-phase" title="Outside the study phase">—</span>}
+          </td>}
+        </tr>
+      }</tbody>
+      <tfoot><tr><th scope="row" class="subject-col">Daily total <span>hours</span></th><td class="remaining-col">{{expanded()?store.weekHours():store.totalHours()}}</td>@for(date of visibleDates();track date){<td>{{store.daily(date)}}</td>}</tr></tfoot>
+    </table>
+  </div>
+  <div class="panel-foot"><span>Scroll sideways to explore <span class="optional-text">· Select any cell to edit</span></span><app-scroll-buttons [target]="scheduleViewport" label="schedule" /></div>
+  @if(expanded()) {
+    <div class="week-insights">
+      <div><span class="eyebrow">AT A GLANCE</span><h3>Your week, by subject.</h3><p class="muted">Recorded study time across these seven days.</p></div>
+      <div class="week-subjects">@for(subject of weekSubjects();track subject.id){<a [routerLink]="['/subject-tab',subject.id]" class="week-subject" [style.--subject-color]="subject.color"><span class="subject-dot" [style.background]="subject.color"></span><span>{{subject.shortName}}</span><strong>{{store.hours(subject,store.week())}} h</strong></a>}@empty{<p class="empty-state">No study time recorded for this week yet. Select a cell above to add some.</p>}</div>
+    </div>
+    <p class="data-note">Recorded hours are daily totals. Use Calendar to plan study sessions.</p>
+  }
+</section>
+
+
