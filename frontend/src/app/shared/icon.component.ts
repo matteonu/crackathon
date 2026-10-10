@@ -16,6 +16,7 @@ const paths:Record<string,string> = {
   expand:'M14 3h7v7 M21 3l-8 8 M10 21H3v-7 M3 21l8-8',
   plus:'M12 5v14 M5 12h14',
   close:'M6 6l12 12 M18 6L6 18',
+  trash:'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7',
   left:'M15 5l-7 7 7 7',
   right:'M9 5l7 7-7 7',
   clock:'M12 8v5l3 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',

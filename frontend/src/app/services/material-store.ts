@@ -48,9 +48,10 @@ export class MaterialStore {
       this.assertUnique(file);await this.write([file]);this.files.update(values=>[...values,file]);this.error.set('');return file;
     });
   }
-  async add(subjectId:string,files:File[],category:MaterialCategory,parentId:string|null=null,mode:LearningMode='shallow'):Promise<void>{
+  async add(subjectId:string,files:File[],category:MaterialCategory,parentId:string|null=null,mode:LearningMode='shallow',requestedQuestions=60):Promise<void>{
     if(this.loading()||this.busy())return;this.busy.set(true);this.error.set('');
     try{const added=await this.queue(async()=>{
+      if(!Number.isInteger(requestedQuestions)||requestedQuestions<5||requestedQuestions>300)throw new Error('Enter a whole number of flashcards from 5 to 300.');
       this.assertParent(subjectId,parentId);const pending:Material[]=[];
       for(const file of files){
         if(file.size>=50_000_000)throw new Error(`${file.name} must be smaller than 50 MB.`);
@@ -58,22 +59,33 @@ export class MaterialStore {
         let name=file.name;let suffix=2;
         const used=(candidate:string)=>[...this.files(),...pending].some(f=>f.subjectId===subjectId&&(f.parentId??null)===parentId&&f.name.toLowerCase()===candidate.toLowerCase());
         while(used(name))name=file.name.replace(/\.pdf$/i,` (${suffix++}).pdf`);
-        pending.push({id:crypto.randomUUID(),subjectId,parentId,kind:'pdf',name,description:'',size:file.size,category,marker:'To read',blob:file,added:Date.now(),processing:{status:'queued',mode}});
+        pending.push({id:crypto.randomUUID(),subjectId,parentId,kind:'pdf',name,description:'',size:file.size,category,marker:'To read',blob:file,added:Date.now(),processing:{status:'queued',mode,requestedQuestions}});
       }
       await this.write(pending);this.files.update(values=>[...values,...pending]);return pending;
     });for(const file of added)void this.process(file.id);}catch(e){this.error.set(e instanceof Error?e.message:'Could not save PDFs. Browser storage may be full.');}finally{this.busy.set(false);}
   }
-  resultUrl(id:string):string{return this.pipeline.resultUrl(id,this.files().find(file=>file.id===id)?.processing?.mode??'shallow');}
+  remove(id:string):Promise<boolean>{return this.queue(async()=>{
+    const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)!=='pdf')return false;
+    try{
+      if(file.processing)await this.pipeline.remove(id);
+      const db=await this.database;await new Promise<void>((resolve,reject)=>{
+        const transaction=db.transaction('files','readwrite');transaction.objectStore('files').delete(id);
+        transaction.oncomplete=()=>resolve();transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error);
+      });
+      this.files.update(files=>files.filter(f=>f.id!==id));this.error.set('');return true;
+    }catch(e){this.error.set(e instanceof Error?e.message:'Could not delete this PDF. Please retry.');return false;}
+  });}
   async process(id:string,resume=false,selectedMode?:LearningMode):Promise<void>{
     const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)!=='pdf'||this.activeJobs.has(id))return;
     const mode=selectedMode??file.processing?.mode??'shallow';
+    const requestedQuestions=file.processing?.requestedQuestions??60;
     this.activeJobs.add(id);
     try{
-      if(!resume&&!await this.update(id,current=>(current.processing?.mode??'shallow')===mode?{processing:{status:'queued',mode}}:learningPatch(current,{id,mode,status:'queued',documents:[]})))throw new Error(this.error());
+      if(!resume&&!await this.update(id,current=>(current.processing?.mode??'shallow')===mode?{processing:{status:'queued',mode,requestedQuestions}}:learningPatch(current,{id,mode,requested_questions:requestedQuestions,status:'queued',documents:[]})))throw new Error(this.error());
       await this.pipeline.process(file,async result=>{
         if(!await this.update(id,current=>learningPatch(current,result)))throw new Error(this.error()||'Could not save generated results.');
       },resume,mode);
-    }catch(e){await this.update(id,{processing:{status:'error',mode,error:e instanceof Error?e.message:'Processing failed. Retry this file.'}});}
+    }catch(e){await this.update(id,{processing:{status:'error',mode,requestedQuestions,error:e instanceof Error?e.message:'Processing failed. Retry this file.'}});}
     finally{this.activeJobs.delete(id);}
   }
   update(id:string,change:MaterialPatch|((file:Material)=>MaterialPatch)):Promise<boolean>{return this.queue(async()=>{

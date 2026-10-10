@@ -50,3 +50,12 @@ test('mode switches discard previous generated content, preserve manual cards an
   const deep={...result,mode:'deep' as const};
   assert.equal(learningPatch({...shallow,...patch},parseStudyResult(deep,file.id,'deep')).processing.mode,'deep');
 });
+
+test('requested flashcard counts survive polling and mode switches',()=>{
+  const configured={...file,processing:{status:'queued' as const,mode:'shallow' as const,requestedQuestions:17}};
+  const pending=learningPatch(configured,{id:file.id,mode:'deep',status:'queued',documents:[]});
+  assert.equal(pending.processing.requestedQuestions,17);
+  const complete=learningPatch(configured,parseStudyResult({...result,requested_questions:17},file.id));
+  assert.equal(complete.processing.requestedQuestions,17);
+  for(const count of [0,4,301,5.5])assert.throws(()=>parseStudyResult({...result,requested_questions:count},file.id),/flashcard count/);
+});

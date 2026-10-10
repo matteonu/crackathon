@@ -16,6 +16,9 @@ export class MaterialLibraryComponent {
   readonly practice=viewChild(FolderFlashcardsComponent);
   readonly markers=MATERIAL_MARKERS;readonly kind=materialKind;
   readonly uploadMode=signal<LearningMode>('shallow');
+  readonly uploadCount=signal<number|null>(60);
+  readonly validCount=computed(()=>Number.isInteger(this.uploadCount())&&this.uploadCount()!>=5&&this.uploadCount()!<=300);
+  readonly deleting=signal(new Set<string>());
   readonly query=signal('');readonly marker=signal('');readonly dragging=signal(false);readonly selectedId=signal<string|null>(null);readonly activeFolder=signal<string|null>(null);readonly expanded=signal(new Set<string>());
   readonly subjectFiles=computed(()=>this.materials.files().filter(f=>f.subjectId===this.subjectId()));
   readonly selected=computed(()=>this.subjectFiles().find(f=>f.id===this.selectedId()));
@@ -32,8 +35,14 @@ export class MaterialLibraryComponent {
   open(id:string):void{this.selectedId.set(id);this.preview()?.nativeElement.showModal();}
   newItem(kind:Exclude<MaterialKind,'pdf'>,parentId:string|null):void{this.chooseFolder(parentId);this.createType=kind;this.newName='';this.createParent=parentId;this.creationError.set('');this.createDialog()?.nativeElement.showModal();}
   async create():Promise<void>{this.creating.set(true);try{const file=await this.materials.create(this.subjectId(),this.createParent,this.createType,this.newName);if(this.createParent)this.expanded.update(s=>new Set([...s,this.createParent!]));this.createDialog()?.nativeElement.close();if(file.kind==='folder')this.chooseFolder(file.id);else this.open(file.id);this.status.set(`${file.name} created.`);}catch(e){this.creationError.set(e instanceof Error?e.message:'Could not create item.');}finally{this.creating.set(false);}}
-  async upload(event:Event,parentId:string|null):Promise<void>{const input=event.target as HTMLInputElement;this.chooseFolder(parentId);await this.materials.add(this.subjectId(),Array.from(input.files??[]),'Slides',parentId,this.uploadMode());input.value='';}
-  async drop(event:DragEvent):Promise<void>{event.preventDefault();this.dragging.set(false);await this.materials.add(this.subjectId(),Array.from(event.dataTransfer?.files??[]),'Slides',this.activeFolder(),this.uploadMode());}
+  async upload(event:Event,parentId:string|null):Promise<void>{const input=event.target as HTMLInputElement;this.chooseFolder(parentId);await this.materials.add(this.subjectId(),Array.from(input.files??[]),'Slides',parentId,this.uploadMode(),this.uploadCount()??0);input.value='';}
+  async drop(event:DragEvent):Promise<void>{event.preventDefault();this.dragging.set(false);await this.materials.add(this.subjectId(),Array.from(event.dataTransfer?.files??[]),'Slides',this.activeFolder(),this.uploadMode(),this.uploadCount()??0);}
+  async remove(id:string):Promise<void>{
+    if(this.deleting().has(id))return;const file=this.subjectFiles().find(f=>f.id===id);if(!file)return;
+    this.deleting.update(ids=>new Set([...ids,id]));
+    try{if(await this.materials.remove(id)){if(this.selectedId()===id)this.preview()?.nativeElement.close();this.status.set(`${file.name} deleted.`);}}
+    finally{this.deleting.update(ids=>{const next=new Set(ids);next.delete(id);return next;});}
+  }
   setMarker(id:string,value:MaterialMarker):void{void this.materials.update(id,{marker:value});}
   showCards(id:string|null,learn=false):void{this.collectionFolder.set(id);this.collectionOpen.set(true);this.collectionDialog()?.nativeElement.showModal();if(learn)requestAnimationFrame(()=>this.practice()?.start());}
   openSource(id:string):void{this.collectionDialog()?.nativeElement.close();this.open(id);}

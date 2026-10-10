@@ -31,7 +31,7 @@ The production files are written directly to `dist/` and served by the Python le
 - Totals, hours remaining, subject progress, and weekly summaries recalculate immediately.
 - Exam view supports All, Still to do, and Completed filters. Click a status to change it.
 - Subject pages let you edit a target, exam date, next action, and completion status.
-- PDF uploads generate a one-sentence summary and flashcards from Python JSON. Choose Shallow for faster text extraction or Deep for complete PDF pages including visuals; both modes keep their own saved results.
+- PDF uploads generate a one-sentence summary and flashcards from Python JSON. Choose Shallow for faster text extraction or Deep for complete PDF pages including visuals, then set the number of cards (5–300) for new uploads; both modes keep their own saved results.
 - Generation labels animate through one, two, and three dots, respecting reduced-motion preferences.
 - Changes persist in this browser’s local storage. Data & settings includes JSON export/import and restoring the original sample after confirmation.
 - Responsive layout for desktop and mobile. Dense tables scroll inside their panels.
@@ -78,7 +78,7 @@ Angular and Angular CLI are pinned to 22.2.2, with TypeScript 6.0.3. Icons are i
 
 ## Subject and Schedule workspaces
 
-- Subject: a browser-local PDF library (multiple PDFs, up to 50 MB each), editable categories and To read / Done / Revisit / Ignore markers, search, local PDF.js preview with page navigation, and download. PDFs and per-file demo results persist in IndexedDB, separately from JSON export/import and sample reset.
+- Subject: a browser-local PDF library (multiple PDFs, up to 50 MB each), To read / Done / Revisit / Ignore markers, search, continuous scrolling in the local PDF.js preview, and download. PDFs and generated results persist in IndexedDB, separately from JSON export/import and sample reset. Trash buttons delete PDFs and their saved results from both the browser and the local Python server.
 - Uploaded PDFs automatically use the real Python pipeline for summaries and flashcards. The generated summary is read-only; processing status and retry errors are shown in the file viewer.
 - Metadata includes ECTS, lecture ID, homepage, target hours, and exam date. Suggestions can be edited and accepted. Subject Anki analytics use explicitly linked snapshot decks; no live Anki service is connected.
 - Schedule (`#/schedule`, with `#/study-view` redirecting) toggles between a weekly calendar and recorded-hour overview. Planned sessions can be added, edited, and deleted; overlapping sessions are rejected. A demo proposal is previewed before it is applied. The bottom legend totals planned hours for the displayed week.
@@ -91,8 +91,8 @@ Validation for the first workspace update: 12 model tests cover date parsing, se
 ## Materials explorer and file viewer
 
 - Materials is each subject’s root. Each folder row offers **New folder** and **Upload PDF** icons immediately before **View all flashcards**; these actions create or upload directly into that folder. Folders expand independently, and search preserves matching files’ ancestors. Existing PDFs migrate to the root without losing their markers or demo results.
-- Click a file to open its viewer. PDF descriptions are generated automatically as one sentence. Titles remain editable; existing text and Markdown files also support local content and description edits. The viewer supports moving a file between folders and changing its marker.
-- The left pane shows the source; the right pane lists saved flashcards. Selecting a card replaces the source with a question and revealable answer. Click outside the card, press Escape, or use **Back to file** to restore the source without resetting the PDF page.
+- Click a file to open its viewer. PDF descriptions are generated automatically as one sentence. PDF titles save when the input loses focus; existing text and Markdown files also support local content and description edits. The viewer toolbar contains the source badge and **Download file**, with no folder/status dropdowns or JSON link.
+- The left pane shows every PDF page in a scrollable document; the right pane lists saved flashcards. Selecting a card replaces the source with a question and revealable answer. Click outside the card, press Escape, or use the **PDF** badge to restore the source without resetting its scroll position. Pages render near the viewport to limit canvas memory.
 - Generation loads question/answer pairs from the Python result JSON and replaces old generated/demo cards. You can also write your own cards, which are preserved. File content, metadata, folders, and cards persist in IndexedDB in this browser; Python results and checkpoints are also saved under `learning_backend/data/`. They remain separate from the study-data JSON export.
 - Every folder, including Materials, offers **View all cards**, **Start learning**, and **Export .apkg**. Folder collections include all nested files. Practice supports reveal, review again, got it, and completion; review progress lasts for that practice session.
 - Anki `.apkg` export runs entirely in the browser using lazily loaded SQL.js and fflate. It writes a SQLite `collection.anki2` and empty media manifest into a ZIP package. The package includes text cards only; demo cards carry a `demo` tag. Stable note IDs avoid creating new identities on repeated exports. Format reference: [genanki’s package implementation](https://github.com/kerrickstaley/genanki/tree/main/genanki). No backend or Anki connection is used.

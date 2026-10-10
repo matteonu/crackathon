@@ -10,6 +10,7 @@ import mimetypes
 import os
 from pathlib import Path
 import re
+import shutil
 import threading
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -36,6 +37,10 @@ class StudyJobs:
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pdf-study")
         self.lock = threading.Lock()
         self.active: set[tuple[str, str]] = set()
+        self.deleted: set[str] = set()
+        for marker in self.directory.glob('*/.deleted'):
+            self.deleted.add(marker.parent.name)
+            self.remove_folder(marker.parent.name)
         for path in self.directory.rglob("result.json"):
             data = self.read(path)
             if data.get("status") in {"queued", "running"}:
@@ -51,18 +56,49 @@ class StudyJobs:
         data.setdefault("mode", "deep" if documents and documents[0].get("deep_mode") else "shallow")
         return data
 
+    def folder(self, document_id: str) -> Path:
+        if not DOCUMENT_ROUTE.fullmatch('/api/learning/documents/' + document_id):
+            raise RequestError(400, 'Invalid PDF ID.')
+        folder = (self.directory / document_id).resolve()
+        if folder.parent != self.directory:
+            raise RequestError(400, 'Invalid PDF storage path.')
+        return folder
+
+    def remove_folder(self, document_id: str) -> None:
+        # Resolve and verify the exact directory before any recursive removal.
+        folder = self.folder(document_id)
+        if folder.exists():
+            shutil.rmtree(folder)
+
+    def is_deleted(self, document_id: str) -> bool:
+        return document_id in self.deleted
+
+    def delete(self, document_id: str) -> None:
+        with self.lock:
+            folder = self.folder(document_id)
+            self.deleted.add(document_id)
+            if folder.exists():
+                (folder / '.deleted').write_text('deleted', encoding='utf-8')
+            if not any(active_id == document_id for active_id, _ in self.active):
+                self.remove_folder(document_id)
+
     def result_path(self, document_id: str, mode: str) -> Path:
         if mode not in {"shallow", "deep"}:
             raise RequestError(400, "Choose shallow or deep processing mode.")
-        legacy = self.directory / document_id / "result.json"
+        legacy = self.folder(document_id) / "result.json"
         if legacy.exists() and self.read(legacy)["mode"] == mode:
             return legacy
-        return self.directory / document_id / mode / "result.json"
+        return self.folder(document_id) / mode / "result.json"
 
     def result(self, document_id: str, mode: str = "shallow") -> dict:
+        if self.is_deleted(document_id):
+            raise RequestError(404, 'This PDF was deleted.')
         return self.read(self.result_path(document_id, mode))
 
-    def submit(self, document_id: str, name: str, pdf: bytes, mode: str = "shallow") -> dict:
+    def submit(self, document_id: str, name: str, pdf: bytes, mode: str = "shallow", questions: int | None = None) -> dict:
+        questions = self.questions if questions is None else questions
+        if type(questions) is not int or not 5 <= questions <= 300:
+            raise RequestError(400, 'Enter a whole number of flashcards from 5 to 300.')
         if mode not in {"shallow", "deep"}:
             raise RequestError(400, "Choose shallow or deep processing mode.")
         if not pdf or len(pdf) >= pdf_study.MAX_PDF_BYTES:
@@ -71,10 +107,14 @@ class StudyJobs:
             raise RequestError(400, "Choose a valid PDF file.")
         digest = hashlib.sha256(pdf).hexdigest()
         with self.lock:
-            folder = self.directory / document_id
+            if self.is_deleted(document_id):
+                raise RequestError(410, 'This PDF was deleted. Upload it again as a new file.')
+            folder = self.folder(document_id)
             source = folder / "source.pdf"
             output = self.result_path(document_id, mode)
             data = self.read(output) if output.exists() else None
+            if data and data.get('requested_questions', self.questions) != questions:
+                raise RequestError(409, 'This upload uses a different flashcard count. Upload it again to change the count.')
             if (source.exists() and hashlib.sha256(source.read_bytes()).hexdigest() != digest) or (data and data.get("pdf_sha256") != digest):
                 raise RequestError(409, "This file ID belongs to a different PDF. Upload it as a new file.")
             if data and ((document_id, mode) in self.active or data.get("status") == "complete"):
@@ -86,7 +126,7 @@ class StudyJobs:
                 source.write_bytes(pdf)
             if data is None:
                 data = {"id": document_id, "file": name, "pdf_sha256": digest, "mode": mode,
-                        "requested_sentences": SUMMARY_SENTENCES, "requested_questions": self.questions,
+                        "requested_sentences": SUMMARY_SENTENCES, "requested_questions": questions,
                         "documents": []}
             data.update(status="queued", error="")
             pdf_study.write_json(output, data)
@@ -96,20 +136,27 @@ class StudyJobs:
 
     def process(self, document_id: str, source: Path, output: Path, mode: str) -> None:
         try:
+            if self.is_deleted(document_id):
+                return
             data = self.read(output)
             data.update(status="running", error="")
             pdf_study.write_json(output, data)
             args = argparse.Namespace(pdfs=[str(source)], output=str(output),
                                       sentences=data["requested_sentences"], questions=data["requested_questions"],
                                       language="same language as the PDF", model=pdf_study.MODEL,
-                                      timeout=600, allow_empty_pages=False, feedback="", deep_mode=mode == "deep")
+                                      timeout=600, allow_empty_pages=False, feedback="", deep_mode=mode == "deep",
+                                      cancelled=lambda: self.is_deleted(document_id))
             self.runner(args)
+            if self.is_deleted(document_id):
+                return
             data = self.read(output)
             if not data["documents"] or not data["documents"][0].get("complete"):
                 raise pdf_study.WorkflowError("Processing did not finish. Retry to resume saved work.")
             data.update(status="complete", error="")
             pdf_study.write_json(output, data)
         except Exception as exc:
+            if self.is_deleted(document_id):
+                return
             # Only the pipeline's sanitized actionable errors can be sent to the browser.
             message = str(exc) if isinstance(exc, pdf_study.WorkflowError) else "Processing failed. Retry to resume saved work."
             try:
@@ -121,6 +168,8 @@ class StudyJobs:
         finally:
             with self.lock:
                 self.active.discard((document_id, mode))
+                if self.is_deleted(document_id) and not any(active_id == document_id for active_id, _ in self.active):
+                    self.remove_folder(document_id)
 
 
 def create_server(jobs: StudyJobs, port: int = 8010, static_dir: Path | None = None) -> ThreadingHTTPServer:
@@ -169,11 +218,28 @@ def create_server(jobs: StudyJobs, port: int = 8010, static_dir: Path | None = N
                 if len(pdf) != length:
                     raise RequestError(400, "Upload was interrupted. Retry the file.")
                 mode = self.headers.get("X-Learning-Mode", "shallow")
-                self.send_json(202, jobs.submit(match[1], name, pdf, mode))
+                try:
+                    questions = int(self.headers.get('X-Flashcard-Count', str(jobs.questions)))
+                except ValueError:
+                    raise RequestError(400, 'Enter a whole number of flashcards from 5 to 300.') from None
+                self.send_json(202, jobs.submit(match[1], name, pdf, mode, questions))
             except RequestError as exc:
                 self.send_json(exc.status, {"error": str(exc)})
             except (OSError, ValueError):
                 self.send_json(500, {"error": "Could not save the PDF or read its results. Check server storage."})
+
+        def do_DELETE(self) -> None:
+            try:
+                self.check_local_request()
+                match = DOCUMENT_ROUTE.fullmatch(urlsplit(self.path).path)
+                if not match or match[2]:
+                    raise RequestError(404, 'Unknown endpoint.')
+                jobs.delete(match[1])
+                self.send_json(200, {'deleted': True})
+            except RequestError as exc:
+                self.send_json(exc.status, {'error': str(exc)})
+            except OSError:
+                self.send_json(500, {'error': 'Could not delete the PDF. Please retry.'})
 
         def do_GET(self) -> None:
             try:

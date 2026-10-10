@@ -11,6 +11,7 @@ export interface StudyDocument {
 export interface StudyResult {
   id: string;
   mode?: LearningMode;
+  requested_questions?: number;
   status: ProcessingState['status'];
   error?: string;
   documents: StudyDocument[];
@@ -23,6 +24,7 @@ export function parseStudyResult(value: unknown, id: string, mode: LearningMode 
     throw new Error('The Python server returned an invalid result file. Retry processing.');
   }
   if (result.error !== undefined && typeof result.error !== 'string') throw new Error('Invalid processing error.');
+  if (result.requested_questions !== undefined && (!Number.isInteger(result.requested_questions) || result.requested_questions < 5 || result.requested_questions > 300)) throw new Error('Invalid flashcard count.');
   if ((result.mode ?? 'shallow') !== mode) throw new Error('The result belongs to a different processing mode. Retry processing.');
   for (const document of result.documents) {
     if (!document || typeof document !== 'object'
@@ -48,7 +50,7 @@ export function learningPatch(file: Material, result: StudyResult) {
     ...card, id: `pipeline:${file.id}:${index}`, demo: false, generated: true,
   }));
   return {
-    processing: { status: result.status, error: result.error ?? '', mode: result.mode ?? 'shallow' },
+    processing: { status: result.status, error: result.error ?? '', mode: result.mode ?? 'shallow', requestedQuestions: result.requested_questions ?? file.processing?.requestedQuestions ?? 60 },
     description: document?.abstract ?? '',
     outputs: {
       summary: { text: document?.abstract ?? '' },

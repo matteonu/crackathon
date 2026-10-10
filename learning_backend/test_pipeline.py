@@ -125,7 +125,7 @@ class PipelineTests(unittest.TestCase):
             document_id = str(uuid.uuid4())
             url = f'{base}/api/learning/documents/{document_id}'
             try:
-                request = Request(url, data=FIXTURE.read_bytes(), headers={'Content-Type': 'application/pdf', 'X-Filename': 'lecture.pdf'})
+                request = Request(url, data=FIXTURE.read_bytes(), headers={'Content-Type': 'application/pdf', 'X-Filename': 'lecture.pdf', 'X-Flashcard-Count': '7'})
                 with urlopen(request) as response:
                     self.assertEqual(response.status, 202)
                 deadline = time.monotonic() + 15
@@ -136,7 +136,8 @@ class PipelineTests(unittest.TestCase):
                         break
                     time.sleep(0.02)
                 self.assertEqual(data['status'], 'complete', (data, failures))
-                self.assertEqual(len(data['documents'][0]['questions']), 5)
+                self.assertEqual(len(data['documents'][0]['questions']), 7)
+                self.assertEqual(data['requested_questions'], 7)
                 self.assertEqual(data, json.loads(jobs.result_path(document_id, 'shallow').read_text()))
                 self.assertEqual(data['mode'], 'shallow')
                 with urlopen(request) as response:
@@ -153,9 +154,27 @@ class PipelineTests(unittest.TestCase):
                 with self.assertRaises(HTTPError) as no_deep_result:
                     urlopen(url + '/result.json?mode=deep')
                 self.assertEqual(no_deep_result.exception.code, 404)
+                for count in ('0', '4', '301', '5.5', 'abc'):
+                    with self.assertRaises(HTTPError) as invalid_count:
+                        urlopen(Request(url, data=FIXTURE.read_bytes(), headers={'Content-Type':'application/pdf', 'X-Flashcard-Count':count}))
+                    self.assertEqual(invalid_count.exception.code, 400)
+                with self.assertRaises(HTTPError) as changed_count:
+                    urlopen(Request(url, data=FIXTURE.read_bytes(), headers={'Content-Type':'application/pdf', 'X-Flashcard-Count':'8'}))
+                self.assertEqual(changed_count.exception.code, 409)
                 with self.assertRaises(RequestError) as conflict:
                     jobs.submit(document_id, 'other.pdf', b'%PDF-different file')
                 self.assertEqual(conflict.exception.status, 409)
+                with self.assertRaises(HTTPError) as blocked_delete:
+                    urlopen(Request(url, method='DELETE', headers={'Origin':'https://untrusted.example'}))
+                self.assertEqual(blocked_delete.exception.code, 403)
+                with urlopen(Request(url, method='DELETE')) as response:
+                    self.assertTrue(json.load(response)['deleted'])
+                self.assertFalse((Path(temp) / document_id).exists())
+                with self.assertRaises(HTTPError) as deleted_result:
+                    urlopen(url + '/result.json')
+                self.assertEqual(deleted_result.exception.code, 404)
+                with urlopen(Request(url, method='DELETE')) as response:
+                    self.assertEqual(response.status, 200)
             finally:
                 server.shutdown()
                 server.server_close()
@@ -212,6 +231,57 @@ class PipelineTests(unittest.TestCase):
             source = pdf_study.prepare_source(path, False, True)
             self.assertEqual(source['valid_pages'], {1})
             self.assertIsNotNone(source['file_input'])
+
+    def test_deleting_an_active_pdf_stops_next_requests_and_removes_every_mode(self):
+        entered = threading.Event()
+        release = threading.Event()
+        calls = []
+        def waiting_model(client, model, data, schema, label, file_input=None):
+            calls.append(data['stage'])
+            entered.set()
+            if not release.wait(10):
+                raise RuntimeError('Test did not release the model request')
+            return fake_model(client, model, data, schema, label, file_input)
+        with tempfile.TemporaryDirectory() as temp, patch.object(pdf_study, 'API_KEY', 'test-only'), \
+             patch.object(pdf_study, 'request_json', side_effect=waiting_model), contextlib.redirect_stdout(io.StringIO()):
+            jobs = StudyJobs(Path(temp), questions=5)
+            document_id = str(uuid.uuid4())
+            other_id = str(uuid.uuid4())
+            other_folder = jobs.folder(other_id)
+            other_folder.mkdir()
+            (other_folder / 'source.pdf').write_bytes(FIXTURE.read_bytes())
+            try:
+                jobs.submit(document_id, 'lecture.pdf', FIXTURE.read_bytes())
+                self.assertTrue(entered.wait(10))
+                jobs.delete(document_id)
+                with self.assertRaises(RequestError) as missing:
+                    jobs.result(document_id)
+                self.assertEqual(missing.exception.status, 404)
+                with self.assertRaises(RequestError) as resurrect:
+                    jobs.submit(document_id, 'lecture.pdf', FIXTURE.read_bytes())
+                self.assertEqual(resurrect.exception.status, 410)
+                with self.assertRaises(RequestError):
+                    jobs.delete('../outside')
+                release.set()
+                jobs.pool.shutdown(wait=True)
+                self.assertEqual(calls, ['preview_and_abstract'])
+                self.assertFalse(jobs.folder(document_id).exists())
+                self.assertTrue((other_folder / 'source.pdf').exists())
+            finally:
+                release.set()
+                jobs.pool.shutdown(wait=True)
+
+    def test_server_restart_finishes_pending_deletions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp) / str(uuid.uuid4())
+            folder.mkdir()
+            (folder / '.deleted').write_text('deleted')
+            (folder / 'source.pdf').write_bytes(FIXTURE.read_bytes())
+            jobs = StudyJobs(Path(temp))
+            try:
+                self.assertFalse(folder.exists())
+            finally:
+                jobs.pool.shutdown()
 
     def test_missing_key_and_interrupted_jobs_are_actionable(self):
         with tempfile.TemporaryDirectory() as temp:

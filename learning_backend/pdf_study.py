@@ -35,6 +35,7 @@ DEEP_MODE = os.environ.get('PDF_DEEP_MODE', 'false').lower() == 'true'
 import argparse
 import base64
 from collections import Counter
+from contextvars import ContextVar
 import glob
 import hashlib
 import io
@@ -61,6 +62,14 @@ SUMMARY_SCHEMA = {'type': 'object', 'additionalProperties': False, 'properties':
 
 class WorkflowError(Exception):
     """An actionable error to display without a traceback."""
+
+
+_cancelled = ContextVar('study_cancelled', default=lambda: False)
+
+
+def check_cancelled() -> None:
+    if _cancelled.get()():
+        raise WorkflowError('Processing cancelled.')
 
 def write_json(path: Path, data: Any) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -416,6 +425,7 @@ def request_json(client, model: str, data: dict, schema: dict, label: str,
                  file_input: dict | None = None) -> dict:
     import openai
 
+    check_cancelled()
     content = json.dumps(data, ensure_ascii=False)
     if file_input is not None:
         content = [{"role": "user", "content": [file_input, {"type": "input_text", "text": content}]}]
@@ -439,6 +449,7 @@ def request_json(client, model: str, data: dict, schema: dict, label: str,
         # Raw API exception messages may echo keys: never log them.
         raise WorkflowError(f"API request failed ({type(exc).__name__}). Check model/server support for structured "
                             "outputs and PDF vision in deep mode. Split very large PDFs if needed.") from None
+    check_cancelled()
     if response.status != "completed":
         raise WorkflowError("API response was incomplete. Increase MAX_OUTPUT_TOKENS or use a smaller --questions count.")
     if any(part.type == "refusal" for item in response.output if item.type == "message" for part in item.content):
@@ -563,6 +574,7 @@ def process_document(client, pdf: Path, source: dict, args: argparse.Namespace,
         state = {"identity": identity, "examples": [], "feedback": [], "batches": [], "abstract": ""}
 
     def save() -> None:
+        check_cancelled()
         write_json(state_path, state)
         write_json(output, data)
 
@@ -623,6 +635,15 @@ def process_document(client, pdf: Path, source: dict, args: argparse.Namespace,
 
 
 def run(args: argparse.Namespace) -> Path:
+    token = _cancelled.set(getattr(args, 'cancelled', lambda: False))
+    try:
+        check_cancelled()
+        return _run(args)
+    finally:
+        _cancelled.reset(token)
+
+
+def _run(args: argparse.Namespace) -> Path:
     import openai
 
     args.deep_mode = getattr(args, "deep_mode", DEEP_MODE)

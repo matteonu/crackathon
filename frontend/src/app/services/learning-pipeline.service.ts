@@ -6,6 +6,10 @@ import { parseStudyResult, StudyResult } from '../models/learning';
 export class LearningPipelineService {
   resultUrl(id: string, mode: LearningMode = 'shallow'): string { return `/api/learning/documents/${encodeURIComponent(id)}/result.json?mode=${mode}`; }
 
+  async remove(id: string): Promise<void> {
+    await this.request(`/api/learning/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
   private async request(url: string, init?: RequestInit): Promise<unknown> {
     let response: Response;
     try {
@@ -25,7 +29,7 @@ export class LearningPipelineService {
 
   async process(file: Material, receive: (result: StudyResult) => Promise<void>, resume = false, mode: LearningMode = 'shallow'): Promise<void> {
     let data = await this.request(resume ? this.resultUrl(file.id,mode) : `/api/learning/documents/${encodeURIComponent(file.id)}`,
-      resume ? undefined : { method: 'POST', headers: { 'Content-Type': 'application/pdf', 'X-Filename': encodeURIComponent(file.name), 'X-Learning-Mode': mode }, body: file.blob });
+      resume ? undefined : { method: 'POST', headers: { 'Content-Type': 'application/pdf', 'X-Filename': encodeURIComponent(file.name), 'X-Learning-Mode': mode, 'X-Flashcard-Count': String(file.processing?.requestedQuestions ?? 60) }, body: file.blob });
     let previous = '';
     const deadline = Date.now() + 30 * 60 * 1000;
     while (true) {
