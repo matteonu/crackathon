@@ -7,7 +7,7 @@ is upserted by code, so rows the seed created and rows users reference keep thei
 `course_offerings` and its children are replaced per semester.
 
 The downloaded dump is cached in DATA_DIR (vvz-dump.zip), so a reset-db can refill the
-catalogue in a second without the network.
+catalogue in a second without the network, and a sync still imports when vvzapi.ch is down.
 
 Usage (from backend/):
     python -m vvz.sync                 # download if the dump changed, then import
@@ -412,12 +412,21 @@ def sync(force: bool = False, offline: bool = False, semesters: list[str] | None
             return False
         source_info["source"] = zip_path
     else:
-        metadata = fetch_metadata()
-        wanted = str(metadata.get("last_modified_ms", ""))
-        if cached_dump_info(data_dir).get("dump_last_modified_ms") != wanted:
-            download_dump(data_dir, metadata)
-        source_info = cached_dump_info(data_dir)
-        source_info["source"] = f"{API_BASE}/api/v2/dump"
+        try:
+            metadata = fetch_metadata()
+            wanted = str(metadata.get("last_modified_ms", ""))
+            if cached_dump_info(data_dir).get("dump_last_modified_ms") != wanted:
+                download_dump(data_dir, metadata)
+            source_info = cached_dump_info(data_dir)
+            source_info["source"] = f"{API_BASE}/api/v2/dump"
+        except (OSError, ValueError) as exc:
+            # vvzapi.ch is a hobby server. With a cached dump we can still import and try the
+            # network again next time; without one there is nothing to do.
+            source_info = cached_dump_info(data_dir)
+            if not source_info:
+                raise
+            log.warning("Could not reach %s (%s); using the cached dump", API_BASE, exc)
+            source_info["source"] = zip_path
 
     unchanged = (
         have.get("dump_last_modified_ms") is not None
