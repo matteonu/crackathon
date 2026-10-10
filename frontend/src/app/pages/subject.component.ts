@@ -1,7 +1,6 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { FormsModule } from '@angular/forms';
 import { StudyStore } from '../services/study-store';
 import { MaterialStore } from '../services/material-store';
 import { SchedulerService } from '../services/scheduler.service';
@@ -11,11 +10,11 @@ import { IconComponent } from '../shared/icon.component';
 import { MaterialLibraryComponent } from '../components/material-library.component';
 import { TaskListComponent } from '../components/task-list.component';
 
-@Component({standalone:true,imports:[RouterLink,FormsModule,IconComponent,MaterialLibraryComponent,TaskListComponent],template:`
+@Component({standalone:true,imports:[RouterLink,IconComponent,MaterialLibraryComponent,TaskListComponent],template:`
   @if(subject();as s){
     <header class="page-heading"><div><div class="breadcrumb">YOUR WORKSPACE <span>/</span> SUBJECTS</div><h1><span class="subject-dot heading-dot" [style.background]="s.color"></span>{{s.name}}<span>.</span></h1>
       <div class="subject-meta"><span>{{s.lectureId || 'Lecture ID not set'}}</span><span>{{s.ects===undefined?'ECTS not set':s.ects+' ECTS'}}</span>@if(s.homepage){<a [href]="s.homepage" target="_blank" rel="noopener noreferrer">Course catalogue ↗</a>}</div>
-    </div><div class="heading-actions"><button class="icon-button" aria-label="Subject details" title="Subject details" aria-haspopup="dialog" (click)="openDetails(detailsDialog)"><app-icon name="settings" /></button><button class="button primary" (click)="store.openEditor(s.id)"><app-icon name="plus" /> Record hours</button></div></header>
+    </div><button class="button primary" (click)="store.openEditor(s.id)"><app-icon name="plus" /> Record hours</button></header>
     <section class="panel subject-progress" aria-labelledby="progress-title"><div class="panel-heading"><h2 id="progress-title">Your progress</h2></div><div class="subject-progress-grid">
       <div class="subject-progress-hours"><div class="subject-hour-total" [style.color]="s.color">{{store.hours(s)}}<span>/ {{s.targetHours}} h</span></div><div class="progress-track"><span [style.background]="s.color" [style.width.%]="store.progress(s)"></span></div>
         <figure class="plan-chart"><figcaption><span>Last {{planDays().length}} days</span><span class="plan-legend"><span><i class="plan-bar-planned"></i>Planned</span><span><i [style.background]="s.color"></i>Recorded</span></span></figcaption>
@@ -38,16 +37,6 @@ import { TaskListComponent } from '../components/task-list.component';
         <app-task-list [subjectId]="s.id" />
       </aside>
     </div>
-    <dialog #detailsDialog class="edit-dialog subject-details-dialog" aria-labelledby="details-title"><div class="dialog-top"><span class="eyebrow">SUBJECT DETAILS</span><button class="icon-button" aria-label="Close subject details" (click)="detailsDialog.close()"><app-icon name="close" /></button></div>
-      <h2 id="details-title">{{s.name}}</h2><p class="muted">Your goals and course information.</p>
-      <form (ngSubmit)="save(detailsDialog)"><div class="form-grid"><label>Target study hours<input type="number" name="target" min="0" max="5000" step="0.25" required [(ngModel)]="target"></label><label>Exam date<input type="date" name="exam" required [(ngModel)]="examDate"></label></div>
-        <dl class="catalogue-facts"><div><dt>ECTS</dt><dd>{{s.ects ?? '–'}}</dd></div><div><dt>Lecture ID</dt><dd>{{s.lectureId || '–'}}</dd></div><div class="catalogue-homepage"><dt>Homepage</dt><dd>@if(s.homepage){<a [href]="s.homepage" target="_blank" rel="noopener noreferrer">{{s.homepage}}</a>}@else{–}</dd></div></dl>
-        <p class="field-hint">From the ETH course catalogue; these cannot be changed here.</p>
-        <label class="checkbox-label"><input type="checkbox" name="completed" [(ngModel)]="completed">Subject completed</label>
-        @if(error()){<p class="form-error" role="alert">{{error()}}</p>}
-        <div class="action-buttons"><button class="button primary" type="submit">Save details <app-icon name="check" /></button><button class="text-button" type="button" (click)="detailsDialog.close()">Cancel</button></div>
-      </form>
-    </dialog>
   } @else if(!store.loaded()) {<div class="empty-state"><p class="muted">Loading your subject…</p></div>
   } @else {<div class="empty-state"><h1>Subject not found</h1><p class="muted">It is not one of your {{store.data().semester}} courses. Add courses with + in the sidebar.</p><a routerLink="/" class="button primary">Back to overview</a></div>}
 `})
@@ -82,20 +71,12 @@ export class SubjectComponent {
   /** The deck list shows this many until expanded, so many decks do not stretch the card. */
   readonly deckLimit=5;readonly allDecks=signal(false);
   shownParts<T>(parts:T[]):T[]{return this.allDecks()?parts:parts.slice(0,this.deckLimit);}
-  private readonly details=computed(()=>{
-    const s=this.subject();return s?{id:s.id,targetHours:s.targetHours,examDate:s.examDate,completed:s.completed}:null;
-  },{equal:(a,b)=>JSON.stringify(a)===JSON.stringify(b)});
-  target:number|null=0;examDate='';completed=false;
-  readonly error=signal('');readonly abs=Math.abs;
+  readonly abs=Math.abs;
   constructor(){
     // New decks and cards change the numbers; ratings refresh them through SchedulerService.review().
     effect(()=>{this.materials.files();void this.scheduler.refreshAnalytics();});
     effect(()=>{this.params();this.allDecks.set(false);});
-    effect(()=>{const s=this.details();if(s){this.target=s.targetHours;this.examDate=s.examDate;this.completed=s.completed;this.error.set('');}});
   }
-  /** Opens the details with the saved values, so a cancelled edit leaves nothing behind. */
-  openDetails(dialog:HTMLDialogElement):void {const s=this.subject();if(!s)return;this.target=s.targetHours;this.examDate=s.examDate;this.completed=s.completed;this.error.set('');dialog.showModal();}
-  save(dialog:HTMLDialogElement):void {const s=this.subject();if(!s)return;try{if(this.target===null)throw new Error('Enter target hours.');this.store.updateSubject(s.id,{targetHours:this.target,examDate:this.examDate,completed:this.completed});this.error.set('');dialog.close();}catch(e){this.error.set((e as Error).message);}}
 }
 
 /** Today in the browser's time zone; the plan's dates are plain calendar days. */
