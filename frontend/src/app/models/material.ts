@@ -4,6 +4,7 @@ export const MATERIAL_MARKERS = ['To read','Done','Revisit','Ignore'] as const;
 export type MaterialCategory = typeof MATERIAL_CATEGORIES[number];
 export type MaterialMarker = typeof MATERIAL_MARKERS[number];
 export type MaterialKind = 'folder' | 'pdf' | 'md' | 'txt' | 'deck';
+<<<<<<< HEAD
 export type DocumentType = 'slides' | 'mock_exam' | 'exercise' | 'exercise_solution' | 'script' | 'summary' | 'cards' | 'mcq';
 export const CATEGORY_DOCUMENT_TYPES:Partial<Record<MaterialCategory,DocumentType>> = {
   Slides:'slides', Exams:'mock_exam', Exercises:'exercise', Solutions:'exercise_solution', Scripts:'script'
@@ -12,6 +13,8 @@ const DOCUMENT_TYPE_LABELS:Record<DocumentType,string> = {
   slides:'slides', mock_exam:'exam', exercise:'exercise', exercise_solution:'exercise solution',
   script:'script', summary:'summary', cards:'flashcards', mcq:'multiple choice'
 };
+=======
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 export type ToolId = 'summary' | 'flashcards';
 export interface Flashcard { id?:string; question:string; answer:string; demo?:boolean; generated?:boolean; }
 export type LearningMode = 'shallow' | 'deep';
@@ -23,7 +26,11 @@ export interface Material {
   marker:MaterialMarker; added:number;
   /** Only while a newly chosen file is still being uploaded; the server is the source. */
   blob?:Blob;
+<<<<<<< HEAD
   kind?:MaterialKind; type?:DocumentType|null; parentId?:string|null; description?:string; content?:string;
+=======
+  kind?:MaterialKind; parentId?:string|null; description?:string; content?:string;
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
   sourcePdfId?:string|null;generationMode?:LearningMode|null;folderWeight?:number;
   outputs?:Partial<Record<ToolId,ToolResult>>;
   processing?:ProcessingState;
@@ -58,7 +65,11 @@ export function descendants(files:readonly Material[],parentId:string|null):Mate
   visit(parentId);return found;
 }
 export function folderCards(files:readonly Material[],folderId:string|null):FolderCard[] {
+<<<<<<< HEAD
   return descendants(files,folderId).filter(f=>materialKind(f)!=='folder'&&(materialKind(f)!=='pdf'||canGenerateFlashcards(f))).flatMap(file=>(file.outputs?.flashcards?.cards??[]).map((card,i)=>({...card,key:card.id??`${file.id}-${i}`,fileId:file.sourcePdfId??file.id,fileName:file.name,deckId:materialKind(file)==='deck'?file.id:undefined})));
+=======
+  return descendants(files,folderId).filter(f=>materialKind(f)!=='folder').flatMap(file=>(file.outputs?.flashcards?.cards??[]).map((card,i)=>({...card,key:card.id??`${file.id}-${i}`,fileId:file.sourcePdfId??file.id,fileName:file.name,deckId:materialKind(file)==='deck'?file.id:undefined})));
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 }
 export function treeRows(files:readonly Material[],expanded:ReadonlySet<string>,query='',marker=''):TreeRow[] {
   const rows:TreeRow[]=[];const seen=new Set<string>();const filtering=!!query||!!marker;

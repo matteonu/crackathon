@@ -168,11 +168,14 @@ subject (`backend/materials.py`, `/api/materials`). The metadata is in SQLite; a
 are written once to `data/learning/<id>/source.pdf`, which is also where the pipeline reads
 them, so nothing is stored twice and `POST /api/learning/documents/<id>` needs no body.
 
+<<<<<<< HEAD
 Each document also has a validated `type` flag (`slides`, `mock_exam`, `exercise`,
 `exercise_solution`, or `script`) separate from its file format. Existing libraries are
 migrated in place from their categories at startup. See the [learning pipeline documentation](backend/learning/README.md)
 for compatibility rules and the independent fast-summary model configuration.
 
+=======
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 PDF summaries remain in `outputs`; `processing` stores the last pipeline run's state.
 Each PDF has one independent deck material, linked by nullable `source_pdf_id`.
 Generation replaces the deck's generated cards when its mode changes, preserves manual
@@ -202,12 +205,15 @@ The learning UI finishes each selected batch, shows the next due time, and enabl
 batch when due. The Analytics page shows expandable folder progress and detailed recall
 statistics. Space reveals answers and rates Good; 1/2/3/4 rate Again/Hard/Good/Easy on the back.
 `.apkg` exports still contain fresh cards, without this app's review progress.
+<<<<<<< HEAD
 
 **Tasks.** Each subject has a TODO list (`backend/tasks.py`, `/api/tasks`, table `tasks`),
 one row per task with title, notes, due date, done flag and a manual position; new tasks go
 to the top, done ones are listed separately and can be cleared per subject. Same rules as
 materials: validated server-side and scoped to the caller. The frontend side is
 `TaskStore` and `TaskListComponent` in the subject sidebar.
+=======
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 
 The study plan itself (subjects, hours, sessions) is still kept in the browser by
 `StudyStore`. Moving it to the server is the next step, and the shape to aim for is in

@@ -16,12 +16,19 @@ The pipeline supports two modes:
 - **Deep** sends the complete PDF to the model so it can inspect text, images, charts,
   diagrams, and spatial relationships. It also supports scanned PDFs.
 
+<<<<<<< HEAD
 Uploading starts a summary-only job: one sentence, using the complete PDF in deep mode.
 Summaries use the smaller `gpt-6-luna` model with reasoning disabled by default to reduce
 latency. No cards are generated until the user starts processing explicitly; card jobs
 use `OPENAI_MODEL` and reuse the saved summary. Both tasks support shallow and deep mode.
 Each task/mode has independent results and checkpoints. Repeating a completed request is
 idempotent; an interrupted request can resume from its saved checkpoint.
+=======
+Both modes generate a one-sentence summary and a configurable number of flashcards. Each
+mode has independent results and checkpoints, so shallow and deep jobs for the same PDF can
+run concurrently. Repeating a completed request is idempotent; an interrupted request can
+resume from its saved checkpoint.
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 
 Partial summaries and card batches are saved as they complete. Deleting a document prevents
 subsequent model requests and removes its files after any active request returns. Cleanup
@@ -36,7 +43,10 @@ Each uploaded PDF has one directory under `DATA_DIR/learning`:
 
 ```text
 <file-id>/source.pdf
+<<<<<<< HEAD
 <file-id>/summary/<shallow-or-deep>/result.json
+=======
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 <file-id>/<shallow-or-deep>/result.json
 <file-id>/<shallow-or-deep>/result.work/<checkpoint>.json
 ```
@@ -50,8 +60,11 @@ The result format is:
 {
   "id": "file-id",
   "mode": "shallow",
+<<<<<<< HEAD
   "task": "flashcards",
   "model": "gpt-6-astra",
+=======
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
   "status": "complete",
   "requested_sentences": 1,
   "requested_questions": 60,
@@ -71,6 +84,7 @@ The result format is:
 A result may contain an abstract or partial card list while its status is `running`. Failed
 jobs retain completed checkpoints and expose a sanitized error for retry.
 
+<<<<<<< HEAD
 ### Document types in SQLite
 
 `materials.kind` stores the format (`pdf`, `md`, `txt`, `folder`, or `deck`). `materials.type`
@@ -96,30 +110,43 @@ display category, and reject invalid or conflicting type/category pairs. Older c
 can still send only `category`; the server assigns its corresponding type. PDF flashcards
 are available for `slides`, `exercise_solution`, and `script`; all PDFs can get summaries.
 
+=======
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 ## HTTP API
 
 All document routes verify that the material belongs to the current user.
 
 - `POST /api/learning/documents/<file-id>` starts or resumes processing. The PDF normally
   already exists in material storage, so the request body is optional.
+<<<<<<< HEAD
 - `GET /api/learning/documents/<file-id>/result.json?mode=shallow&task=flashcards` returns saved progress.
+=======
+- `GET /api/learning/documents/<file-id>/result.json?mode=shallow` returns saved progress.
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 - `DELETE /api/learning/documents/<file-id>` removes every mode and checkpoint.
 - `GET /api/learning/health` reports model configuration and pipeline defaults.
 
 Generation requests accept these headers:
 
 - `X-Learning-Mode: shallow|deep`
+<<<<<<< HEAD
 - `X-Learning-Task: summary|flashcards` (default: `flashcards`)
+=======
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 - `X-Flashcard-Count: 5..300`
 - `X-Filename: <encoded PDF name>`
 
 ## Configuration
 
+<<<<<<< HEAD
 - `OPENAI_MODEL` selects the flashcard/standalone CLI model (default: `gpt-6-astra`).
 - `OPENAI_SUMMARY_MODEL` selects the upload-summary model (default: `gpt-6-luna`).
 - `OPENAI_SUMMARY_REASONING_EFFORT` defaults to `none` for fast summaries. If overriding
   the model, choose a supported effort or set this to empty to omit the reasoning option.
 - `/api/learning/health` reports both `model` and `summaryModel`.
+=======
+- `OPENAI_MODEL` selects the model.
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 - `OPENAI_BASE_URL` selects an OpenAI-compatible endpoint.
 - `PDF_DEEP_MODE` sets only the standalone CLI default.
 - `DEFAULT_QUESTIONS` in `jobs.py` applies when a request omits the count header.
@@ -146,9 +173,13 @@ calls. Coverage includes extraction, sentence correction, checkpoint writes, res
 idempotency, concurrent modes, textless PDFs, custom card counts, deletion during generation,
 restart cleanup, and missing-key errors.
 
+<<<<<<< HEAD
 Document tests cover type validation, upload persistence, category compatibility, and
 non-destructive migration of existing libraries. Provider-boundary tests verify that
 summary model/settings do not change flashcard requests.
 
 OpenAI schema reference: [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
 Summary model: [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna).
+=======
+OpenAI schema reference: [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0

@@ -231,6 +231,7 @@ CREATE TABLE IF NOT EXISTS materials (
 CREATE UNIQUE INDEX IF NOT EXISTS materials_unique_name
     ON materials (user_id, subject_id, ifnull(parent_id, ''), lower(name));
 
+<<<<<<< HEAD
 -- A user's to-do list per subject, like Google Tasks: add, tick off, edit, reorder, delete.
 CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,              -- the uuid the browser generates
@@ -246,6 +247,8 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 CREATE INDEX IF NOT EXISTS tasks_by_subject ON tasks (user_id, subject_id);
 
+=======
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 -- A deck is independent of its PDF: deleting the source only clears this reference.
 CREATE UNIQUE INDEX IF NOT EXISTS materials_source_deck
     ON materials(source_pdf_id) WHERE kind = 'deck' AND source_pdf_id IS NOT NULL;

@@ -24,7 +24,11 @@
         @else if(nextDue()){<p>Next review: {{nextDue() | date:'medium'}}.</p>}
         @else if(dueCount()){<p>Increase the new-card limit to include the remaining due cards.</p>}
         @else{<p>No further cards are scheduled.</p>}
+<<<<<<< HEAD
         <button class="button primary" [disabled]="!ready()||!validLimits()" (click)="start()">Start next session</button>
+=======
+        <button class="button primary" [disabled]="!ready()||!validLimits()" (click)="start()">Start next session</button><button class="text-button" [disabled]="busy()||!validLimits()" (click)="checkNext()">Check availability</button>
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
       </div>
     }
     <footer class="practice-settings"><label>Cards this session <input aria-label="Cards this session" title="Applies to the next batch" type="number" min="1" step="1" [ngModel]="limit()" (ngModelChange)="limit.set($event)"> <small aria-live="polite">{{reviewed()}} reviewed · {{queue().length}} remaining</small></label><label>New cards <input aria-label="New cards" title="Applies to the next batch" type="number" min="0" step="1" [ngModel]="newLimit()" (ngModelChange)="newLimit.set($event)"></label></footer>

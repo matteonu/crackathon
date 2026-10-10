@@ -35,8 +35,11 @@ from auth import current_user  # noqa: E402
 import db  # noqa: E402
 import learning  # noqa: E402
 import materials  # noqa: E402
+<<<<<<< HEAD
 import planner  # noqa: E402
 import tasks  # noqa: E402
+=======
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 import decks  # noqa: E402
 import practice  # noqa: E402
 import vvz.sync  # noqa: E402

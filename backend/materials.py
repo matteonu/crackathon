@@ -15,11 +15,19 @@ from material_types import CATEGORY_TYPES, DOCUMENT_TYPES, TYPE_CATEGORIES
 bp = Blueprint("materials", __name__, url_prefix="/api/materials")
 
 KINDS = {"folder", "pdf", "md", "txt", "deck"}
+<<<<<<< HEAD
 CATEGORIES = {"Slides", "Solutions", "Scripts", "Notes", "Transcripts", "Books", "Exams", "Exercises"}
 MARKERS = {"To read", "Done", "Revisit", "Ignore"}
 MAX_TEXT = 200_000      # a note's content
 MAX_JSON = 1_000_000    # outputs or processing, serialised
 COLUMNS = ("id, subject_id, parent_id, kind, name, description, category, type, marker, size, "
+=======
+CATEGORIES = {"Slides", "Notes", "Transcripts", "Books", "Exams", "Exercises"}
+MARKERS = {"To read", "Done", "Revisit", "Ignore"}
+MAX_TEXT = 200_000      # a note's content
+MAX_JSON = 1_000_000    # outputs or processing, serialised
+COLUMNS = ("id, subject_id, parent_id, kind, name, description, category, marker, size, "
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
            "content, added_at, outputs, processing, source_pdf_id, generation_mode, folder_weight")
 
 
@@ -31,7 +39,11 @@ def jobs():
 def to_json(row):
     data = {"id": row["id"], "subjectId": row["subject_id"], "parentId": row["parent_id"],
             "kind": row["kind"], "name": row["name"], "description": row["description"],
+<<<<<<< HEAD
             "category": row["category"], "type": row["type"], "marker": row["marker"], "size": row["size"],
+=======
+            "category": row["category"], "marker": row["marker"], "size": row["size"],
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
             "added": row["added_at"], "sourcePdfId": row["source_pdf_id"],
             "generationMode": row["generation_mode"], "folderWeight": row["folder_weight"]}
     if row["content"] is not None:
@@ -265,7 +277,11 @@ def update(material_id):
             elif existing["kind"] == "pdf":
                 # Legacy clients can still submit card outputs; content lives only in the deck.
                 processing = body.get("processing") or json.loads(existing["processing"] or "{}")
+<<<<<<< HEAD
                 if processing.get("status") == "complete" and processing.get("task", "flashcards") == "flashcards":
+=======
+                if processing.get("status") == "complete":
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
                     generated = [c for c in cards if c.get("generated") or c.get("demo")]
                     deck_id = decks.sync_generated(conn, existing, generated, processing.get("mode", "shallow"))
                     manual = [c for c in cards if not c.get("generated") and not c.get("demo")]

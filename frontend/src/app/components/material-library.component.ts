@@ -12,10 +12,17 @@ import { LoadingDotsComponent } from '../shared/loading-dots.component';
 export class MaterialLibraryComponent {
   readonly subjectId=input.required<string>();readonly materials=inject(MaterialStore);private readonly exporter=inject(FlashcardExportService);
   readonly preview=viewChild<ElementRef<HTMLDialogElement>>('preview');readonly createDialog=viewChild<ElementRef<HTMLDialogElement>>('createDialog');readonly collectionDialog=viewChild<ElementRef<HTMLDialogElement>>('collectionDialog');readonly learningDialog=viewChild<ElementRef<HTMLDialogElement>>('learningDialog');
+<<<<<<< HEAD
   readonly markers=MATERIAL_MARKERS;readonly kind=materialKind;readonly typeLabel=materialTypeLabel;
   readonly uploadCategories=UPLOAD_CATEGORIES;readonly uploadCategory=signal<MaterialCategory>('Slides');
   private uploadParent:string|null=null;
   prepareUpload(category:MaterialCategory):void{this.uploadCategory.set(category);this.uploadParent=this.activeFolder();}
+=======
+  readonly markers=MATERIAL_MARKERS;readonly kind=materialKind;
+  readonly uploadMode=signal<LearningMode>('shallow');
+  readonly uploadCount=signal<number|null>(60);
+  readonly validCount=computed(()=>Number.isInteger(this.uploadCount())&&this.uploadCount()!>=5&&this.uploadCount()!<=300);
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
   readonly deleting=signal(new Set<string>());
   readonly deleteDialog=viewChild<ElementRef<HTMLDialogElement>>('deleteDialog');readonly pendingDelete=signal<Material|null>(null);
   readonly query=signal('');readonly marker=signal('');readonly dragging=signal(false);readonly selectedId=signal<string|null>(null);readonly activeFolder=signal<string|null>(null);readonly expanded=signal(new Set<string>());
@@ -30,6 +37,7 @@ export class MaterialLibraryComponent {
   readonly learningCards=computed(()=>this.learningDeck()?folderCards(this.subjectFiles(),null).filter(c=>c.deckId===this.learningDeck()):folderCards(this.subjectFiles(),this.learningFolder()));
   readonly exporting=signal(false);readonly localError=signal('');readonly status=signal('');readonly creating=signal(false);readonly creationError=signal('');
   createType:Exclude<MaterialKind,'pdf'|'deck'>='folder';newName='';private createParent:string|null=null;
+<<<<<<< HEAD
   constructor(){
     effect(()=>{this.subjectId();this.activeFolder.set(null);this.selectedId.set(null);this.expanded.set(new Set());this.query.set('');this.marker.set('');});
     effect(()=>{
@@ -46,6 +54,13 @@ export class MaterialLibraryComponent {
   chooseFolder(id:string|null):void{this.activeFolder.set(id);if(id)this.expanded.update(s=>new Set([...s,id]));}
   toggle(id:string):void{this.expanded.update(s=>{const next=new Set(s);next.has(id)?next.delete(id):next.add(id);return next;});}
   async open(id:string):Promise<void>{if(await this.materials.ensureAvailable(id)&&this.subjectFiles().some(file=>file.id===id)){this.selectedId.set(id);this.preview()?.nativeElement.showModal();}}
+=======
+  constructor(){effect(()=>{this.subjectId();this.activeFolder.set(null);this.selectedId.set(null);this.expanded.set(new Set());this.query.set('');this.marker.set('');});}
+  count(folderId:string|null):number{return folderCards(this.subjectFiles(),folderId).length;}
+  chooseFolder(id:string|null):void{this.activeFolder.set(id);if(id)this.expanded.update(s=>new Set([...s,id]));}
+  toggle(id:string):void{this.expanded.update(s=>{const next=new Set(s);next.has(id)?next.delete(id):next.add(id);return next;});}
+  open(id:string):void{this.selectedId.set(id);this.preview()?.nativeElement.showModal();}
+>>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
   newItem(kind:Exclude<MaterialKind,'pdf'|'deck'>,parentId:string|null):void{this.chooseFolder(parentId);this.createType=kind;this.newName='';this.createParent=parentId;this.creationError.set('');this.createDialog()?.nativeElement.showModal();}
   async create():Promise<void>{this.creating.set(true);try{const file=await this.materials.create(this.subjectId(),this.createParent,this.createType,this.newName);if(this.createParent)this.expanded.update(s=>new Set([...s,this.createParent!]));this.createDialog()?.nativeElement.close();if(file.kind==='folder')this.chooseFolder(file.id);else this.open(file.id);this.status.set(`${file.name} created.`);}catch(e){this.creationError.set(e instanceof Error?e.message:'Could not create item.');}finally{this.creating.set(false);}}
   async upload(event:Event):Promise<void>{const input=event.target as HTMLInputElement;await this.materials.add(this.subjectId(),Array.from(input.files??[]),this.uploadCategory(),this.uploadParent);input.value='';}
