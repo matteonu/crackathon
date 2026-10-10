@@ -206,6 +206,28 @@ matters for a demo, ask the organizers whether the proxy can send `prompt=login`
 `approval_prompt=force` -- that is their config, and it would force a fresh login for every
 team's app. Set `SIGN_OUT_URL` empty in `.env` to hide the button entirely.
 
+## Course catalogue (VVZ)
+
+The `courses` table is the ETH course catalogue. The seed puts a few rows in it; the VVZ sync (`backend/vvz/sync.py`) fills and refreshes it from the database dump of the community project [vvzapi.ch](https://vvzapi.ch) ([markbeep/vvzapi](https://github.com/markbeep/vvzapi), GPLv3; we use its data, not its code, and credit it here). Every course gets ECTS, exam mode, the Basisprüfung block, lecturers, programme sections and student ratings, and per semester an offering with the lecture/exercise parts, their weekly hours and room timeslots.
+
+- **Schema:** in `backend/schema.sql`. `courses` is upserted by `code`, so ids survive and `semester_courses` keeps pointing at the right rows; `course_offerings` (one per course and semester, id = VVZ lerneinheitId) with `course_lectures`, `course_timeslots`, `course_lecturers`/`lecturers`, `course_sections`, plus `course_ratings` and `vvz_meta`.
+- **Which semesters:** previous, current and the next two by default; override with `VVZ_SEMESTERS=2025W,2026S`.
+- **When it runs:** nobody triggers it by hand. Every app start (so every deploy and every restart) launches a background thread that syncs about ten seconds after boot and then every 24 h (`VVZ_REFRESH_SECONDS`); `VVZ_AUTO_SYNC=0` turns that off. A sync asks vvzapi.ch whether the dump changed, downloads it only then, and imports only when the database does not already hold that dump for these semesters, so a redeploy with up-to-date data is a no-op. The import is one transaction, so requests see either the old or the new catalogue. To force one: `docker compose exec app python -m vvz.sync --force`.
+- **Cache:** the downloaded dump is cached as `data/vvz-dump.zip`, which is how `reset-db` and `wipe` refill the catalogue in a second without the network, and how a sync still imports when vvzapi.ch is down. A fresh deployment with an empty `data/` downloads it on first start (about 70 MB, ten seconds); until then the catalogue holds only the seed.
+- **On the VM:** `data/` is a bind mount, so the database and the cache survive `docker compose up --build`. The GitHub Actions deploy (`.github/workflows/deploy.yml`) runs the backend tests, which never touch the network, then restarts the container; the sync thread then does its start-up check as described above.
+- **dump-seed** skips the synced tables and writes only the courses the demo data references, so the seed files stay small.
+- **Known gap:** upstream has no timeslots for autumn 2026 yet, although VVZ itself lists them. An offering without slots gets the slots of the same course one year earlier, marked with `inherited_from`, so treat those as "probably" and show the flag in the UI.
+
+```bash
+cd backend
+../.venv/bin/python -m vvz.sync                   # download the dump (~70 MB) if it changed, then import
+../.venv/bin/python -m vvz.sync --force           # import again even if nothing changed
+../.venv/bin/python -m vvz.sync --offline         # import from the cached dump, no network
+../.venv/bin/python -m unittest tests.test_vvz tests.test_vvz_app
+```
+
+No endpoints yet: read the tables directly (`courses`, `course_offerings`, `course_lectures`, `course_timeslots`, ...) from whatever backend code needs them.
+
 ## Deadlines
 
 - **Sunday noon:** we lose access to the VM, so the app must already be running on its own (Docker Compose with `restart: unless-stopped`).

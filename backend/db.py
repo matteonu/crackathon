@@ -14,6 +14,14 @@ from flask import current_app, g
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_PATH = os.path.join(BACKEND_DIR, "schema.sql")
 
+# Filled by the VVZ sync (backend/vvz/), never by the seed, so dump-seed leaves them out.
+VVZ_TABLES = {"course_offerings", "course_lectures", "course_timeslots", "lecturers",
+              "course_lecturers", "course_sections", "course_ratings", "vvz_meta"}
+# The sync also adds thousands of rows to `courses`; the seed only needs the ones the
+# demo data points at, everything else comes back from VVZ.
+SEED_COURSES_SQL = """SELECT * FROM courses WHERE id IN (SELECT course_id FROM semester_courses)
+                      OR id IN (SELECT course_id FROM course_resources) ORDER BY rowid"""
+
 
 def init_app(app):
     app.teardown_appcontext(close_db)
@@ -98,11 +106,14 @@ def dump_seed():
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid"
         )]
         for table in tables:
+            if table in VVZ_TABLES:
+                continue
             path = existing.get(table)
             if path is None:
                 path = os.path.join(out_dir, f"{next_num:02d}_{table}.json")
                 next_num += 1
-            rows = [dict(r) for r in db.execute(f'SELECT * FROM "{table}" ORDER BY rowid')]
+            query = SEED_COURSES_SQL if table == "courses" else f'SELECT * FROM "{table}" ORDER BY rowid'
+            rows = [dict(r) for r in db.execute(query)]
             with open(path, "w") as f:
                 json.dump(rows, f, indent=2, ensure_ascii=False)
                 f.write("\n")

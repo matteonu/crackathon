@@ -24,6 +24,7 @@ def load_env_file(path=os.path.join(BACKEND_DIR, "..", ".env")):
 load_env_file()
 
 import shutil  # noqa: E402
+import sys  # noqa: E402
 from urllib.parse import quote  # noqa: E402
 
 import click  # noqa: E402
@@ -34,6 +35,7 @@ from auth import current_user  # noqa: E402
 import db  # noqa: E402
 import learning  # noqa: E402
 import materials  # noqa: E402
+import vvz.sync  # noqa: E402
 from learning import RequestError, StudyJobs  # noqa: E402
 
 
@@ -69,11 +71,19 @@ def config_from_env():
         "SIGN_OUT_URL": os.environ.get("SIGN_OUT_URL", DEFAULT_SIGN_OUT_URL),
         "LEARNING_DIR": os.environ.get("LEARNING_DIR", os.path.join(data_dir, "learning")),
         "STATIC_DIR": os.environ.get("STATIC_DIR", os.path.join(BACKEND_DIR, "..", "frontend", "dist")),
+        # The course catalogue (courses, course_offerings, ...) is filled from the ETH VVZ by a
+        # background thread at start and refreshed daily; VVZ_AUTO_SYNC=0 turns that off.
+        "VVZ_AUTO_SYNC": os.environ.get("VVZ_AUTO_SYNC", "1").lower() not in {"0", "false", "no"},
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
         # 50 MB PDFs, with headroom for the request around them.
         "MAX_CONTENT_LENGTH": 70 * 1024 * 1024,
     }
+
+
+def _flask_cli():
+    """True under `flask --app app <command>`, where a background download would be a nuisance."""
+    return os.path.basename(sys.argv[0]) == "flask"
 
 
 def create_app(overrides=None):
@@ -95,6 +105,8 @@ def create_app(overrides=None):
     auth.init_app(app)
     app.register_blueprint(materials.bp)
     app.register_blueprint(learning.bp)
+    if app.config["VVZ_AUTO_SYNC"] and not app.testing and not _flask_cli():
+        vvz.sync.start_background(app.config["DATABASE_PATH"], app.config["DATA_DIR"])
 
     @app.errorhandler(RequestError)
     def request_error(exc):
@@ -133,11 +145,19 @@ def create_app(overrides=None):
             return send_from_directory(static_dir, path)
         return send_from_directory(static_dir, "index.html")
 
+    def refill_catalogue():
+        """After a reset, put the VVZ courses back from the cached dump (no network, about a second)."""
+        if vvz.sync.sync(offline=True, db_path=app.config["DATABASE_PATH"], data_dir=app.config["DATA_DIR"]):
+            click.echo("Course catalogue refilled from the cached VVZ dump")
+        else:
+            click.echo("No cached VVZ dump yet; the catalogue fills when the app next starts")
+
     @app.cli.command("reset-db")
     def reset_db_command():
         """Delete the database and rebuild it from the seed. Discards everything users changed."""
         db.reset_db()
         click.echo(f"Database reset from {os.pathsep.join(app.config['SEED_DIRS'])}")
+        refill_catalogue()
 
     @app.cli.command("wipe")
     @click.option("--yes", is_flag=True, help="Do not ask.")
@@ -152,6 +172,7 @@ def create_app(overrides=None):
             shutil.rmtree(os.path.join(learning_dir, name), ignore_errors=True)
             removed += 1
         click.echo(f"Database reloaded from the seed, {removed} uploaded document(s) deleted")
+        refill_catalogue()
 
     @app.cli.command("dump-seed")
     def dump_seed_command():
