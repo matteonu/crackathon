@@ -1,126 +1,156 @@
-"""Read helpers for the local VVZ database built by `python -m vvz.sync`.
-
-All functions open a short-lived read-only connection, so they stay correct while
-the sync swaps in a freshly built file underneath.
+"""Read helpers for the course catalogue in the app database (see schema.sql, `courses` and
+`course_offerings`). Every function takes the database path, so tests and the CLI can point
+them anywhere; the routes pass the app's DATABASE_PATH.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
-import os
 import sqlite3
 
-from .sync import DB_PATH
+from .sync import DATABASE_PATH
 
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+JSON_COLUMNS = ("levels", "departments", "exam_block")
 
 
-class NotSynced(RuntimeError):
-    """Raised when vvz.db does not exist yet."""
-
-
-def connect(db_path: str = DB_PATH) -> sqlite3.Connection:
-    if not os.path.exists(db_path):
-        raise NotSynced(f"{db_path} does not exist; run `python -m vvz.sync` first")
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+def connect(db_path: str = DATABASE_PATH):
+    """A read connection that is closed when the `with` block ends."""
+    conn = sqlite3.connect(db_path, timeout=30)
     conn.row_factory = sqlite3.Row
-    return conn
+    return contextlib.closing(conn)
 
 
-def _unit_dict(row) -> dict:
+def _course_dict(row) -> dict:
     d = dict(row)
-    for col in ("levels", "departments", "exam_block"):
-        d[col] = json.loads(d.get(col) or "[]")
+    for col in JSON_COLUMNS:
+        if col in d:
+            d[col] = json.loads(d[col] or "[]")
     return d
 
 
-def status(db_path: str = DB_PATH) -> dict:
+def status(db_path: str = DATABASE_PATH) -> dict:
+    """What the sync last imported; empty before the first import."""
     with connect(db_path) as conn:
-        return dict(conn.execute("SELECT key, value FROM vvz_meta").fetchall())
+        try:
+            return dict(conn.execute("SELECT key, value FROM vvz_meta").fetchall())
+        except sqlite3.OperationalError:
+            return {}
 
 
-def semesters(db_path: str = DB_PATH) -> list[str]:
+def semesters(db_path: str = DATABASE_PATH) -> list[str]:
     with connect(db_path) as conn:
-        return [r[0] for r in conn.execute("SELECT DISTINCT semkez FROM vvz_units ORDER BY semkez")]
+        return [r[0] for r in conn.execute("SELECT DISTINCT semkez FROM course_offerings ORDER BY semkez")]
 
 
-def search_units(q: str = "", semkez: str | None = None, section: str | None = None, limit: int = 50, db_path: str = DB_PATH) -> list[dict]:
-    """Units whose number or title contains q, optionally in one semester and programme section.
+def search_courses(q: str = "", semkez: str | None = None, section: str | None = None, limit: int = 50,
+                   db_path: str = DATABASE_PATH) -> list[dict]:
+    """Courses whose code or title contains q.
 
-    `section` matches the English section path, e.g. "Computer Science Bachelor > 1. Semester".
+    With `semkez`, only courses offered that semester, and `offering_id` is that offering.
+    Without it, every course (seeded or synced), and `offering_id` is the latest offering.
+    `section` matches the English programme path of the offering, e.g.
+    "Computer Science Bachelor > First Year Examinations".
     """
     where, params = ["1=1"], []
     if q:
-        where.append("(u.number LIKE ? OR u.title LIKE ? OR u.title_english LIKE ?)")
+        where.append("(c.code LIKE ? OR c.title LIKE ? OR c.title_english LIKE ?)")
         params += [f"%{q}%"] * 3
     if semkez:
-        where.append("u.semkez = ?")
-        params.append(semkez.upper())
+        offering = "SELECT o.id FROM course_offerings o WHERE o.course_id = c.id AND o.semkez = ?"
+        params_offering = [semkez.upper()]
+    else:
+        offering = "SELECT o.id FROM course_offerings o WHERE o.course_id = c.id ORDER BY o.semkez DESC LIMIT 1"
+        params_offering = []
     if section:
-        where.append("EXISTS (SELECT 1 FROM vvz_unit_sections s WHERE s.unit_id = u.id AND s.path_en LIKE ?)")
-        params.append(f"%{section}%")
-    sql = f"""SELECT u.id, u.semkez, u.number, u.title, u.title_english, u.credits, u.weekly_hours,
-                     u.language, u.exam_mode, u.exam_type, u.exam_block, u.levels, u.departments
-              FROM vvz_units u WHERE {' AND '.join(where)}
-              ORDER BY u.semkez DESC, u.number LIMIT ?"""
-    params.append(int(limit))
+        where.append(f"""EXISTS (SELECT 1 FROM course_sections s WHERE s.offering_id = ({offering}) AND s.path_en LIKE ?)""")
+        params += params_offering + [f"%{section}%"]
+    if semkez:
+        where.append(f"EXISTS ({offering})")
+        params += params_offering
+    sql = f"""SELECT c.id, c.code, c.title, c.title_english, c.term, c.ects, c.professor, c.weekly_hours,
+                     c.language, c.exam_mode, c.exam_type, c.exam_block, c.levels, c.latest_semkez,
+                     ({offering}) AS offering_id
+              FROM courses c WHERE {' AND '.join(where)}
+              ORDER BY c.code LIMIT ?"""
+    params = params_offering + params + [int(limit)]
     with connect(db_path) as conn:
-        return [_unit_dict(r) for r in conn.execute(sql, params)]
+        return [_course_dict(r) for r in conn.execute(sql, params)]
 
 
-def get_unit(unit_id: int, db_path: str = DB_PATH) -> dict | None:
-    """One unit with its courses, timeslots, lecturers, programme sections and rating."""
+def get_course(course_id: int, semkez: str | None = None, db_path: str = DATABASE_PATH) -> dict | None:
+    """One course with its offering for `semkez` (default: the latest), including lectures,
+    timeslots, lecturers, programme sections, plus the rating and the list of all semesters."""
     with connect(db_path) as conn:
-        row = conn.execute("SELECT * FROM vvz_units WHERE id = ?", (unit_id,)).fetchone()
+        row = conn.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
         if row is None:
             return None
-        unit = _unit_dict(row)
-        unit["courses"] = [dict(r) for r in conn.execute(
-            "SELECT number, title, type, type_name, hours, hour_type, comment FROM vvz_courses WHERE unit_id = ? ORDER BY number",
-            (unit_id,),
-        )]
-        for course in unit["courses"]:
-            course["timeslots"] = []
-        for s in [dict(r) for r in conn.execute(
-            """SELECT course_number, weekday, date, start_time, end_time, building, floor, room,
-                      first_half_semester, second_half_semester, biweekly, inherited_from
-               FROM vvz_timeslots WHERE unit_id = ? ORDER BY weekday, start_time, building, room""",
-            (unit_id,),
-        )]:
-            number = s.pop("course_number")
-            s["weekday_name"] = WEEKDAYS[s["weekday"]] if s["weekday"] is not None and 0 <= s["weekday"] < 7 else None
-            for course in unit["courses"]:
-                if course["number"] == number:
-                    course["timeslots"].append(s)
-        unit["lecturers"] = [dict(r) for r in conn.execute(
-            """SELECT l.id, l.title, l.name, l.surname, l.department, ul.role
-               FROM vvz_unit_lecturers ul JOIN vvz_lecturers l ON l.id = ul.lecturer_id
-               WHERE ul.unit_id = ? ORDER BY ul.role, l.surname""",
-            (unit_id,),
-        )]
-        unit["sections"] = [dict(r) for r in conn.execute(
-            "SELECT section_id, type, path_en, path_de FROM vvz_unit_sections WHERE unit_id = ? ORDER BY path_en",
-            (unit_id,),
-        )]
-        rating = conn.execute("SELECT * FROM vvz_ratings WHERE number = ?", (unit["number"],)).fetchone()
-        unit["rating"] = dict(rating) if rating else None
-        return unit
+        course = _course_dict(row)
+        course["offered_in"] = [r[0] for r in conn.execute(
+            "SELECT semkez FROM course_offerings WHERE course_id = ? ORDER BY semkez", (course_id,))]
+        rating = conn.execute("SELECT * FROM course_ratings WHERE code = ?", (course["code"],)).fetchone()
+        course["rating"] = dict(rating) if rating else None
+        course["resources"] = [dict(r) for r in conn.execute(
+            "SELECT kind, title, url FROM course_resources WHERE course_id = ? ORDER BY id", (course_id,))]
+
+        if semkez:
+            offering = conn.execute(
+                "SELECT * FROM course_offerings WHERE course_id = ? AND semkez = ?", (course_id, semkez.upper())).fetchone()
+        else:
+            offering = conn.execute(
+                "SELECT * FROM course_offerings WHERE course_id = ? ORDER BY semkez DESC LIMIT 1", (course_id,)).fetchone()
+        course["offering"] = _offering_dict(conn, offering) if offering else None
+        return course
 
 
-def weekly_timetable(unit_ids: list[int], db_path: str = DB_PATH) -> list[dict]:
-    """All weekly slots of the given units, for building a timetable or finding clashes."""
-    if not unit_ids:
+def _offering_dict(conn, offering) -> dict:
+    o = dict(offering)
+    o["lectures"] = [dict(r) for r in conn.execute(
+        "SELECT number, title, type, type_name, hours, hour_type, comment FROM course_lectures WHERE offering_id = ? ORDER BY number",
+        (o["id"],),
+    )]
+    for lecture in o["lectures"]:
+        lecture["timeslots"] = []
+    by_number = {lecture["number"]: lecture for lecture in o["lectures"]}
+    for s in conn.execute(
+        """SELECT lecture_number, weekday, date, start_time, end_time, building, floor, room,
+                  first_half_semester, second_half_semester, biweekly, inherited_from
+           FROM course_timeslots WHERE offering_id = ? ORDER BY weekday, start_time, building, room""",
+        (o["id"],),
+    ):
+        slot = dict(s)
+        number = slot.pop("lecture_number")
+        slot["weekday_name"] = WEEKDAYS[slot["weekday"]] if slot["weekday"] is not None and 0 <= slot["weekday"] < 7 else None
+        by_number.setdefault(number, {"number": number, "timeslots": []})["timeslots"].append(slot)
+    o["lecturers"] = [dict(r) for r in conn.execute(
+        """SELECT l.id, l.title, l.name, l.surname, l.department, cl.role
+           FROM course_lecturers cl JOIN lecturers l ON l.id = cl.lecturer_id
+           WHERE cl.offering_id = ? ORDER BY cl.role, l.surname""",
+        (o["id"],),
+    )]
+    o["sections"] = [dict(r) for r in conn.execute(
+        "SELECT section_id, type, path_en, path_de FROM course_sections WHERE offering_id = ? ORDER BY path_en",
+        (o["id"],),
+    )]
+    return o
+
+
+def weekly_timetable(course_ids: list[int], semkez: str, db_path: str = DATABASE_PATH) -> list[dict]:
+    """All weekly slots of the given courses in one semester, for a timetable or clash detection."""
+    if not course_ids:
         return []
-    marks = ",".join("?" for _ in unit_ids)
+    marks = ",".join("?" for _ in course_ids)
     with connect(db_path) as conn:
         return [dict(r) for r in conn.execute(
-            f"""SELECT t.unit_id, u.number AS unit_number, u.title, c.type, c.type_name,
+            f"""SELECT c.id AS course_id, c.code, c.title, o.id AS offering_id, l.type, l.type_name,
                        t.weekday, t.start_time, t.end_time, t.building, t.floor, t.room,
                        t.first_half_semester, t.second_half_semester, t.biweekly, t.inherited_from
-                FROM vvz_timeslots t
-                JOIN vvz_units u ON u.id = t.unit_id
-                JOIN vvz_courses c ON c.unit_id = t.unit_id AND c.number = t.course_number AND c.semkez = t.semkez
-                WHERE t.unit_id IN ({marks}) AND t.date IS NULL AND t.start_time IS NOT NULL
+                FROM course_timeslots t
+                JOIN course_offerings o ON o.id = t.offering_id
+                JOIN courses c ON c.id = o.course_id
+                LEFT JOIN course_lectures l ON l.offering_id = t.offering_id AND l.number = t.lecture_number
+                WHERE o.course_id IN ({marks}) AND o.semkez = ? AND t.date IS NULL AND t.start_time IS NOT NULL
                 ORDER BY t.weekday, t.start_time""",
-            unit_ids,
+            [*course_ids, semkez.upper()],
         )]

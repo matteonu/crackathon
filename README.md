@@ -191,21 +191,23 @@ Override it with `SIGN_OUT_URL` in `.env`, or set it empty to hide the button.
 
 ## Course catalogue (VVZ)
 
-`backend/data/vvz.db` is a local copy of the ETH course catalogue: every unit (course) with ECTS, exam mode, Basisprüfung block, lecturers, programme sections, student ratings, and per lecture/exercise the weekly hours and timeslots with rooms. It is **not** part of the seed; it is built by `backend/vvz/sync.py` from the database dump of the community project [vvzapi.ch](https://vvzapi.ch) ([markbeep/vvzapi](https://github.com/markbeep/vvzapi), GPLv3; we use its data, not its code, and credit it here).
+The `courses` table is the ETH course catalogue. The seed puts a few rows in it; the VVZ sync (`backend/vvz/sync.py`) fills and refreshes it from the database dump of the community project [vvzapi.ch](https://vvzapi.ch) ([markbeep/vvzapi](https://github.com/markbeep/vvzapi), GPLv3; we use its data, not its code, and credit it here). Every course gets ECTS, exam mode, the Basisprüfung block, lecturers, programme sections and student ratings, and per semester an offering with the lecture/exercise parts, their weekly hours and room timeslots.
 
-- **Schema:** `backend/vvz/schema.sql` (tables `vvz_units`, `vvz_courses`, `vvz_timeslots`, `vvz_lecturers`, `vvz_unit_lecturers`, `vvz_unit_sections`, `vvz_ratings`, `vvz_meta`).
+- **Schema:** in `backend/schema.sql`. `courses` is upserted by `code`, so ids survive and `semester_courses` keeps pointing at the right rows; `course_offerings` (one per course and semester, id = VVZ lerneinheitId) with `course_lectures`, `course_timeslots`, `course_lecturers`/`lecturers`, `course_sections`, plus `course_ratings` and `vvz_meta`.
 - **Which semesters:** previous, current and the next two by default; override with `VVZ_SEMESTERS=2025W,2026S`.
-- **Refresh:** the app starts a background thread that builds the file at start and rebuilds it every 24 h (`VVZ_REFRESH_SECONDS`) when the upstream dump changed; `VVZ_AUTO_SYNC=0` turns that off. The build swaps the file in atomically, so the app never reads a half-built database. Until the first build is done, `/api/vvz/*` answers 503. The file lives in `data/` next to `app.db`, so it survives a redeploy.
-- **Known gap:** upstream has no timeslots for autumn 2026 yet, although VVZ itself lists them. For a unit without slots the sync copies the slots of the same unit one year earlier and marks them with `inherited_from`, so treat those as "probably" and show the flag in the UI.
+- **Refresh:** the app starts a background thread that imports at start and again every 24 h (`VVZ_REFRESH_SECONDS`) when the upstream dump changed; `VVZ_AUTO_SYNC=0` turns that off. The import is one transaction, so requests see either the old or the new catalogue. The downloaded dump is cached as `data/vvz-dump.zip`, which is how `reset-db` and `wipe` refill the catalogue in a second without the network.
+- **dump-seed** skips the synced tables and writes only the courses the demo data references, so the seed files stay small.
+- **Known gap:** upstream has no timeslots for autumn 2026 yet, although VVZ itself lists them. An offering without slots gets the slots of the same course one year earlier, marked with `inherited_from`, so treat those as "probably" and show the flag in the UI.
 
 ```bash
-.venv/bin/python -m vvz.sync                      # download the dump (~70 MB) and build data/vvz.db, run from backend/
-.venv/bin/python -m vvz.sync --force              # rebuild even if the dump is unchanged
-.venv/bin/python -m vvz.sync --dump database.db   # build from an already downloaded dump
-.venv/bin/python -m unittest tests.test_vvz       # tests run against a tiny fake dump, no network
+cd backend
+../.venv/bin/python -m vvz.sync                   # download the dump (~70 MB) if it changed, then import
+../.venv/bin/python -m vvz.sync --force           # import again even if nothing changed
+../.venv/bin/python -m vvz.sync --offline         # import from the cached dump, no network
+../.venv/bin/python -m unittest tests.test_vvz tests.test_vvz_api
 ```
 
-Endpoints (need the proxy user like every `/api` route): `GET /api/vvz/status`, `GET /api/vvz/units?q=Analysis&semkez=2026W&section=Computer%20Science%20Bachelor`, `GET /api/vvz/units/<id>`, `GET /api/vvz/timetable?ids=1,2,3`. Python side: `vvz.queries.search_units`, `get_unit`, `weekly_timetable`.
+Endpoints (need the proxy user like every `/api` route): `GET /api/courses?q=Analysis&semkez=2026W&section=Computer%20Science%20Bachelor`, `GET /api/courses/<id>?semkez=2026W`, `GET /api/courses/timetable?ids=1,2&semkez=2026W`, `GET /api/courses/sync-status`. Python side: `vvz.queries.search_courses`, `get_course`, `weekly_timetable`.
 
 ## Deadlines
 

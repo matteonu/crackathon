@@ -72,9 +72,8 @@ def config_from_env():
         "SIGN_OUT_URL": os.environ.get("SIGN_OUT_URL", DEFAULT_SIGN_OUT_URL),
         "LEARNING_DIR": os.environ.get("LEARNING_DIR", os.path.join(data_dir, "learning")),
         "STATIC_DIR": os.environ.get("STATIC_DIR", os.path.join(BACKEND_DIR, "..", "frontend", "dist")),
-        # The local copy of the ETH course catalogue (see backend/vvz/). Built in a background
-        # thread at start and refreshed daily; VVZ_AUTO_SYNC=0 turns that off (tests, CLI).
-        "VVZ_DB_PATH": os.environ.get("VVZ_DB_PATH", os.path.join(data_dir, "vvz.db")),
+        # The course catalogue (courses, course_offerings, ...) is filled from the ETH VVZ by a
+        # background thread at start and refreshed daily; VVZ_AUTO_SYNC=0 turns that off.
         "VVZ_AUTO_SYNC": os.environ.get("VVZ_AUTO_SYNC", "1").lower() not in {"0", "false", "no"},
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
@@ -109,7 +108,7 @@ def create_app(overrides=None):
     app.register_blueprint(learning.bp)
     app.register_blueprint(vvz.routes.bp)
     if app.config["VVZ_AUTO_SYNC"] and not app.testing and not _flask_cli():
-        vvz.sync.start_background(app.config["VVZ_DB_PATH"])
+        vvz.sync.start_background(app.config["DATABASE_PATH"], app.config["DATA_DIR"])
 
     @app.errorhandler(RequestError)
     def request_error(exc):
@@ -148,11 +147,19 @@ def create_app(overrides=None):
             return send_from_directory(static_dir, path)
         return send_from_directory(static_dir, "index.html")
 
+    def refill_catalogue():
+        """After a reset, put the VVZ courses back from the cached dump (no network, about a second)."""
+        if vvz.sync.sync(offline=True, db_path=app.config["DATABASE_PATH"], data_dir=app.config["DATA_DIR"]):
+            click.echo("Course catalogue refilled from the cached VVZ dump")
+        else:
+            click.echo("No cached VVZ dump yet; the catalogue fills when the app next starts")
+
     @app.cli.command("reset-db")
     def reset_db_command():
         """Delete the database and rebuild it from the seed. Discards everything users changed."""
         db.reset_db()
         click.echo(f"Database reset from {os.pathsep.join(app.config['SEED_DIRS'])}")
+        refill_catalogue()
 
     @app.cli.command("wipe")
     @click.option("--yes", is_flag=True, help="Do not ask.")
@@ -167,6 +174,7 @@ def create_app(overrides=None):
             shutil.rmtree(os.path.join(learning_dir, name), ignore_errors=True)
             removed += 1
         click.echo(f"Database reloaded from the seed, {removed} uploaded document(s) deleted")
+        refill_catalogue()
 
     @app.cli.command("dump-seed")
     def dump_seed_command():

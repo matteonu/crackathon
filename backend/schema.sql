@@ -12,14 +12,121 @@ CREATE TABLE IF NOT EXISTS users (
     study_start TEXT                  -- 'YYYY-MM-DD'
 );
 
--- Course catalog, shared by all users
+-- Course catalog, shared by all users. One row per ETH unit number (code), across semesters.
+-- Rows come from the seed and from the VVZ sync (backend/vvz/), which upserts by code and
+-- fills the columns below from the catalogue; semester-specific detail is in course_offerings.
 CREATE TABLE IF NOT EXISTS courses (
     id INTEGER PRIMARY KEY,
     code TEXT UNIQUE NOT NULL,        -- e.g. '252-0027-00L'
     title TEXT NOT NULL,
-    term TEXT CHECK (term IN ('HS', 'FS')),
+    term TEXT CHECK (term IN ('HS', 'FS')),   -- of the latest offering
     ects INTEGER NOT NULL,
-    professor TEXT
+    professor TEXT,                   -- lecturers of the latest offering, comma-separated
+    -- Filled by the VVZ sync; NULL for courses only the seed knows.
+    title_english TEXT,
+    language TEXT,
+    exam_mode TEXT,                   -- 'written 180 minutes'
+    exam_type TEXT,                   -- 'session examination', 'end-of-semester examination', ...
+    exam_block TEXT,                  -- JSON list; first-year courses name their Basisprüfung block
+    course_frequency TEXT,            -- ANNUAL, SEMESTER, BIENNIAL, ONETIME
+    weekly_hours REAL,                -- lecture + exercise hours per week of the latest offering
+    levels TEXT,                      -- JSON list, e.g. ["BSC"]
+    departments TEXT,                 -- JSON list of VVZ department ids
+    abstract TEXT,
+    objective TEXT,
+    content TEXT,
+    lecture_notes TEXT,
+    literature TEXT,
+    written_aids TEXT,
+    latest_semkez TEXT,               -- '2026W' = autumn 2026, '2027S' = spring 2027
+    vvz_updated_at TEXT               -- when the sync last wrote this row
+);
+
+-- One course as offered in one semester, from VVZ. id is the VVZ lerneinheitId.
+CREATE TABLE IF NOT EXISTS course_offerings (
+    id INTEGER PRIMARY KEY,
+    course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    semkez TEXT NOT NULL,
+    title TEXT,
+    ects REAL,
+    max_places INTEGER,
+    weekly_hours REAL,                -- sum over course_lectures with WEEKLY_HOURS
+    UNIQUE (course_id, semkez)
+);
+CREATE INDEX IF NOT EXISTS course_offerings_semkez ON course_offerings (semkez);
+
+-- The parts of an offering with their own hours and rooms: the lecture (V), the exercise (U), ...
+CREATE TABLE IF NOT EXISTS course_lectures (
+    offering_id INTEGER NOT NULL REFERENCES course_offerings(id) ON DELETE CASCADE,
+    number TEXT NOT NULL,             -- '401-0212-16 V'
+    title TEXT,
+    type TEXT,                        -- V, U, G, P, S, K, A, D, R
+    type_name TEXT,                   -- 'lecture', 'exercise', ...
+    hours REAL,
+    hour_type TEXT,                   -- WEEKLY_HOURS or SEMESTER_HOURS
+    comment TEXT,
+    PRIMARY KEY (offering_id, number)
+);
+
+CREATE TABLE IF NOT EXISTS course_timeslots (
+    id INTEGER PRIMARY KEY,
+    offering_id INTEGER NOT NULL REFERENCES course_offerings(id) ON DELETE CASCADE,
+    lecture_number TEXT NOT NULL,     -- course_lectures.number
+    weekday INTEGER,                  -- 0 = Monday ... 6 = Sunday
+    date TEXT,                        -- '31.12' for one-off slots, else NULL
+    start_time TEXT,                  -- '14:15'
+    end_time TEXT,                    -- '16:00'
+    building TEXT,                    -- 'HG'
+    floor TEXT,                       -- 'F'
+    room TEXT,                        -- '1'
+    first_half_semester INTEGER NOT NULL DEFAULT 0,
+    second_half_semester INTEGER NOT NULL DEFAULT 0,
+    biweekly INTEGER NOT NULL DEFAULT 0,
+    inherited_from TEXT               -- NULL = real slot; else the semkez it was copied from (see vvz/sync.py)
+);
+CREATE INDEX IF NOT EXISTS course_timeslots_offering ON course_timeslots (offering_id);
+
+CREATE TABLE IF NOT EXISTS lecturers (
+    id INTEGER PRIMARY KEY,           -- VVZ id
+    title TEXT,                       -- 'Prof. Dr.'
+    name TEXT,
+    surname TEXT,
+    department TEXT
+);
+
+CREATE TABLE IF NOT EXISTS course_lecturers (
+    offering_id INTEGER NOT NULL REFERENCES course_offerings(id) ON DELETE CASCADE,
+    lecturer_id INTEGER NOT NULL REFERENCES lecturers(id),
+    role TEXT NOT NULL,               -- 'lecturer' or 'examiner'
+    PRIMARY KEY (offering_id, lecturer_id, role)
+);
+
+-- Where an offering sits in a programme, e.g.
+-- 'Computer Science Bachelor > First Year Examinations > First Year Examination Block 1'
+CREATE TABLE IF NOT EXISTS course_sections (
+    offering_id INTEGER NOT NULL REFERENCES course_offerings(id) ON DELETE CASCADE,
+    section_id INTEGER NOT NULL,
+    type TEXT,                        -- O (compulsory), W (elective), W+, E-, Z, Dr
+    path_en TEXT,
+    path_de TEXT,
+    PRIMARY KEY (offering_id, section_id)
+);
+CREATE INDEX IF NOT EXISTS course_sections_path ON course_sections (path_en);
+
+-- Student ratings scraped from course reviews, by course code.
+CREATE TABLE IF NOT EXISTS course_ratings (
+    code TEXT PRIMARY KEY,
+    recommended REAL,
+    engaging REAL,
+    difficulty REAL,
+    effort REAL,
+    resources REAL
+);
+
+-- What the VVZ sync last imported (dump timestamp, semesters, counts).
+CREATE TABLE IF NOT EXISTS vvz_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
 );
 
 -- Resources and docs of a course (a list per course)

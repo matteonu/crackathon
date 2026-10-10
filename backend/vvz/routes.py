@@ -1,40 +1,35 @@
-"""HTTP endpoints over the local VVZ database. Like every /api route, auth.py has already
+"""HTTP endpoints over the course catalogue. Like every /api route, auth.py has already
 checked the caller before these run.
 
-    GET /api/vvz/status                      -> when the data was built, which semesters
-    GET /api/vvz/units?q=Analysis&semkez=2026W&section=Computer%20Science%20Bachelor&limit=20
-    GET /api/vvz/units/<id>                  -> unit with courses, timeslots, lecturers, sections, rating
-    GET /api/vvz/timetable?ids=203292,204074 -> weekly slots of several units (clash detection)
+    GET /api/courses?q=Analysis&semkez=2026W&section=Computer%20Science%20Bachelor&limit=20
+    GET /api/courses/<id>?semkez=2026W      -> course with the offering of that semester (default: latest)
+    GET /api/courses/timetable?ids=5,2&semkez=2026W
+    GET /api/courses/sync-status            -> what the VVZ sync last imported
 """
 
 from flask import Blueprint, current_app, jsonify, request
 
 from . import queries
 
-bp = Blueprint("vvz", __name__, url_prefix="/api/vvz")
+bp = Blueprint("courses", __name__, url_prefix="/api/courses")
 
 
 def _db():
-    return current_app.config["VVZ_DB_PATH"]
+    return current_app.config["DATABASE_PATH"]
 
 
-@bp.errorhandler(queries.NotSynced)
-def not_synced(exc):
-    return jsonify(error="VVZ data is not synced yet", detail=str(exc)), 503
-
-
-@bp.get("/status")
-def status():
+@bp.get("/sync-status")
+def sync_status():
     return jsonify(queries.status(db_path=_db()))
 
 
-@bp.get("/units")
-def units():
+@bp.get("")
+def search():
     try:
         limit = min(int(request.args.get("limit", 50)), 500)
     except ValueError:
         return jsonify(error="limit must be an integer"), 400
-    return jsonify(queries.search_units(
+    return jsonify(queries.search_courses(
         q=request.args.get("q", ""),
         semkez=request.args.get("semkez"),
         section=request.args.get("section"),
@@ -43,18 +38,21 @@ def units():
     ))
 
 
-@bp.get("/units/<int:unit_id>")
-def unit(unit_id):
-    found = queries.get_unit(unit_id, db_path=_db())
+@bp.get("/<int:course_id>")
+def course(course_id):
+    found = queries.get_course(course_id, semkez=request.args.get("semkez"), db_path=_db())
     if found is None:
-        return jsonify(error="unit not found"), 404
+        return jsonify(error="course not found"), 404
     return jsonify(found)
 
 
 @bp.get("/timetable")
 def timetable():
+    semkez = request.args.get("semkez", "")
+    if not semkez:
+        return jsonify(error="semkez is required, e.g. 2026W"), 400
     try:
         ids = [int(x) for x in request.args.get("ids", "").split(",") if x.strip()]
     except ValueError:
         return jsonify(error="ids must be comma-separated integers"), 400
-    return jsonify(queries.weekly_timetable(ids, db_path=_db()))
+    return jsonify(queries.weekly_timetable(ids, semkez, db_path=_db()))
