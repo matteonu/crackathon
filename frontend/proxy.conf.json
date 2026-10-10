@@ -1,6 +1,6 @@
 {
-  "/api": {
-    "target": "http://localhost:8080",
+  "/api/learning/**": {
+    "target": "http://127.0.0.1:8010",
     "secure": false
   }
 }

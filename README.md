@@ -1,5 +1,9 @@
 # crackathon
 
+On the `frontend_plus_learningView` branch, run `bash start-learning.sh` for the subject
+learning view with real PDF summaries and flashcards. See [LEARNING_VIEW.md](LEARNING_VIEW.md)
+for setup, JSON output, and development commands.
+
 Team repo for the VIScon 2026 Hackathon. Replace `NN` below with our team number.
 
 ## Running the app

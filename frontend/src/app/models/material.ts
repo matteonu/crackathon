@@ -4,13 +4,16 @@ export type MaterialCategory = typeof MATERIAL_CATEGORIES[number];
 export type MaterialMarker = typeof MATERIAL_MARKERS[number];
 export type MaterialKind = 'folder' | 'pdf' | 'md' | 'txt';
 export type ToolId = 'summary' | 'flashcards';
-export interface Flashcard { id?:string; question:string; answer:string; demo?:boolean; }
+export interface Flashcard { id?:string; question:string; answer:string; demo?:boolean; generated?:boolean; }
+export type LearningMode = 'shallow' | 'deep';
+export interface ProcessingState { status:'queued'|'running'|'complete'|'error'; error?:string; mode?:LearningMode; }
 export interface ToolResult { text?: string; cards?: Flashcard[]; }
 export interface Material {
   id:string; subjectId:string; name:string; size:number; category:MaterialCategory;
   marker:MaterialMarker; blob:Blob; added:number;
   kind?:MaterialKind; parentId?:string|null; description?:string; content?:string;
   outputs?:Partial<Record<ToolId,ToolResult>>;
+  processing?:ProcessingState;
 }
 export interface FolderCard extends Flashcard { key:string; fileId:string; fileName:string; }
 export interface TreeRow { material:Material; depth:number; }

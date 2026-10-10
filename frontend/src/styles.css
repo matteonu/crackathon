@@ -468,14 +468,8 @@ textarea { resize: vertical; line-height: 1.7; }
 .pdf-reader > .form-error { margin:12px; }
 /* Folder explorer and focused file / flashcard workspace. */
 .explorer-panel { padding-bottom:16px; }
-.explorer-panel h2 { margin-top:6px; }
+.explorer-panel h2 { margin-top:0; }
 .explorer-panel.dragging { outline:2px dashed #7f9b6f; outline-offset:-6px; background:#f4f8ef; }
-.explorer-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; border-bottom:1px solid var(--line); padding-bottom:18px; }
-.create-menu { width:105px; min-height:38px; font-size:11px; margin-left:auto; background:white; }
-.folder-breadcrumb { display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin:16px 0 7px; font-size:11px; }
-.folder-breadcrumb button { background:none; border:0; color:var(--muted); padding:3px 0; }
-.folder-breadcrumb button[aria-current] { color:var(--green); font-weight:600; }
-.folder-breadcrumb > span { color:#b3bba9; }
 .explorer-tree { border:1px solid var(--line); border-radius:10px; overflow:auto; min-height:200px; }
 .explorer-row { display:flex; align-items:center; gap:6px; min-height:50px; padding:8px 10px 8px calc(8px + var(--depth,0) * 14px); border-bottom:1px solid #edf0e8; }
 .explorer-row:last-child { border-bottom:0; }
@@ -491,7 +485,7 @@ textarea { resize: vertical; line-height: 1.7; }
 .tree-meta { font-size:10px; color:var(--muted); white-space:nowrap; }
 .tree-chevron { border:0; background:none; padding:0; display:flex; align-items:center; width:16px; flex:0 0 16px; color:#87947c; }
 .tree-chevron app-icon { width:13px; height:13px; }
-.folder-actions { display:flex; gap:4px; margin-left:auto; }
+.folder-actions { display:flex; flex-shrink:0; gap:4px; margin-left:auto; }
 .folder-actions .icon-button { background:transparent; border-color:transparent; }
 .folder-actions .icon-button:hover { background:white; }
 .tree-marker { width:84px; flex:0 0 84px; font-size:10px; padding:6px; min-height:31px; background:transparent; border-color:transparent; }
@@ -505,6 +499,16 @@ textarea { resize: vertical; line-height: 1.7; }
 .file-details .editable-file-title { width:100%; background:transparent; border:1px solid transparent; border-radius:5px; font-size:25px; font-weight:600; letter-spacing:-.03em; color:var(--ink); padding:5px 0; min-height:40px; }
 .file-details .editable-file-title:hover, .file-details .editable-file-description:hover { border-color:var(--line); }
 .file-details .editable-file-description { width:100%; background:transparent; border:1px solid transparent; padding:5px 0; color:var(--muted); font-size:12px; min-height:52px; line-height:1.6; }
+.generated-file-description { color:var(--muted); font-size:12px; line-height:1.7; margin:8px 0 18px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.processing-status { font-size:10px; color:var(--muted); margin-right:6px; }
+.processing-status.failed { color:#a44335; }
+.learning-mode-control { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:4px 0 16px; }
+.learning-mode-label { font-size:10px; font-weight:600; color:var(--muted); }
+.learning-mode-options { display:inline-flex; gap:3px; border:1px solid var(--line); padding:3px; border-radius:8px; background:var(--canvas); }
+.learning-mode-options button { border:0; background:transparent; border-radius:5px; padding:6px 10px; font-size:11px; color:var(--muted); }
+.learning-mode-options button.selected { background:var(--green); color:white; }
+.learning-mode-hint { font-size:10px; color:var(--muted); }
+.flashcard-panel .learning-mode-hint { flex-basis:100%; line-height:1.6; }
 .file-detail-actions { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:15px; }
 .file-meta-bar { display:flex; align-items:center; flex-wrap:wrap; gap:15px; border-block:1px solid var(--line); padding:9px 0; }
 .file-meta-bar label { display:flex; gap:7px; align-items:center; font-size:10px; color:var(--muted); }
@@ -569,5 +573,5 @@ textarea { resize: vertical; line-height: 1.7; }
 .learning-complete { padding:50px 20px; text-align:center; background:#f5f8ef; border-radius:12px; }
 .learning-complete>span { display:block; color:var(--green); font-size:35px; margin-bottom:15px; }
 .learning-complete p { color:var(--muted); margin:12px 0 24px; }
-@media(max-width:1100px){.explorer-row{gap:3px;padding-right:6px;}.folder-actions{gap:0;}.tree-meta{display:none;}.explorer-toolbar .create-menu{margin-left:0;}.file-viewer-columns{grid-template-columns:minmax(0,1.2fr) minmax(270px,1fr);}}
-@media(max-width:700px){.file-viewer-dialog{width:calc(100vw - 20px);padding:16px;}.file-viewer-columns{grid-template-columns:1fr;gap:16px;}.file-details .editable-file-title{font-size:21px;}.file-meta-bar{gap:9px;}.file-meta-bar label{flex-wrap:wrap;}.file-meta-bar>a{margin-left:0;}.flashcard-stage{padding:20px;margin:12px;min-height:280px;}.flashcard-stage h2{font-size:21px;}.text-file-preview,.text-file-editor{min-height:260px;max-height:45vh;}.folder-card-heading{flex-wrap:wrap;}.folder-export-footer{flex-wrap:wrap;}.explorer-name strong{font-size:11px;}.explorer-name{min-width:90px;}.tree-marker{width:74px;flex-basis:74px;}.explorer-row{padding-left:calc(5px + var(--depth,0)*9px);}.folder-actions .icon-button{width:25px;}.explorer-toolbar .button{padding:8px;}.create-menu{width:84px;}.learning-card{padding:20px;}.file-detail-actions{align-items:start;}.file-detail-actions>.text-button{flex-wrap:wrap;}.flashcard-list{max-height:38vh;}}
+@media(max-width:1100px){.explorer-row{gap:3px;padding-right:6px;}.folder-actions{gap:0;}.tree-meta{display:none;}.file-viewer-columns{grid-template-columns:minmax(0,1.2fr) minmax(270px,1fr);}}
+@media(max-width:700px){.file-viewer-dialog{width:calc(100vw - 20px);padding:16px;}.file-viewer-columns{grid-template-columns:1fr;gap:16px;}.file-details .editable-file-title{font-size:21px;}.file-meta-bar{gap:9px;}.file-meta-bar label{flex-wrap:wrap;}.file-meta-bar>a{margin-left:0;}.flashcard-stage{padding:20px;margin:12px;min-height:280px;}.flashcard-stage h2{font-size:21px;}.text-file-preview,.text-file-editor{min-height:260px;max-height:45vh;}.folder-card-heading{flex-wrap:wrap;}.folder-export-footer{flex-wrap:wrap;}.explorer-name strong{font-size:11px;}.explorer-name{min-width:90px;}.tree-marker{width:74px;flex-basis:74px;}.explorer-row{padding-left:calc(5px + var(--depth,0)*9px);}.folder-actions .icon-button{width:25px;}.learning-card{padding:20px;}.file-detail-actions{align-items:start;}.file-detail-actions>.text-button{flex-wrap:wrap;}.flashcard-list{max-height:38vh;}}

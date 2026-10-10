@@ -1,12 +1,15 @@
-import { Injectable, signal } from '@angular/core';
-import { Material, MaterialCategory, MaterialKind, Flashcard, normalizeMaterial, materialKind, materialName, validParent } from '../models/material';
+import { Injectable, inject, signal } from '@angular/core';
+import { Material, MaterialCategory, MaterialKind, Flashcard, LearningMode, normalizeMaterial, materialKind, materialName, validParent } from '../models/material';
+import { learningPatch } from '../models/learning';
+import { LearningPipelineService } from './learning-pipeline.service';
 
-type MaterialPatch=Partial<Pick<Material,'category'|'marker'|'outputs'|'name'|'description'|'parentId'|'content'>>;
-/** Browser-local files, folders, and cards. No server requests. */
+type MaterialPatch=Partial<Pick<Material,'category'|'marker'|'outputs'|'name'|'description'|'parentId'|'content'|'processing'>>;
+/** Local file library, with PDF summaries and cards read from Python's saved JSON. */
 @Injectable({providedIn:'root'})
 export class MaterialStore {
   readonly files=signal<Material[]>([]);readonly loading=signal(true);readonly error=signal('');readonly busy=signal(false);
   private database:Promise<IDBDatabase>;private mutations:Promise<unknown>=Promise.resolve();
+  private readonly pipeline=inject(LearningPipelineService);private readonly activeJobs=new Set<string>();
   constructor(){
     this.database=new Promise((resolve,reject)=>{
       const request=indexedDB.open('studyphase-materials',1);
@@ -18,7 +21,9 @@ export class MaterialStore {
   private async load():Promise<void>{
     try{const db=await this.database;const values=await new Promise<Material[]>((resolve,reject)=>{
       const request=db.transaction('files').objectStore('files').getAll();request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
-    });this.files.set(values.map(normalizeMaterial));}
+    });this.files.set(values.map(normalizeMaterial));
+      for(const file of this.files())if(materialKind(file)==='pdf'&&file.processing)void this.process(file.id,true);
+    }
     catch{this.error.set('Local storage is unavailable. Enable browser storage and reload.');}finally{this.loading.set(false);}
   }
   private async write(files:Material[]):Promise<void>{
@@ -43,24 +48,38 @@ export class MaterialStore {
       this.assertUnique(file);await this.write([file]);this.files.update(values=>[...values,file]);this.error.set('');return file;
     });
   }
-  async add(subjectId:string,files:File[],category:MaterialCategory,parentId:string|null=null):Promise<void>{
+  async add(subjectId:string,files:File[],category:MaterialCategory,parentId:string|null=null,mode:LearningMode='shallow'):Promise<void>{
     if(this.loading()||this.busy())return;this.busy.set(true);this.error.set('');
-    try{await this.queue(async()=>{
+    try{const added=await this.queue(async()=>{
       this.assertParent(subjectId,parentId);const pending:Material[]=[];
       for(const file of files){
-        if(file.size>50*1024*1024)throw new Error(`${file.name} exceeds the 50 MB file limit.`);
+        if(file.size>=50_000_000)throw new Error(`${file.name} must be smaller than 50 MB.`);
         if(!/\.pdf$/i.test(file.name)||!(await file.slice(0,1024).text()).includes('%PDF-'))throw new Error(`${file.name} is not a PDF.`);
         let name=file.name;let suffix=2;
         const used=(candidate:string)=>[...this.files(),...pending].some(f=>f.subjectId===subjectId&&(f.parentId??null)===parentId&&f.name.toLowerCase()===candidate.toLowerCase());
         while(used(name))name=file.name.replace(/\.pdf$/i,` (${suffix++}).pdf`);
-        pending.push({id:crypto.randomUUID(),subjectId,parentId,kind:'pdf',name,description:'',size:file.size,category,marker:'To read',blob:file,added:Date.now()});
+        pending.push({id:crypto.randomUUID(),subjectId,parentId,kind:'pdf',name,description:'',size:file.size,category,marker:'To read',blob:file,added:Date.now(),processing:{status:'queued',mode}});
       }
-      await this.write(pending);this.files.update(values=>[...values,...pending]);
-    });}catch(e){this.error.set(e instanceof Error?e.message:'Could not save PDFs. Browser storage may be full.');}finally{this.busy.set(false);}
+      await this.write(pending);this.files.update(values=>[...values,...pending]);return pending;
+    });for(const file of added)void this.process(file.id);}catch(e){this.error.set(e instanceof Error?e.message:'Could not save PDFs. Browser storage may be full.');}finally{this.busy.set(false);}
   }
-  update(id:string,patch:MaterialPatch):Promise<boolean>{return this.queue(async()=>{
+  resultUrl(id:string):string{return this.pipeline.resultUrl(id,this.files().find(file=>file.id===id)?.processing?.mode??'shallow');}
+  async process(id:string,resume=false,selectedMode?:LearningMode):Promise<void>{
+    const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)!=='pdf'||this.activeJobs.has(id))return;
+    const mode=selectedMode??file.processing?.mode??'shallow';
+    this.activeJobs.add(id);
+    try{
+      if(!resume&&!await this.update(id,current=>(current.processing?.mode??'shallow')===mode?{processing:{status:'queued',mode}}:learningPatch(current,{id,mode,status:'queued',documents:[]})))throw new Error(this.error());
+      await this.pipeline.process(file,async result=>{
+        if(!await this.update(id,current=>learningPatch(current,result)))throw new Error(this.error()||'Could not save generated results.');
+      },resume,mode);
+    }catch(e){await this.update(id,{processing:{status:'error',mode,error:e instanceof Error?e.message:'Processing failed. Retry this file.'}});}
+    finally{this.activeJobs.delete(id);}
+  }
+  update(id:string,change:MaterialPatch|((file:Material)=>MaterialPatch)):Promise<boolean>{return this.queue(async()=>{
     const file=this.files().find(f=>f.id===id);if(!file)return false;
     try{
+      const patch=typeof change==='function'?change(file):change;
       const next={...file,...patch,outputs:{...file.outputs,...patch.outputs}};
       next.name=materialName(next.name,materialKind(next));this.assertParent(next.subjectId,next.parentId??null,id);this.assertUnique(next);
       if(patch.content!==undefined){if(!['md','txt'].includes(materialKind(file)))throw new Error('Only text files can be edited.');next.blob=new Blob([patch.content],{type:'text/plain'});next.size=next.blob.size;}
