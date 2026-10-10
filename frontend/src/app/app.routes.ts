@@ -1,0 +1,16 @@
+import { Routes } from '@angular/router';
+import { OverviewComponent } from './pages/overview.component';
+import { StudyComponent } from './pages/study.component';
+import { ExamsComponent } from './pages/exams.component';
+import { AnalyticsPageComponent } from './pages/analytics-page.component';
+import { SubjectComponent } from './pages/subject.component';
+
+export const routes:Routes = [
+  {path:'',component:OverviewComponent,title:'Overview · Studyphase'},
+  {path:'schedule',component:StudyComponent,title:'Schedule · Studyphase'},
+  {path:'study-view',redirectTo:'schedule',pathMatch:'full'},
+  {path:'exam-view',component:ExamsComponent,title:'Exams · Studyphase'},
+  {path:'analytics',component:AnalyticsPageComponent,title:'Analytics · Studyphase'},
+  {path:'subject-tab/:id',component:SubjectComponent,title:'Subject · Studyphase'},
+  {path:'**',redirectTo:''}
+];

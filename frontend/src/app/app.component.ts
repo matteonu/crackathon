@@ -1,28 +1,24 @@
-import { Component, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { Component, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Router, NavigationEnd, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter } from 'rxjs';
+import { StudyStore } from './services/study-store';
+import { IconComponent } from './shared/icon.component';
+import { HoursEditorComponent } from './shared/hours-editor.component';
 
-import { DashboardComponent } from './dashboard/dashboard.component';
-import { LoginComponent } from './login/login.component';
-
-@Component({
-  selector: 'app-root',
-  imports: [DashboardComponent, LoginComponent],
-  templateUrl: './app.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
-})
-export class AppComponent implements OnInit {
-  private http = inject(HttpClient);
-  user: string | null = null;
-  checked = false;
-
-  ngOnInit() {
-    // Restore an existing session before deciding which page to show.
-    this.http.get<{ username: string }>('/api/me').subscribe({
-      next: (res) => {
-        this.user = res.username;
-        this.checked = true;
-      },
-      error: () => (this.checked = true),
-    });
+@Component({selector:'app-root',standalone:true,imports:[RouterLink,RouterLinkActive,RouterOutlet,IconComponent,HoursEditorComponent],templateUrl:'./app.component.html'})
+export class AppComponent {
+  readonly store=inject(StudyStore);private readonly router=inject(Router);
+  readonly main=viewChild<ElementRef<HTMLElement>>('main');
+  readonly settings=viewChild<ElementRef<HTMLDialogElement>>('settings');
+  readonly importError=signal('');
+  constructor(){this.router.events.pipe(filter(e=>e instanceof NavigationEnd),takeUntilDestroyed()).subscribe(()=>{requestAnimationFrame(()=>{this.main()?.nativeElement.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});});});}
+  openSettings():void {this.importError.set('');this.settings()?.nativeElement.showModal();}
+  reset():void {if(confirm('Restore the original HS24 sample? This replaces the changes saved in this browser. Export first if you want to keep a copy.')){this.store.reset();this.settings()?.nativeElement.close();void this.router.navigate(['/']);}}
+  async import(event:Event):Promise<void> {
+    const input=event.target as HTMLInputElement;const file=input.files?.[0];if(!file)return;
+    try {if(file.size>1024*1024)throw new Error('Choose a data file smaller than 1 MB.');this.store.importData(JSON.parse(await file.text()));this.importError.set('');this.settings()?.nativeElement.close();void this.router.navigate(['/']);}
+    catch(e){this.importError.set(e instanceof SyntaxError?'This is not a valid JSON file.':(e as Error).message);}
+    finally{input.value='';}
   }
 }
