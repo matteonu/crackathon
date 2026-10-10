@@ -310,6 +310,7 @@ def delete(material_id):
         raise RequestError(404, "This file does not exist.")
     with conn:
         conn.execute("DELETE FROM materials WHERE id = ? AND user_id = ?", (material_id, user["id"]))
+    current_app.extensions["document_chat"].wake.set()
     # The rows are gone either way; the PDFs and generated results follow.
     for removed_id, kind in removed:
         if kind == "pdf":
@@ -340,6 +341,7 @@ def upload(material_id):
     with conn:
         conn.execute("UPDATE materials SET size = ?, sha256 = ? WHERE id = ? AND user_id = ?",
                      (len(pdf), digest, material_id, current_user()["id"]))
+    current_app.extensions["document_chat"].ensure_index(material_id)
     return jsonify(to_json(row(material_id)))
 
 

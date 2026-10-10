@@ -1,14 +1,15 @@
 import { Component, ElementRef, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MaterialStore } from '../services/material-store';
-import { LearningMode, canGenerateFlashcards, materialFileUrl, materialKind } from '../models/material';
+import { LearningMode, canGenerateFlashcards, canChatWithDocument, materialFileUrl, materialKind } from '../models/material';
+import { DocumentChatComponent } from './document-chat.component';
 import { PdfPreviewComponent } from './pdf-preview.component';
 import { IconComponent } from '../shared/icon.component';
 import { LoadingDotsComponent } from '../shared/loading-dots.component';
 import { LearningModeComponent } from '../shared/learning-mode.component';
 import { FolderFlashcardsComponent } from './folder-flashcards.component';
 
-@Component({selector:'app-file-viewer',standalone:true,imports:[FormsModule,ReactiveFormsModule,PdfPreviewComponent,IconComponent,LoadingDotsComponent,LearningModeComponent,FolderFlashcardsComponent],templateUrl:'./file-viewer.component.html'})
+@Component({selector:'app-file-viewer',standalone:true,imports:[FormsModule,ReactiveFormsModule,PdfPreviewComponent,IconComponent,LoadingDotsComponent,LearningModeComponent,FolderFlashcardsComponent,DocumentChatComponent],templateUrl:'./file-viewer.component.html'})
 export class FileViewerComponent {
   readonly fileId=input.required<string>();readonly materials=inject(MaterialStore);
   readonly openFile=output<string>();
@@ -17,6 +18,10 @@ export class FileViewerComponent {
   readonly requestedCount=signal<number|null>(60);
   readonly validCount=computed(()=>Number.isInteger(this.requestedCount())&&this.requestedCount()!>=5&&this.requestedCount()!<=300);
   readonly allowsCards=computed(()=>!!this.file()&&(this.kind()!=='pdf'||canGenerateFlashcards(this.file()!)));
+  readonly allowsChat=computed(()=>!!this.file()&&canChatWithDocument(this.file()!));
+  readonly pageContext=signal({page:0,total:0});
+  readonly panelChoice=signal<'flashcards'|'chat'|null>(null);
+  readonly panel=computed(()=>!this.allowsChat()?'flashcards':!this.allowsCards()?'chat':this.panelChoice()??(this.cards().length?'flashcards':'chat'));
   readonly summaryRunning=computed(()=>this.generating()&&this.file()?.processing?.task==='summary');
   readonly cardsReady=computed(()=>this.file()?.processing?.task!=='summary'&&this.file()?.processing?.status==='complete'&&this.selectedMode()===(this.file()?.processing?.mode??'shallow')&&this.requestedCount()===(this.file()?.processing?.requestedQuestions??60));
   readonly stage=viewChild<ElementRef<HTMLElement>>('stage');
@@ -31,9 +36,11 @@ export class FileViewerComponent {
   readonly content=new FormControl('',{nonNullable:true});readonly cardForm=new FormGroup({question:new FormControl('',{nonNullable:true}),answer:new FormControl('',{nonNullable:true})});
   readonly lines=computed(()=>(this.file()?.content??'').split('\n'));
   constructor(){
+    effect(()=>{this.fileId();this.panelChoice.set(null);this.pageContext.set({page:0,total:0});this.returnToFile();});
     effect(()=>{const id=this.fileId();const f=this.materials.files().find(f=>f.id===id);if(f&&!this.loaded.has(id)){this.loaded.add(id);this.selectedMode.set(f.processing?.task==='summary'?'shallow':f.processing?.mode??'shallow');this.requestedCount.set(f.processing?.requestedQuestions||60);this.details.reset({name:f.name,description:f.description??''});this.content.setValue(f.content??'');}});
   }
   private readonly loaded=new Set<string>();
+  choosePanel(panel:'flashcards'|'chat'):void{this.panelChoice.set(panel);this.returnToFile();}
   selectCard(id:string):void{this.selectedCard.set(id);this.revealed.set(false);requestAnimationFrame(()=>this.stage()?.nativeElement.scrollIntoView({block:'nearest'}));}
   returnToFile():void{this.selectedCard.set(null);this.revealed.set(false);}
   surfaceClick(event:MouseEvent):void{const target=event.target;if(target instanceof Element&&!target.closest('.flashcard-stage, .flashcard-choice'))this.returnToFile();}

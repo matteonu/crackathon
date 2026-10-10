@@ -64,7 +64,10 @@ def submit(document_id):
         questions = int(request.headers.get("X-Flashcard-Count", str(jobs().questions)))
     except ValueError:
         raise RequestError(400, "Enter a whole number of flashcards from 5 to 300.") from None
-    return jsonify(jobs().submit(document_id, name, pdf, mode, questions, task)), 202
+    result = jobs().submit(document_id, name, pdf, mode, questions, task)
+    if pdf is not None:
+        current_app.extensions['document_chat'].ensure_index(document_id)
+    return jsonify(result), 202
 
 
 @bp.get("/documents/<uuid:document_id>/result.json")
@@ -74,5 +77,7 @@ def result(document_id):
 
 @bp.delete("/documents/<uuid:document_id>")
 def delete(document_id):
-    jobs().delete(owned(document_id))
+    document_id = owned(document_id)
+    current_app.extensions["document_chat"].delete_context(document_id)
+    jobs().delete(document_id)
     return jsonify(deleted=True)
