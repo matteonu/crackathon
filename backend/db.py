@@ -8,6 +8,7 @@ import glob
 from contextlib import closing
 import json
 import os
+import shutil
 import sqlite3
 
 from flask import current_app, g
@@ -161,6 +162,22 @@ def seed_files():
         yield path, table
 
 
+def restore_seed_assets():
+    """Copy seeded PDFs into the same document store used by normal uploads."""
+    learning_dir = current_app.config["LEARNING_DIR"]
+    for directory in seed_dirs():
+        assets = os.path.join(directory, "learning")
+        if not os.path.isdir(assets):
+            continue
+        for material_id in os.listdir(assets):
+            source = os.path.join(assets, material_id, "source.pdf")
+            if not os.path.isfile(source):
+                continue
+            target_dir = os.path.join(learning_dir, material_id)
+            os.makedirs(target_dir, exist_ok=True)
+            shutil.copy2(source, os.path.join(target_dir, "source.pdf"))
+
+
 def reset_db():
     """Delete the database and rebuild it from the seed files."""
     close_db()
@@ -189,6 +206,7 @@ def reset_db():
         from decks import migrate_embedded_cards
         migrate_embedded_cards(db)
         migrate_sessions_to_slots(db)
+    restore_seed_assets()
 
 
 def dump_seed():

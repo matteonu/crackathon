@@ -192,6 +192,7 @@ def create_app(overrides=None):
         for name in os.listdir(learning_dir) if os.path.isdir(learning_dir) else []:
             shutil.rmtree(os.path.join(learning_dir, name), ignore_errors=True)
             removed += 1
+        db.restore_seed_assets()
         click.echo(f"Database reloaded from the seed, {removed} uploaded document(s) deleted")
         refill_catalogue()
 

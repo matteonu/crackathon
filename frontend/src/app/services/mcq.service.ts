@@ -19,6 +19,7 @@ export class McqService {
       body:JSON.stringify({mode,action,setId,questionCount:questionCount??null,idempotencyKey:crypto.randomUUID()})}),null);
   }
   async retry(setId:string):Promise<McqSet|null>{return this.run(()=>this.request(`/api/learning/mcq-sets/${setId}/retry`,{method:'POST'}),null);}
+  async sessions(setId:string):Promise<McqSession[]>{return this.run(()=>this.request(`/api/learning/mcq-sets/${setId}/sessions`),[]);}
   async start(setId:string):Promise<McqSession|null>{return this.run(()=>this.request(`/api/learning/mcq-sets/${setId}/sessions`,{method:'POST'}),null);}
   async session(id:string):Promise<McqSession|null>{return this.run(()=>this.request(`/api/learning/mcq-sessions/${id}`),null);}
   async answer(sessionId:string,questionId:string,selectedOptionIds:string[]):Promise<McqAnswerResult|null>{

@@ -99,6 +99,16 @@ class SeedTests(unittest.TestCase):
                 self.assertGreater(conn.execute('SELECT count(*) FROM courses').fetchone()[0], 0)
                 self.assertGreater(conn.execute('SELECT count(*) FROM semesters').fetchone()[0], 0)
                 self.assertGreater(conn.execute('SELECT count(*) FROM course_resources').fetchone()[0], 0)
+                material = conn.execute("SELECT * FROM materials WHERE id=?",
+                    ('6a3e1d60-d094-4a42-b549-5479229363fb',)).fetchone()
+                self.assertEqual((material['subject_id'], material['category'], material['type']),
+                                 ('course-9', 'Slides', 'slides'))
+            source = Path(temp) / 'learning' / material['id'] / 'source.pdf'
+            self.assertEqual(source.stat().st_size, material['size'])
+            response = app.test_client().get(f"/api/materials/{material['id']}/file",
+                                             headers={'X-User-Id': 'alice@ethz.ch'})
+            self.assertEqual((response.status_code, len(response.data)), (200, material['size']))
+            response.close()
             self.assertEqual(emails(app), ['alice@ethz.ch', 'bob@ethz.ch'])
 
     def test_a_restart_keeps_the_data_and_still_applies_the_schema(self):

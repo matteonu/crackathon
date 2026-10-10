@@ -27,8 +27,8 @@ export class LearningPipelineService {
     return data;
   }
 
-  async process(file: Material, receive: (result: StudyResult) => Promise<void>, resume = false, mode: LearningMode = 'shallow', task: LearningTask = 'flashcards', count = 60): Promise<void> {
-    const submit = () => this.request(`/api/learning/documents/${encodeURIComponent(file.id)}`, { method: 'POST', headers: { 'X-Filename': encodeURIComponent(file.name), 'X-Learning-Mode': mode, 'X-Learning-Task': task, 'X-Flashcard-Count': String(count) } });
+  async process(file: Material, receive: (result: StudyResult) => Promise<void>, resume = false, mode: LearningMode = 'shallow', task: LearningTask = 'flashcards', count = 60, regenerate = false): Promise<void> {
+    const submit = () => this.request(`/api/learning/documents/${encodeURIComponent(file.id)}`, { method: 'POST', headers: { 'X-Filename': encodeURIComponent(file.name), 'X-Learning-Mode': mode, 'X-Learning-Task': task, 'X-Flashcard-Count': String(count), ...(regenerate?{'X-Regenerate':'true'}:{}) } });
     let data: unknown;
     try { data = resume ? await this.request(this.resultUrl(file.id,mode,task)) : await submit(); }
     catch (error) {

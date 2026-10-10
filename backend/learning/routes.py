@@ -75,7 +75,10 @@ def submit(document_id):
         questions = int(request.headers.get("X-Flashcard-Count", str(jobs().questions)))
     except ValueError:
         raise RequestError(400, "Enter a whole number of flashcards from 5 to 300.") from None
-    result = jobs().submit(document_id, name, pdf, mode, questions, task)
+    regenerate = request.headers.get("X-Regenerate", "false").lower() == "true"
+    if regenerate and task != "summary":
+        raise RequestError(400, "Only summaries can be regenerated through this endpoint.")
+    result = jobs().submit(document_id, name, pdf, mode, questions, task, regenerate=regenerate)
     if pdf is not None:
         current_app.extensions['document_chat'].ensure_index(document_id)
     return jsonify(result), 202
@@ -117,7 +120,8 @@ def set_json(row, include_questions=False):
                              FROM mcq_sessions s WHERE set_id=? AND user_id=? AND status='completed'
                              ORDER BY completed_at DESC, rowid DESC LIMIT 1""", (row["id"], current_user()["id"])).fetchone()
     body["latestScore"] = ({"correct": latest["score"], "total": latest["total"]} if latest else None)
-    active = conn.execute("SELECT id FROM mcq_sessions WHERE set_id=? AND user_id=? AND status='active'",
+    active = conn.execute("""SELECT id FROM mcq_sessions WHERE set_id=? AND user_id=? AND status='active'
+                             ORDER BY created_at DESC, rowid DESC LIMIT 1""",
                           (row["id"], current_user()["id"])).fetchone()
     body["activeSessionId"] = active["id"] if active else None
     if include_questions and row["status"] == "complete":
@@ -210,11 +214,13 @@ def retry_mcq_set(set_id):
     return jsonify(set_json(conn.execute("SELECT * FROM mcq_sets WHERE id=?", (row["id"],)).fetchone())), 202
 
 
-@bp.post("/mcq-sets/<uuid:set_id>/sessions")
+@bp.route("/mcq-sets/<uuid:set_id>/sessions", methods=["GET", "POST"])
 def start_mcq_session(set_id):
     row = owned_set(set_id, True); conn = db.get_db(); user_id = current_user()["id"]
-    active = conn.execute("SELECT * FROM mcq_sessions WHERE set_id=? AND user_id=? AND status='active'", (row["id"], user_id)).fetchone()
-    if active: return jsonify(session_json(active)), 200
+    if request.method == "GET":
+        sessions = conn.execute("""SELECT * FROM mcq_sessions WHERE set_id=? AND user_id=?
+                                   ORDER BY created_at DESC, rowid DESC""", (row["id"], user_id))
+        return jsonify([session_json(session, include_questions=False) for session in sessions])
     session_id = str(uuid.uuid4())
     with conn: conn.execute("INSERT INTO mcq_sessions (id,set_id,user_id,status) VALUES (?,?,?,'active')", (session_id, row["id"], user_id))
     return jsonify(session_json(conn.execute("SELECT * FROM mcq_sessions WHERE id=?", (session_id,)).fetchone())), 201
@@ -226,10 +232,29 @@ def owned_session(session_id):
     return row
 
 
-def session_json(row):
-    total = db.get_db().execute("SELECT count(*) FROM mcq_questions WHERE set_id=?", (row["set_id"],)).fetchone()[0]
-    return {"id": row["id"], "setId": row["set_id"], "status": row["status"], "position": row["position"],
-            "score": row["score"], "total": total, "questions": questions_json(row["set_id"])}
+def session_json(row, include_questions=True):
+    conn = db.get_db()
+    total = conn.execute("SELECT count(*) FROM mcq_questions WHERE set_id=?", (row["set_id"],)).fetchone()[0]
+    result = {"id": row["id"], "setId": row["set_id"], "status": row["status"], "position": row["position"],
+              "score": row["score"], "total": total, "createdAt": row["created_at"],
+              "completedAt": row["completed_at"]}
+    if include_questions:
+        result["questions"] = questions_json(row["set_id"])
+    if include_questions and row["status"] == "completed":
+        answers = []
+        for answer in conn.execute("""SELECT a.*,q.explanation FROM mcq_session_answers a
+                                      JOIN mcq_questions q ON q.id=a.question_id
+                                      WHERE a.session_id=? ORDER BY q.position""", (row["id"],)):
+            correct_ids = [option["id"] for option in conn.execute(
+                "SELECT id FROM mcq_options WHERE question_id=? AND is_correct=1 ORDER BY position", (answer["question_id"],))]
+            pages = [page["page"] for page in conn.execute(
+                "SELECT page FROM mcq_question_pages WHERE question_id=? ORDER BY page", (answer["question_id"],))]
+            answers.append({"questionId": answer["question_id"],
+                            "selectedOptionIds": json.loads(answer["selected_option_ids"]),
+                            "correct": bool(answer["is_correct"]), "correctOptionIds": correct_ids,
+                            "explanation": answer["explanation"], "sourcePages": pages})
+        result["answers"] = answers
+    return result
 
 
 @bp.get("/mcq-sessions/<uuid:session_id>")

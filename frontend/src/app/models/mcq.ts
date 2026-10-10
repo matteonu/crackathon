@@ -11,7 +11,11 @@ export interface McqSet {
   activeSessionId?:string|null; questions?:McqQuestion[];
 }
 export interface McqSession {
-  id:string; setId:string; status:'active'|'completed'; position:number; score:number; total:number; questions:McqQuestion[];
+  id:string; setId:string; status:'active'|'completed'; position:number; score:number; total:number;
+  createdAt:string; completedAt?:string|null; questions?:McqQuestion[]; answers?:McqSessionAnswer[];
+}
+export interface McqSessionAnswer {
+  questionId:string; selectedOptionIds:string[]; correct:boolean; correctOptionIds:string[]; explanation:string; sourcePages:number[];
 }
 export interface McqAnswerResult {
   correct:boolean; correctOptionIds:string[]; explanation:string; sourcePages:number[]; session:McqSession;

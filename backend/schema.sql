@@ -463,8 +463,9 @@ CREATE TABLE IF NOT EXISTS mcq_sessions (
     completed_at TEXT,
     FOREIGN KEY (set_id, user_id) REFERENCES mcq_sets(id, user_id) ON DELETE CASCADE
 );
-CREATE UNIQUE INDEX IF NOT EXISTS mcq_sessions_one_active
-    ON mcq_sessions (user_id, set_id) WHERE status = 'active';
+DROP INDEX IF EXISTS mcq_sessions_one_active;
+CREATE INDEX IF NOT EXISTS mcq_sessions_by_set
+    ON mcq_sessions (user_id, set_id, created_at);
 CREATE TABLE IF NOT EXISTS mcq_session_answers (
     session_id TEXT NOT NULL REFERENCES mcq_sessions(id) ON DELETE CASCADE,
     question_id TEXT NOT NULL REFERENCES mcq_questions(id) ON DELETE CASCADE,

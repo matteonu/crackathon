@@ -106,6 +106,23 @@ class McqApiTests(unittest.TestCase):
             self.assertEqual(db.get_db().execute("SELECT count(*) FROM mcq_sets").fetchone()[0], 0)
             self.assertEqual(db.get_db().execute("SELECT count(*) FROM mcq_sessions").fetchone()[0], 0)
 
+    def test_attempt_history_review_and_independent_active_sessions(self):
+        set_id, question_id, options = self.completed_set()
+        completed = self.client.post(f"/api/learning/mcq-sets/{set_id}/sessions").get_json()
+        self.client.post(f"/api/learning/mcq-sessions/{completed['id']}/answers",
+                         json={"questionId": question_id, "selectedOptionIds": [options[0]]})
+        active_one = self.client.post(f"/api/learning/mcq-sets/{set_id}/sessions").get_json()
+        active_two = self.client.post(f"/api/learning/mcq-sets/{set_id}/sessions").get_json()
+        self.assertNotEqual(active_one["id"], active_two["id"])
+
+        history = self.client.get(f"/api/learning/mcq-sets/{set_id}/sessions").get_json()
+        self.assertEqual(len(history), 3)
+        self.assertNotIn("questions", history[0])
+        review = self.client.get(f"/api/learning/mcq-sessions/{completed['id']}").get_json()
+        self.assertEqual(review["answers"][0]["selectedOptionIds"], [options[0]])
+        self.assertEqual(review["answers"][0]["correctOptionIds"], [options[0]])
+        self.assertTrue(review["answers"][0]["correct"])
+
 
 if __name__ == "__main__":
     unittest.main()

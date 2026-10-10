@@ -45,6 +45,10 @@ class LearningTaskTests(unittest.TestCase):
                 self.assertEqual([call.args[2]['stage'] for call in request.call_args_list], ['abstract'])
                 self.assertFalse(jobs.result_path(document_id, 'shallow').exists())
                 request.reset_mock()
+                jobs.submit(document_id, 'slides.pdf', mode='deep', task='summary', regenerate=True)
+                summary = self.wait_result(jobs, document_id, 'deep', 'summary')
+                self.assertEqual([call.args[2]['stage'] for call in request.call_args_list], ['abstract'])
+                request.reset_mock()
                 jobs.submit(document_id, 'slides.pdf', mode='shallow', questions=7)
                 cards = self.wait_result(jobs, document_id, 'shallow', 'flashcards')
                 self.assertEqual(len(cards['documents'][0]['questions']), 7)
@@ -98,6 +102,12 @@ class LearningTaskTests(unittest.TestCase):
                     url = f'/api/learning/documents/{document_id}'
                     self.assertEqual(client.post(url, headers={'X-Learning-Task': 'summary', 'X-Learning-Mode': 'deep'}).status_code, 202)
                     self.assertEqual(submit.call_args.args[-1], 'summary')
+                    self.assertFalse(submit.call_args.kwargs['regenerate'])
+                    if category == 'Slides':
+                        regenerated = client.post(url, headers={'X-Learning-Task': 'summary',
+                                                  'X-Learning-Mode': 'deep', 'X-Regenerate': 'true'})
+                        self.assertEqual(regenerated.status_code, 202)
+                        self.assertTrue(submit.call_args.kwargs['regenerate'])
                     submit.reset_mock()
                     cards = client.post(url, headers={'X-Learning-Task': 'flashcards', 'X-Flashcard-Count': '12'})
                     allowed = category in {'Slides', 'Solutions', 'Scripts'}
