@@ -10,21 +10,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Build frontend
+      - name: Frontend checks
         working-directory: frontend
-        run: npm ci && npm run build
+        run: |
+          npm ci
+          npm run check
+          npm test
+          npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Backend tests
+        run: |
+          pip install -r backend/requirements.txt
+          cd backend && python -m unittest discover -s tests -t . -v
 
   deploy:
-    needs: build
+    needs: check
     runs-on: ubuntu-latest
     steps:
       - name: Set up SSH
@@ -46,6 +59,14 @@ jobs:
             cd ~/crackathon
             git fetch origin main
             git reset --hard origin/main
-            docker compose up -d --build
+            [ -f .env ] || echo "WARNING: no .env on the VM, so SECRET_KEY and OPENAI_API_KEY are unset"
+            # --wait holds until the health check passes, so a broken image fails the job.
+            if ! docker compose up -d --build --wait; then
+              echo "::error::the app did not become healthy"
+              docker compose ps
+              docker compose logs --tail 80 app
+              exit 1
+            fi
             docker image prune -f
+            docker compose ps
           '

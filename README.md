@@ -8,7 +8,11 @@ Flask (`backend/`) serves the API under `/api` and the built Angular app (`front
 other path — one process, one port. The PDF pipeline (lecture PDF → summary → flashcards → Anki
 deck) lives in `backend/learning/`; see [LEARNING_VIEW.md](LEARNING_VIEW.md) for how it works.
 
-**Deploy:** every push to `main` is deployed to the VM by `.github/workflows/deploy.yml`. One-time VM setup:
+**Deploy:** every push to `main` runs the frontend and backend checks, then deploys to the VM
+(`.github/workflows/deploy.yml`): `git reset --hard origin/main` and
+`docker compose up -d --build --wait`. `--wait` holds until the container's health check
+passes, so a broken build fails the job instead of taking the app down quietly. One-time VM
+setup:
 
 ```bash
 cp .env.example .env           # then set SECRET_KEY and OPENAI_API_KEY
@@ -121,7 +125,7 @@ on the VM `DEV_USER` is unset, so a request that bypasses the proxy gets 401.
 
 - **VM:** Ubuntu 26.04, 4 vCPUs, 8 GB RAM, 80 GB disk. The user is `viscon` with full sudo. Docker, Node.js 24 and Python 3.14 are preinstalled. The SSH config and the password are on the team page.
 - **Web app:** serve plain HTTP on `0.0.0.0:8080`. The proxy at `https://NN.hackathon.ethz.ch` handles TLS and login. By default only our team, our mentors and the staff can access it.
-- **Direct access:** `NN-direct.viscon-hackathon.ch` is for SSH and any ports we open ourselves (`sudo ufw allow <port>/tcp`).
+- **Direct access:** `NN-direct.viscon-hackathon.ch` is for SSH and any ports we open ourselves (`sudo ufw allow <port>/tcp`). Don't open 8080: that is what makes the user headers trustworthy.
 - **Auth for free:** the proxy sends `X-User-Id` (the user's email) and `X-User-Name` with every request. These are only trustworthy while the app is reachable solely through the managed address.
 - **No WebSockets.** Use Server-Sent Events or Socket.IO instead.
 - **Template:** a React and FastAPI example app is running in `~/template`. Redeploy it with `docker compose up -d --build`, or remove it with `docker compose down`.
