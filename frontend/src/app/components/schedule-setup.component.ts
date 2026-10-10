@@ -13,47 +13,58 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
  *  Opened before the first proposal, and from the calendar whenever they want to adjust it. */
 @Component({selector:'app-schedule-setup',standalone:true,imports:[IconComponent],template:`
   <dialog #dialog class="edit-dialog schedule-setup-dialog" aria-labelledby="setup-title" (close)="error.set('')">
-    <div class="dialog-top"><span class="eyebrow">BEFORE WE PLAN</span><button type="button" class="icon-button" aria-label="Close" (click)="dialog.close()"><app-icon name="close" /></button></div>
-    <h2 id="setup-title">How do you want to study?</h2>
-    <p class="muted">The schedule is built from this. ECTS and weekly lecture hours come from the course catalogue; what is below is yours.</p>
+    <div class="dialog-top"><span class="eyebrow">STUDY SETUP</span><button type="button" class="icon-button" aria-label="Close" (click)="dialog.close()"><app-icon name="close" /></button></div>
+    <h2 id="setup-title">When are your exams, and when do you study?</h2>
+    <p class="muted">That is all the schedule needs. Everything else has a sensible default under Advanced.</p>
 
-    <h3 class="setup-heading">Your courses</h3>
+    <h3 class="setup-heading">Exams</h3>
     @if(!courses().length){<p class="empty-state">No courses yet. Add one with + next to Your subjects.</p>}
-    <div class="setup-courses">@for(course of courses();track course.courseId){
-      <div class="setup-course">
-        <div class="setup-course-name"><span class="subject-dot" [style.background]="course.color"></span><strong>{{course.name}}</strong></div>
-        <div class="form-grid setup-course-fields">
-          <label>Exam date<input type="date" [min]="store.examSession().start" [max]="store.examSession().end" [value]="course.examDate" (change)="edit(course.courseId,{examDate:$any($event.target).value})"></label>
-          <label>Priority<select [value]="course.priority" (change)="edit(course.courseId,{priority:+$any($event.target).value})">@for(option of priorities;track option.value){<option [value]="option.value">{{option.label}}</option>}</select></label>
-          <label>Difficulty<select [value]="course.difficulty" (change)="edit(course.courseId,{difficulty:+$any($event.target).value})">@for(option of difficulties;track option.value){<option [value]="option.value">{{option.label}}</option>}</select></label>
-          <label>Cap on hours<input type="number" min="0" max="5000" step="1" placeholder="no cap" [value]="course.maxStudyHours ?? ''" (change)="edit(course.courseId,{maxStudyHours:number($any($event.target).value)})"></label>
-        </div>
-      </div>
+    <div class="setup-exams">@for(course of courses();track course.courseId){
+      <label class="setup-exam"><span><span class="subject-dot" [style.background]="course.color"></span>{{course.name}}</span>
+        <input type="date" [min]="store.examSession().start" [max]="store.examSession().end" [value]="course.examDate" (change)="edit(course.courseId,{examDate:$any($event.target).value})"></label>
     }</div>
 
     <h3 class="setup-heading">Your day</h3>
-    <div class="form-grid">
+    <div class="form-grid setup-day">
       <label>Day starts<input type="time" [value]="habits().dayStart" (change)="setHabit({dayStart:$any($event.target).value})"></label>
       <label>Day ends<input type="time" [value]="habits().dayEnd" (change)="setHabit({dayEnd:$any($event.target).value})"></label>
-      <label>Lunch<input type="time" [value]="habits().lunch[0]" (change)="setMeal('lunch',0,$any($event.target).value)"></label>
-      <label>until<input type="time" [value]="habits().lunch[1]" (change)="setMeal('lunch',1,$any($event.target).value)"></label>
-      <label>Dinner<input type="time" [value]="habits().dinner[0]" (change)="setMeal('dinner',0,$any($event.target).value)"></label>
-      <label>until<input type="time" [value]="habits().dinner[1]" (change)="setMeal('dinner',1,$any($event.target).value)"></label>
-      <label>Study block (minutes)<input type="number" min="15" max="240" step="5" [value]="habits().studyBlockSize" (change)="setHabit({studyBlockSize:+$any($event.target).value})"></label>
-      <label>Hours a week<input type="number" min="0" max="168" step="1" [value]="habits().studyHoursPerWeek ?? ''" (change)="setHabit({studyHoursPerWeek:number($any($event.target).value)})"></label>
+      <label>Lunch from<input type="time" [value]="habits().lunch[0]" (change)="setMeal('lunch',0,$any($event.target).value)"></label>
+      <label>to<input type="time" [value]="habits().lunch[1]" (change)="setMeal('lunch',1,$any($event.target).value)"></label>
+      <label>Dinner from<input type="time" [value]="habits().dinner[0]" (change)="setMeal('dinner',0,$any($event.target).value)"></label>
+      <label>to<input type="time" [value]="habits().dinner[1]" (change)="setMeal('dinner',1,$any($event.target).value)"></label>
     </div>
-    <p class="field-hint">These times leave {{freeHours()}} h of free slots a week. The plan uses the hours above instead, spread over the days before each exam; raise it to {{freeHours()}} to fill every slot.</p>
 
-    <h3 class="setup-heading">Days off</h3>
-    <div class="setup-days-off">@for(day of habits().daysOff;track $index){
-      <div class="setup-day-off">
-        <label class="sr-only" [attr.for]="'day-off-'+$index">First day off</label>
-        <input [id]="'day-off-'+$index" type="date" [min]="store.examSession().start" [max]="store.examSession().end" [value]="day.startDate" (change)="setDayOff($index,{startDate:$any($event.target).value})">
-        <label>for<input type="number" min="1" max="400" step="1" [value]="day.rangeLength" (change)="setDayOff($index,{rangeLength:+$any($event.target).value})"> day(s)</label>
-        <button type="button" class="icon-button" [attr.aria-label]="'Remove the days off from '+day.startDate" (click)="removeDayOff($index)"><app-icon name="trash" /></button>
+    <details class="setup-advanced" [open]="advanced()" (toggle)="advanced.set($any($event.target).open)">
+      <summary>Advanced settings</summary>
+      <div class="form-grid setup-day">
+        <label>Study block (minutes)<input type="number" min="15" max="240" step="5" [value]="habits().studyBlockSize" (change)="setHabit({studyBlockSize:+$any($event.target).value})"></label>
+        <label>Hours a week<input type="number" min="0" max="168" step="1" [placeholder]="freeHours()+' (all free time)'" [value]="habits().studyHoursPerWeek ?? ''" (change)="setHabit({studyHoursPerWeek:number($any($event.target).value)})"></label>
       </div>
-    }@empty{<p class="field-hint">No days off. Add the days you will not study at all.</p>}</div>
-    <button type="button" class="text-button" (click)="addDayOff()"><app-icon name="plus" /> Add days off</button>
+      <p class="field-hint">Left empty, every free hour between your day's start and end is used — {{freeHours()}} h a week at these times. Enter a number to study less.</p>
+
+      <h3 class="setup-heading">Per course</h3>
+      <div class="setup-courses">@for(course of courses();track course.courseId){
+        <div class="setup-course">
+          <div class="setup-course-name"><span class="subject-dot" [style.background]="course.color"></span><strong>{{course.name}}</strong></div>
+          <div class="form-grid setup-course-fields">
+            <label>Priority<select [value]="course.priority" (change)="edit(course.courseId,{priority:+$any($event.target).value})">@for(option of priorities;track option.value){<option [value]="option.value">{{option.label}}</option>}</select></label>
+            <label>Difficulty<select [value]="course.difficulty" (change)="edit(course.courseId,{difficulty:+$any($event.target).value})">@for(option of difficulties;track option.value){<option [value]="option.value">{{option.label}}</option>}</select></label>
+            <label>Cap on hours<input type="number" min="0" max="5000" step="1" placeholder="no cap" [value]="course.maxStudyHours ?? ''" (change)="edit(course.courseId,{maxStudyHours:number($any($event.target).value)})"></label>
+          </div>
+        </div>
+      }</div>
+
+      <h3 class="setup-heading">Days off</h3>
+      <div class="setup-days-off">@for(day of habits().daysOff;track $index){
+        <div class="setup-day-off">
+          <label class="sr-only" [attr.for]="'day-off-'+$index">First day off</label>
+          <input [id]="'day-off-'+$index" type="date" [min]="store.examSession().start" [max]="store.examSession().end" [value]="day.startDate" (change)="setDayOff($index,{startDate:$any($event.target).value})">
+          <label>for<input type="number" min="1" max="400" step="1" [value]="day.rangeLength" (change)="setDayOff($index,{rangeLength:+$any($event.target).value})"> day(s)</label>
+          <button type="button" class="icon-button" [attr.aria-label]="'Remove the days off from '+day.startDate" (click)="removeDayOff($index)"><app-icon name="trash" /></button>
+        </div>
+      }@empty{<p class="field-hint">No days off. Add the days you will not study at all.</p>}</div>
+      <button type="button" class="text-button" (click)="addDayOff()"><app-icon name="plus" /> Add days off</button>
+    </details>
 
     @if(error()){<p class="form-error" role="alert">{{error()}}</p>}
     <div class="dialog-actions">
@@ -70,7 +81,7 @@ export class ScheduleSetupComponent {
   readonly priorities=PRIORITIES;readonly difficulties=DIFFICULTIES;
   readonly habits=signal<Preferences>(this.store.preferences());
   readonly courses=signal<CourseDraft[]>([]);
-  readonly saving=signal(false);readonly error=signal('');
+  readonly saving=signal(false);readonly error=signal('');readonly advanced=signal(false);
   /** Study hours a full week offers at the chosen times, so the budget field has a yardstick. */
   readonly freeHours=computed(()=>{
     const h=this.habits();const span=(a:string,b:string)=>Math.max(0,this.minutes(b)-this.minutes(a));

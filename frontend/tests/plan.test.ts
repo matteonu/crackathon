@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { blockLabel, blockMinutes, minutesOf, studyHours } from '../src/app/models/semester.ts';
+import { blockLabel, blockMinutes, minutesOf, studyHours, timeOf, visibleBlock } from '../src/app/models/semester.ts';
 import type { PlanBlock } from '../src/app/models/semester.ts';
 
 function block(start: string, end: string, type: PlanBlock['type'], subject: string | null = 'course-1'): PlanBlock {
   return {id: null, subjectId: subject, courseId: subject ? 1 : null, date: '2027-01-05',
-    start, end, type, label: type === 'meal' ? 'Lunch' : null};
+    start, end, type, label: type === 'meal' ? 'Lunch' : null, source: 'generated'};
 }
 
 test('a block measures itself from its own clock times', () => {
@@ -38,4 +38,15 @@ test('hours are split by subject so the legend can add them up per course', () =
   assert.equal(studyHours(blocks.filter(b => b.subjectId === 'course-1')), 2);
   assert.equal(studyHours(blocks.filter(b => b.subjectId === 'course-2')), 2.5);
   assert.equal(studyHours(blocks), 4.5);
+});
+
+test('the calendar hides the scheduler\'s meals but shows a break the user drew', () => {
+  assert.equal(visibleBlock(block('12:00', '13:00', 'meal', null)), false);
+  assert.equal(visibleBlock({...block('14:00', '15:30', 'meal', null), label: 'Break', source: 'manual'}), true);
+  assert.equal(visibleBlock(block('08:00', '09:30', 'active_learning')), true);
+});
+
+test('minutes and clock times convert both ways', () => {
+  for (const time of ['00:00', '08:15', '14:45', '23:59']) assert.equal(timeOf(minutesOf(time)), time);
+  assert.equal(timeOf(9 * 60 + 5), '09:05');
 });

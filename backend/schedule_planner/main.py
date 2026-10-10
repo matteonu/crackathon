@@ -99,6 +99,26 @@ def _history(value, subjects):
     return entries
 
 
+def _busy(value, subjects):
+    """Time the user already filled: [{date, start_time, end_time, subject?}]."""
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("busy must be a list of {date, start_time, end_time}.")
+    entries = []
+    for entry in value:
+        if not isinstance(entry, dict):
+            raise ValueError("Every busy entry must be an object.")
+        start = _time(entry.get("start_time"), "busy: start_time")
+        end = _time(entry.get("end_time"), "busy: end_time")
+        if start >= end:
+            raise ValueError("A busy entry must end after it starts.")
+        subject = entry.get("subject")
+        if subject is not None and subject not in subjects:
+            raise ValueError(f"busy mentions {subject!r}, which is not a subject here.")
+        entries.append({"date": iso_date(entry.get("date")), "subject": subject,
+                        "start": int(start[:2]) * 60 + int(start[3:]), "end": int(end[:2]) * 60 + int(end[3:])})
+    return entries
+
+
 def validated(data):
     """Check a request and return it as the arguments Schedule takes. Never touches `data`."""
     if not isinstance(data, dict):
@@ -130,6 +150,7 @@ def validated(data):
     return {
         "subjects": prepared,
         "history": _history(data.get("history", []), prepared),
+        "busy": _busy(data.get("busy", []), prepared),
         "study_hours_per_week": budget,
         "exam_session": DayRange.from_value(data["exam_session"]),
         "days_off": [DayRange.from_value(value) for value in days_off],
@@ -149,7 +170,7 @@ def generate_schedule(data: dict) -> dict:
     planner = Schedule(
         {"subjects": options["subjects"], "days_off": options["days_off"],
          "exam_session": options["exam_session"], "study_block_size": options["study_block_size"],
-         "history": options["history"]},
+         "history": options["history"], "busy": options["busy"]},
         options["day_start"], options["day_end"], options["lunch_time"], options["dinner_time"],
         alpha=options["alpha"], beta=options["beta"],
         weeks_in_semester=options["weeks_in_semester"],

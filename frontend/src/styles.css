@@ -497,37 +497,58 @@ textarea { resize: vertical; line-height: 1.7; }
 .calendar-legend strong { font-weight:600; color:var(--ink); }
 .calendar-empty { font-size:12px; color:var(--muted); margin-top:18px; padding:13px; background:var(--canvas); border-radius:8px; }
 
-/* A block of the generated plan. Behind the user's own sessions, and not clickable: the
-   scheduler owns it, so it is changed by generating again, not by dragging. */
-.calendar-block { position:absolute; left:4px; right:4px; border-radius:5px; padding:6px 7px; display:flex; flex-direction:column; gap:3px; overflow:hidden; font-size:10px; pointer-events:none;
-  border-left:3px solid var(--subject-color); background:color-mix(in srgb, var(--subject-color) 13%, transparent); color:#354e31; }
-.calendar-block strong { font-weight:600; line-height:1.25; overflow-wrap:anywhere; }
-.calendar-block span { font-size:9px; color:var(--muted); white-space:nowrap; }
-.calendar-block.is-recall { border-left-style:dashed; background:color-mix(in srgb, var(--subject-color) 7%, transparent); }
-.calendar-block.is-meal { border-left-color:var(--line); background:var(--canvas); }
-.calendar-block.is-meal strong { color:var(--muted); font-weight:500; }
-.block-key { display:inline-block; flex:0 0 3px; width:3px; height:12px; border-radius:2px; background:#81a17b; }
-.block-key.is-recall { background:repeating-linear-gradient(to bottom,#81a17b 0 3px,transparent 3px 5px); }
-/* A day holding both the plan and the user's own sessions splits into two lanes, so the
-   two never sit on top of each other. */
-.calendar-day.two-lanes .calendar-block { right:51%; }
-.calendar-day.two-lanes .calendar-session { left:51%; }
-.calendar-day.two-lanes .calendar-session small { display:none; }
-/* What the plan asks for on a day nothing is recorded on yet. */
-.planned-hint { color:var(--muted); font-variant-numeric:tabular-nums; opacity:.75; }
-.planned-row > th > span { font-weight:400; color:var(--muted); }
-.planned-row td { color:var(--muted); }
+/* A slot: the original session style, opaque, so the hour lines stop showing through. */
+.calendar-day:not(.outside-session) { cursor:cell; }
+.calendar-slot { background:color-mix(in srgb, var(--subject-color) 16%, #fff); cursor:grab; user-select:none; touch-action:none; transition:box-shadow .15s ease, filter .15s ease; }
+.calendar-slot:focus-visible { outline:2px solid var(--green); outline-offset:1px; }
+.calendar-slot.is-recall { background:color-mix(in srgb, var(--subject-color) 8%, #fff); }
+.calendar-slot strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; flex-shrink:0; }
+.calendar-slot > span:not(.slot-edge) { flex-shrink:0; }
+/* Under an hour and a half there is room for one line of name. */
+.calendar-slot.is-compact strong { -webkit-line-clamp:1; overflow-wrap:normal; word-break:break-all; }
+.calendar-slot.is-recall > span { color:var(--muted); }
+.calendar-slot.is-break { background:#f1f3ee; color:var(--muted); }
+.calendar-slot.is-break strong { font-weight:500; }
+.calendar-slot.is-short { padding:4px 7px; gap:0; }
+.calendar-slot.is-short > span:not(.slot-edge) { display:none; }
+.calendar-slot.is-short strong { -webkit-line-clamp:1; }
+.calendar-slot.is-dragged { z-index:3; cursor:grabbing; box-shadow:0 8px 20px rgba(38,53,45,.18); filter:none; }
+.calendar-grid.dragging, .calendar-grid.dragging * { cursor:grabbing; user-select:none; }
+.slot-edge { position:absolute; left:0; right:0; height:8px; cursor:ns-resize; z-index:1; }
+.slot-edge.top { top:-2px; } .slot-edge.bottom { bottom:-2px; }
+.slot-delete { position:absolute; top:4px; right:4px; width:18px; height:18px; display:grid; place-items:center; padding:0; border:0; border-radius:50%; background:rgba(255,255,255,.92); color:var(--muted); opacity:0; transition:opacity .15s ease; cursor:pointer; z-index:2; }
+.slot-delete app-icon, .slot-delete svg { width:10px; height:10px; }
+.calendar-slot:hover .slot-delete, .calendar-slot:focus-within .slot-delete { opacity:1; }
+.slot-delete:hover { color:var(--ink); }
+.calendar-ghost { position:absolute; left:4px; right:4px; z-index:2; border:1.5px dashed var(--green); border-radius:5px; background:color-mix(in srgb, var(--sage) 70%, #fff); padding:5px 7px; font-size:9px; color:var(--green); pointer-events:none; }
+.calendar-hint { margin:0; font-size:11px; color:var(--muted); }
+.slot-chooser { width:min(440px,calc(100vw - 32px)); }
+.slot-choices { display:grid; gap:8px; margin-top:16px; }
+.slot-choices button { display:flex; align-items:center; gap:10px; padding:11px 12px; border:1px solid var(--line); border-radius:8px; background:var(--surface); font-size:12px; text-align:left; cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+.slot-choices button:hover { background:var(--sage); border-color:#cfd9ca; }
+.slot-choices button.is-break { color:var(--muted); }
 .proposal-totals { display:flex; flex-wrap:wrap; gap:8px 18px; margin:14px 0 18px; }
 .proposal-totals > span { display:inline-flex; align-items:center; gap:7px; font-size:11px; color:var(--muted); }
 .proposal-totals strong { font-weight:600; color:var(--ink); }
 
 /* The study setup form. */
+.setup-exams { display:grid; gap:8px; }
+.setup-exam { display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:14px; padding:9px 12px; border:1px solid var(--line); border-radius:8px; font-size:12px; }
+.setup-exam > span { display:flex; align-items:center; gap:8px; min-width:0; }
+.setup-exam input { width:auto; }
+.setup-day { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.setup-advanced { margin-top:22px; border-top:1px solid var(--line); padding-top:14px; }
+.setup-advanced > summary { cursor:pointer; font-size:12px; font-weight:600; color:var(--green); list-style:none; }
+.setup-advanced > summary::-webkit-details-marker { display:none; }
+.setup-advanced > summary::before { content:'›'; display:inline-block; margin-right:7px; transition:transform .15s ease; }
+.setup-advanced[open] > summary::before { transform:rotate(90deg); }
+.setup-advanced[open] > summary { margin-bottom:12px; }
 .schedule-setup-dialog { width:min(720px,calc(100vw - 32px)); }
 .setup-heading { font-size:12px; font-weight:600; margin:22px 0 10px; }
 .setup-courses { display:grid; gap:12px; }
 .setup-course { border:1px solid var(--line); border-radius:8px; padding:13px; }
 .setup-course-name { display:flex; align-items:center; gap:8px; margin-bottom:11px; font-size:12px; }
-.setup-course-fields { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.setup-course-fields { grid-template-columns:repeat(3,minmax(0,1fr)); }
 .setup-days-off { display:grid; gap:9px; }
 .setup-day-off { display:flex; align-items:end; gap:10px; }
 .setup-day-off > label { flex-direction:row; align-items:center; gap:7px; font-size:11px; color:var(--muted); }

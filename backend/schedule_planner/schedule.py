@@ -17,6 +17,8 @@ from .dayrange import DayRange
 
 # Subjects per day are capped at a third of the day's blocks, so learning stays grouped.
 BLOCKS_PER_SUBJECT = 3
+# What is left of a block after busy time is cut out of it must be at least this long to use.
+MIN_SLOT_MINUTES = 15
 # The workload estimate: ECTS times this, minus the lectures already attended.
 HOURS_PER_ECTS = 30
 WEEKS_IN_SEMESTER = 13
@@ -65,6 +67,12 @@ class Schedule:
         for entry in user_input.get("history", []):
             self.study_history.setdefault(entry["date"], []).append(
                 (entry["subject"], entry["type"], entry["hours"]))
+        # Time the user has already filled, by day: [(start, end, subject or None)] in minutes.
+        # Nothing is planned on top of it, and a busy block with a subject counts as studying it.
+        self.busy: dict[dt.date, list[tuple[int, int, str | None]]] = {}
+        for entry in user_input.get("busy", []):
+            self.busy.setdefault(entry["date"], []).append(
+                (entry["start"], entry["end"], entry.get("subject")))
         self.block_types: dict[dt.date, dict[tuple[str, str], str]] = {}
         self.schedule: dict[dt.date, dict[tuple[str, str], str]] = {}
         self.current_week: DayRange | None = None
@@ -163,10 +171,21 @@ class Schedule:
     def _study_days(self) -> int:
         return sum(1 for day in self.current_week if not self._is_day_off(day))
 
+    def _free_slots(self, day: dt.date, slots: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        """The day's study slots with the user's busy time cut out of them."""
+        for x, y, _ in self.busy.get(day, []):
+            slots = [piece for s, e in slots
+                     for piece in ((s, min(e, x)), (max(s, y), e)) if piece[1] > piece[0]]
+        return [(a, b) for a, b in slots if b - a >= MIN_SLOT_MINUTES]
+
+    def _busy_hours(self, subject: str, days) -> float:
+        return sum((b - a) / 60 for day in days for a, b, name in self.busy.get(day, []) if name == subject)
+
     def _available_hours(self) -> float:
-        """Hours of free slots this week, days off excluded. What the week physically offers."""
-        minutes = sum(b - a for a, b, meal in self._time_slots() if meal is None)
-        return minutes / 60 * self._study_days()
+        """Hours of free slots this week, days off and busy time excluded."""
+        slots = [(a, b) for a, b, meal in self._time_slots() if meal is None]
+        return sum(b - a for day in self.current_week if not self._is_day_off(day)
+                   for a, b in self._free_slots(day, slots)) / 60
 
     def _budget_hours(self) -> float:
         """Hours the week may plan: the free slots, or the user's budget if that is lower.
@@ -193,10 +212,12 @@ class Schedule:
                    for (start, end), name in blocks.items() if name == subject)
 
     def _previous_hours(self, subject: str, active_only: bool = False) -> float:
-        return sum(hours for day, blocks in self.study_history.items()
-                   if day < self.current_week.start_date
-                   for name, kind, hours in blocks
-                   if name == subject and (not active_only or kind == "active_learning"))
+        planned = sum(hours for day, blocks in self.study_history.items()
+                      if day < self.current_week.start_date
+                      for name, kind, hours in blocks
+                      if name == subject and (not active_only or kind == "active_learning"))
+        # The user's own slots on days before this week are study done, like planned history.
+        return planned + self._busy_hours(subject, [day for day in self.busy if day < self.current_week.start_date])
 
     @property
     def hours_studied_per_subject(self) -> dict[str, float]:
@@ -234,9 +255,11 @@ class Schedule:
         self.schedule = {day: {} for day in self.current_week}
         self.block_types = {day: {} for day in self.current_week}
         self.hours_per_subject_this_week = self.generate_hours_per_subject_per_week()
-        assigned = {name: 0.0 for name in self.subjects}
-        active = {name: self._previous_hours(name, active_only=True) for name in self.subjects}
-        slots = [(a, b) for a, b, meal in self._time_slots() if meal is None]
+        # The user's own slots this week count towards each subject's share and its cap.
+        own = {name: self._busy_hours(name, self.current_week) for name in self.subjects}
+        assigned = dict(own)
+        active = {name: self._previous_hours(name, active_only=True) + own[name] for name in self.subjects}
+        day_slots = [(a, b) for a, b, meal in self._time_slots() if meal is None]
         block_hours = self.study_block_size / 60
 
         def remaining(name):
@@ -260,6 +283,7 @@ class Schedule:
                 active[name] += hours
 
         for day in self.current_week:
+            slots = self._free_slots(day, day_slots)
             if self._is_day_off(day) or not slots:
                 continue
             eligible = [name for name, subject in self.subjects.items()

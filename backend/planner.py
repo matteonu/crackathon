@@ -14,6 +14,9 @@
 
     PUT    /api/semesters/<semkez>/preferences         study habits and days off
     POST   /api/semesters/<semkez>/plan/generate       build a schedule proposal from them
+    POST   /api/semesters/<semkez>/plan/blocks         draw a slot (a course, or a break)
+    PATCH  /api/semesters/<semkez>/plan/blocks/<id>    move or resize one; it becomes yours
+    DELETE /api/semesters/<semkez>/plan/blocks/<id>    remove one
 
 In the app each course is a subject with id 'course-<courseId>'. A semester's study phase -- the
 days hours can be recorded and sessions planned for -- is its Lernphase before the exams.
@@ -46,15 +49,15 @@ MAX_SESSIONS = 10000
 MAX_DAYS_OFF = 200
 # Used when neither the user nor the scraped course ratings say how hard a course is.
 DEFAULT_DIFFICULTY = 3
-# A full-time study week. Without it the scheduler fills every free slot before the exams,
-# which over a 56-day winter phase is around 500 hours and no use to anyone. A semester whose
-# study_hours_per_week is NULL is planned with this; the form shows it and can change it.
-DEFAULT_HOURS_PER_WEEK = 35
 # The habits of a semester that has no row yet, mirroring the defaults in schema.sql.
+# studyHoursPerWeek None means every free slot between day start and end, meals excluded.
 DEFAULT_PREFERENCES = {"dayStart": "08:00", "dayEnd": "20:00", "lunch": ["12:00", "13:00"],
-                       "dinner": ["18:00", "19:00"], "studyBlockSize": 90,
-                       "studyHoursPerWeek": DEFAULT_HOURS_PER_WEEK, "alpha": .3, "beta": 5,
-                       "daysOff": []}
+                       "dinner": ["18:00", "19:00"], "studyBlockSize": 60,
+                       "studyHoursPerWeek": None, "alpha": .3, "beta": 5, "daysOff": []}
+# A slot the user draws: a course, or a break that keeps the scheduler away.
+SLOT_KINDS = ("course", "break")
+# A block the calendar shows. Generated meals are kept in the data but not drawn.
+VISIBLE = "NOT (type = 'meal' AND source = 'generated')"
 # Colours of new subjects, in order of adding; the same family as the frontend's.
 COLORS = ("#2598A2", "#E4AC17", "#D56568", "#5586CA", "#DD792F", "#6E9A5A", "#9A6BB8", "#C2577E")
 
@@ -473,10 +476,6 @@ def semester_row(sid):
     return db.get_db().execute("SELECT * FROM semesters WHERE id = ?", (sid,)).fetchone()
 
 
-def hours_per_week(row):
-    """The week's study budget. A semester that has never said gets the full-time default."""
-    return DEFAULT_HOURS_PER_WEEK if row["study_hours_per_week"] is None else row["study_hours_per_week"]
-
 
 def preferences(sid):
     """How this semester's days are laid out, in the API's spelling."""
@@ -485,7 +484,7 @@ def preferences(sid):
             "lunch": [row["lunch_start"], row["lunch_end"]],
             "dinner": [row["dinner_start"], row["dinner_end"]],
             "studyBlockSize": row["study_block_size"],
-            "studyHoursPerWeek": hours_per_week(row),
+            "studyHoursPerWeek": row["study_hours_per_week"],
             "alpha": row["alpha"], "beta": row["beta"],
             "daysOff": [{"startDate": r["start_date"], "rangeLength": r["range_length"]}
                         for r in db.get_db().execute(
@@ -532,10 +531,18 @@ def scheduler_request(sid, semkez, from_date):
                       WHERE semester_id = ? AND date < ? AND type <> 'meal' ORDER BY date, start_time""",
                    (sid, from_date))
                if r["course_id"] in codes]
+    # The user's own slots from from_date on stay where they are; the scheduler plans around them.
+    busy = [{"date": r["date"], "start_time": r["start_time"], "end_time": r["end_time"],
+             "subject": codes.get(r["course_id"]) if r["type"] != "meal" else None}
+            for r in conn.execute(
+                """SELECT course_id, date, start_time, end_time, type FROM plan_blocks
+                   WHERE semester_id = ? AND date >= ? AND source = 'manual' ORDER BY date, start_time""",
+                (sid, from_date))]
     length = (dt.date.fromisoformat(end) - dt.date.fromisoformat(from_date)).days + 1
     return {
         "subjects": subjects_input,
         "history": history,
+        "busy": busy,
         "exam_session": {"start_date": from_date, "range_length": length},
         "days_off": [{"start_date": day["startDate"], "range_length": day["rangeLength"]}
                      for day in preferences(sid)["daysOff"]],
@@ -543,9 +550,23 @@ def scheduler_request(sid, semkez, from_date):
         "lunch_time": [row["lunch_start"], row["lunch_end"]],
         "dinner_time": [row["dinner_start"], row["dinner_end"]],
         "study_block_size": row["study_block_size"],
-        "study_hours_per_week": hours_per_week(row),
+        "study_hours_per_week": row["study_hours_per_week"],
         "alpha": row["alpha"], "beta": row["beta"],
     }, ids
+
+
+def sessions_of(day):
+    """A day's blocks with back-to-back blocks of one course and kind joined: the scheduler
+    thinks in study-block units, a person in sessions, and one slot is what they drag."""
+    joined = []
+    for block in day["blocks"]:
+        last = joined[-1] if joined else None
+        if (last and block["subject"] is not None and last["subject"] == block["subject"]
+                and last["type"] == block["type"] and last["end_time"] == block["start_time"]):
+            last["end_time"] = block["end_time"]
+        else:
+            joined.append(dict(block))
+    return joined
 
 
 def plan_payload(from_date, generated_at, plan, ids):
@@ -555,8 +576,8 @@ def plan_payload(from_date, generated_at, plan, ids):
     blocks = [{"id": None, "subjectId": None if block["subject"] is None else f"course-{ids[block['subject']]}",
                "courseId": None if block["subject"] is None else ids[block["subject"]],
                "date": day["date"], "start": block["start_time"], "end": block["end_time"],
-               "type": block["type"], "label": block["label"]}
-              for week in plan["weeks"] for day in week["days"] for block in day["blocks"]]
+               "type": block["type"], "label": block["label"], "source": "generated"}
+              for week in plan["weeks"] for day in week["days"] for block in sessions_of(day)]
     return {"generatedAt": generated_at, "fromDate": from_date, "blocks": blocks,
             "summary": [{"subjectId": f"course-{ids[code]}", "courseId": ids[code],
                          "scheduledHours": round(hours, 2),
@@ -564,19 +585,29 @@ def plan_payload(from_date, generated_at, plan, ids):
                         for code, hours in scheduled.items()]}
 
 
-def store_plan(sid, from_date, payload, result):
-    """Replace this semester's plan from `from_date` on. Earlier blocks stay as history.
+def refresh_targets(conn, sid):
+    """A course's target hours become what its slots add up to, the user's own included, so
+    the hours overview and the progress bars have something to measure recorded hours against."""
+    hours = {}
+    for r in conn.execute("""SELECT course_id, start_time, end_time FROM plan_blocks
+                             WHERE semester_id = ? AND type <> 'meal' AND course_id IS NOT NULL""", (sid,)):
+        hours[r["course_id"]] = hours.get(r["course_id"], 0.0) + (
+            minutes_of(r["end_time"]) - minutes_of(r["start_time"])) / 60
+    conn.executemany("UPDATE semester_courses SET target_hours = ? WHERE semester_id = ? AND course_id = ?",
+                     [(round(total, 2), sid, course_id) for course_id, total in hours.items()])
 
-    A course's target hours become what the plan asks of it, so the hours overview and the
-    progress bars have something to measure recorded hours against.
-    """
+
+def store_plan(sid, from_date, payload, result):
+    """Replace the generated slots from `from_date` on. Earlier slots stay as history, and the
+    user's own slots stay everywhere: the run planned around them."""
     conn = db.get_db()
     rows = [(sid, block["courseId"], block["date"], block["start"], block["end"],
              block["type"], block["label"]) for block in result["blocks"]]
     with conn:
-        conn.execute("DELETE FROM plan_blocks WHERE semester_id = ? AND date >= ?", (sid, from_date))
-        conn.executemany("""INSERT INTO plan_blocks (semester_id, course_id, date, start_time, end_time, type, label)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)""", rows)
+        conn.execute("DELETE FROM plan_blocks WHERE semester_id = ? AND date >= ? AND source = 'generated'",
+                     (sid, from_date))
+        conn.executemany("""INSERT INTO plan_blocks (semester_id, course_id, date, start_time, end_time, type, label, source)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'generated')""", rows)
         conn.execute("""INSERT INTO study_plans (semester_id, generated_at, from_date, input_json, summary_json)
                         VALUES (?, ?, ?, ?, ?)
                         ON CONFLICT (semester_id) DO UPDATE SET
@@ -584,35 +615,29 @@ def store_plan(sid, from_date, payload, result):
                             input_json = excluded.input_json, summary_json = excluded.summary_json""",
                      (sid, result["generatedAt"], from_date, json.dumps(payload),
                       json.dumps(result["summary"])))
-        # Over every block held, not just this run's: earlier weeks are part of the target too.
-        hours = {}
-        for r in conn.execute("""SELECT course_id, start_time, end_time FROM plan_blocks
-                                 WHERE semester_id = ? AND type <> 'meal' AND course_id IS NOT NULL""", (sid,)):
-            hours[r["course_id"]] = hours.get(r["course_id"], 0.0) + (
-                minutes_of(r["end_time"]) - minutes_of(r["start_time"])) / 60
-        conn.executemany("UPDATE semester_courses SET target_hours = ? WHERE semester_id = ? AND course_id = ?",
-                         [(round(total, 2), sid, course_id) for course_id, total in hours.items()])
+        refresh_targets(conn, sid)
+
+
+def block_json(r):
+    return {"id": r["id"], "subjectId": None if r["course_id"] is None else f"course-{r['course_id']}",
+            "courseId": r["course_id"], "date": r["date"], "start": r["start_time"], "end": r["end_time"],
+            "type": r["type"], "label": r["label"], "source": r["source"]}
 
 
 def stored_plan(sid):
-    """The plan held for a semester, or None if none was generated.
+    """The slots held for a semester, or None while there are none.
 
-    The totals are added up from the blocks rather than taken from the last run, because the
-    blocks of earlier weeks outlive the run that made them.
+    The totals are added up from the slots rather than taken from the last run, because the
+    slots of earlier weeks, and the user's own, outlive the run that made them.
     """
     conn = db.get_db()
+    blocks = [block_json(r) for r in conn.execute(
+        """SELECT id, course_id, date, start_time, end_time, type, label, source
+           FROM plan_blocks WHERE semester_id = ? ORDER BY date, start_time, end_time, type""", (sid,))]
     row = conn.execute("SELECT generated_at, from_date FROM study_plans WHERE semester_id = ?",
                        (sid,)).fetchone()
-    if row is None:
+    if row is None and not blocks:
         return None
-    blocks = [{"id": r["id"],
-               "subjectId": None if r["course_id"] is None else f"course-{r['course_id']}",
-               "courseId": r["course_id"], "date": r["date"], "start": r["start_time"],
-               "end": r["end_time"], "type": r["type"], "label": r["label"]}
-              for r in conn.execute(
-                  """SELECT id, course_id, date, start_time, end_time, type, label
-                     FROM plan_blocks WHERE semester_id = ?
-                     ORDER BY date, start_time, end_time, type""", (sid,))]
     totals = {}
     for block in blocks:
         if block["courseId"] is None:
@@ -627,7 +652,8 @@ def stored_plan(sid):
     for entry in totals.values():
         entry["scheduledHours"] = round(entry["scheduledHours"], 2)
         entry["activeLearningHours"] = round(entry["activeLearningHours"], 2)
-    return {"generatedAt": row["generated_at"], "fromDate": row["from_date"], "blocks": blocks,
+    return {"generatedAt": row["generated_at"] if row else None,
+            "fromDate": row["from_date"] if row else None, "blocks": blocks,
             "summary": [totals[course_id] for course_id in sorted(totals)]}
 
 
@@ -739,3 +765,104 @@ def generate_plan(semkez):
         store_plan(sid, from_date, payload, plan)
         plan = stored_plan(sid)
     return jsonify(plan)
+
+
+# ------------------------------------------------------------------ the user's own slots
+
+def slot_times(body, phase_range, current=None):
+    """The date, start and end a slot request asks for, falling back to `current` for a move
+    that changes only some of them."""
+    start, end = phase_range
+    date = body.get("date", current and current["date"])
+    begin = body.get("start", current and current["start_time"])
+    finish = body.get("end", current and current["end_time"])
+    if not iso_date(date) or not start <= date <= end:
+        raise RequestError(400, f"Choose a day in the study phase, {start} to {end}.")
+    for value in (begin, finish):
+        if not isinstance(value, str) or not START.fullmatch(value):
+            raise RequestError(400, "Start and end must be times of day like 09:15.")
+    if begin >= finish:
+        raise RequestError(400, "A slot has to end after it starts.")
+    return date, begin, finish
+
+
+def make_room(conn, sid, date, begin, finish, keep=None):
+    """Clear a slot's time: generated slots under it give way, the user's own do not."""
+    clashes = conn.execute(
+        f"""SELECT id, source FROM plan_blocks
+            WHERE semester_id = ? AND date = ? AND start_time < ? AND end_time > ? AND {VISIBLE}
+              AND id IS NOT ?""", (sid, date, finish, begin, keep)).fetchall()
+    if any(r["source"] == "manual" for r in clashes):
+        raise RequestError(409, "That overlaps another slot of yours. Move or shorten it first.")
+    conn.executemany("DELETE FROM plan_blocks WHERE id = ?", [(r["id"],) for r in clashes])
+
+
+def own_block(sid, block_id):
+    row = None if sid is None else db.get_db().execute(
+        "SELECT * FROM plan_blocks WHERE id = ? AND semester_id = ?", (block_id, sid)).fetchone()
+    if row is None:
+        raise RequestError(404, "This slot is not in your plan.")
+    return row
+
+
+@bp.post("/semesters/<semkez>/plan/blocks")
+def create_block(semkez):
+    """Draw a slot: {date, start, end, kind: 'course' with courseId, or 'break'}."""
+    semkez = checked(semkez)
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        raise RequestError(400, "Send the slot as a JSON object.")
+    sid = semester_id(current_user()["id"], semkez, create=True)
+    date, begin, finish = slot_times(body, phase(semkez))
+    kind = body.get("kind")
+    if kind not in SLOT_KINDS:
+        raise RequestError(400, "Choose a course or a break for this slot.")
+    course_id = None
+    if kind == "course":
+        course_id = body.get("courseId")
+        if (not isinstance(course_id, int) or isinstance(course_id, bool)
+                or not db.get_db().execute("SELECT 1 FROM semester_courses WHERE semester_id = ? AND course_id = ?",
+                                           (sid, course_id)).fetchone()):
+            raise RequestError(400, f"Choose one of your {label_of(semkez)} courses.")
+    conn = db.get_db()
+    with conn:
+        make_room(conn, sid, date, begin, finish)
+        conn.execute("""INSERT INTO plan_blocks (semester_id, course_id, date, start_time, end_time, type, label, source)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'manual')""",
+                     (sid, course_id, date, begin, finish,
+                      "active_learning" if kind == "course" else "meal", None if kind == "course" else "Break"))
+        refresh_targets(conn, sid)
+    return jsonify(stored_plan(sid)), 201
+
+
+@bp.patch("/semesters/<semkez>/plan/blocks/<int:block_id>")
+def move_block(semkez, block_id):
+    """Move or resize a slot: {date?, start?, end?}. A generated slot touched becomes yours."""
+    semkez = checked(semkez)
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or not {"date", "start", "end"} & body.keys():
+        raise RequestError(400, "Send the slot's new date, start or end.")
+    sid = semester_id(current_user()["id"], semkez)
+    row = own_block(sid, block_id)
+    date, begin, finish = slot_times(body, phase(semkez), row)
+    conn = db.get_db()
+    with conn:
+        make_room(conn, sid, date, begin, finish, keep=block_id)
+        conn.execute("""UPDATE plan_blocks SET date = ?, start_time = ?, end_time = ?, source = 'manual'
+                        WHERE id = ?""", (date, begin, finish, block_id))
+        refresh_targets(conn, sid)
+    return jsonify(stored_plan(sid))
+
+
+@bp.delete("/semesters/<semkez>/plan/blocks/<int:block_id>")
+def delete_block(semkez, block_id):
+    """Remove a slot. Its time is free again, so the next generation may fill it; draw a break
+    to keep it free."""
+    semkez = checked(semkez)
+    sid = semester_id(current_user()["id"], semkez)
+    own_block(sid, block_id)
+    conn = db.get_db()
+    with conn:
+        conn.execute("DELETE FROM plan_blocks WHERE id = ?", (block_id,))
+        refresh_targets(conn, sid)
+    return jsonify(stored_plan(sid))

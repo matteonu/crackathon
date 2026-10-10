@@ -54,6 +54,13 @@ export interface PlanBlock {
   end: string;
   type: BlockType;
   label: string | null;
+  /** 'manual' once the user drew, moved or resized it: regenerating keeps it and plans around it. */
+  source: 'generated' | 'manual';
+}
+
+/** What the calendar draws: everything but the scheduler's own lunch and dinner. */
+export function visibleBlock(block: PlanBlock): boolean {
+  return !(block.type === 'meal' && block.source === 'generated');
 }
 
 export interface PlanTotals {
@@ -65,8 +72,9 @@ export interface PlanTotals {
 
 /** What POST .../plan/generate returns and GET .../plan carries. */
 export interface GeneratedPlan {
-  generatedAt: string;
-  fromDate: string;
+  /** null while the plan holds only slots the user drew and nothing was generated yet. */
+  generatedAt: string | null;
+  fromDate: string | null;
   blocks: PlanBlock[];
   summary: PlanTotals[];
 }
@@ -178,4 +186,9 @@ export function studyHours(blocks: readonly PlanBlock[]): number {
 export function blockLabel(block: PlanBlock): string {
   return block.type === 'meal' ? block.label ?? 'Break'
     : block.type === 'recall' ? 'Recall' : 'Learning';
+}
+
+/** 'HH:MM' for minutes after midnight. */
+export function timeOf(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }

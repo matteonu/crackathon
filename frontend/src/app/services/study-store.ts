@@ -1,11 +1,11 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { StudyData, Subject, PlannedSession, validSession, sessionsOverlap, addDays, dailyTotal, mondayOf, round, sumHours, validateData, weekDays } from '../models/study';
 import { CourseHit, GeneratedPlan, Plan, PlanBlock, PlanSubject, Preferences, SemesterOption, Semesters,
-  courseIdOf, emptyData, planToData, studyHours } from '../models/semester';
+  courseIdOf, emptyData, planToData, studyHours, visibleBlock } from '../models/semester';
 
 /** The habits of a semester nobody has configured, mirroring the server's defaults. */
 const DEFAULT_PREFERENCES: Preferences = {dayStart:'08:00', dayEnd:'20:00', lunch:['12:00','13:00'],
-  dinner:['18:00','19:00'], studyBlockSize:90, studyHoursPerWeek:35, alpha:.3, beta:5, daysOff:[]};
+  dinner:['18:00','19:00'], studyBlockSize:60, studyHoursPerWeek:null, alpha:.3, beta:5, daysOff:[]};
 
 /** The scheduler fields of one course that the setup form may change. */
 export type CoursePlanPatch = Partial<{priority:number; difficulty:number|null; maxStudyHours:number|null;
@@ -161,10 +161,39 @@ export class StudyStore {
     this.state.set(data); this.announce('Subject changes saved.');
     void this.write(url,this.json('PATCH',patch));
   }
-  /** The study blocks of a generated plan on one day, earliest first. Meals are not shown:
-   *  the calendar is for what to study, and they only crowd the courses out. */
+  /** The slots the calendar shows on one day, earliest first. The scheduler's own lunch and
+   *  dinner are left out; a break the user drew is shown. */
   planOn(date:string):PlanBlock[] {
-    return (this.generatedPlan()?.blocks ?? []).filter(block => block.date === date && block.type !== 'meal');
+    return (this.generatedPlan()?.blocks ?? []).filter(block => block.date === date && visibleBlock(block));
+  }
+
+  /** Draw a slot. Generated slots under it give way; the server refuses an overlap with yours. */
+  createSlot(slot:{date:string; start:string; end:string; kind:'course'|'break'; courseId?:number}):Promise<boolean> {
+    return this.slotRequest(`/api/semesters/${this.semkez()}/plan/blocks`, this.json('POST', slot));
+  }
+  /** Move or resize a slot. It becomes the user's own, so regenerating keeps it. */
+  moveSlot(id:number, patch:{date?:string; start?:string; end?:string}):Promise<boolean> {
+    const plan=this.generatedPlan();
+    if(plan)this.generatedPlan.set({...plan,blocks:plan.blocks.map(b=>b.id===id?{...b,...patch,source:'manual' as const}:b)});
+    return this.slotRequest(`/api/semesters/${this.semkez()}/plan/blocks/${id}`, this.json('PATCH', patch));
+  }
+  deleteSlot(id:number):Promise<boolean> {
+    const plan=this.generatedPlan();
+    if(plan)this.generatedPlan.set({...plan,blocks:plan.blocks.filter(b=>b.id!==id)});
+    return this.slotRequest(`/api/semesters/${this.semkez()}/plan/blocks/${id}`, {method:'DELETE'});
+  }
+  /** Send a slot change after the ones before it, then take the server's plan and targets. */
+  private async slotRequest(url:string, init:RequestInit):Promise<boolean> {
+    await this.writes;
+    try {
+      this.generatedPlan.set(await this.request<GeneratedPlan | null>(url, init));
+      await this.load();          // target hours follow the slots
+      return true;
+    } catch (e) {
+      this.announce(e instanceof Error ? e.message : 'Could not change that slot.');
+      await this.load();
+      return false;
+    }
   }
   /** Hours the plan asks for on one day, across every course. */
   plannedDaily(date:string):number {

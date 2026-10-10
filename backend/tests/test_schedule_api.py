@@ -139,8 +139,8 @@ class PreferenceTests(ScheduleApiCase):
     def test_defaults_before_anything_is_saved(self):
         self.assertEqual(self.plan()["preferences"],
                          {"dayStart": "08:00", "dayEnd": "20:00", "lunch": ["12:00", "13:00"],
-                          "dinner": ["18:00", "19:00"], "studyBlockSize": 90,
-                          "studyHoursPerWeek": 35, "alpha": .3, "beta": 5, "daysOff": []})
+                          "dinner": ["18:00", "19:00"], "studyBlockSize": 60,
+                          "studyHoursPerWeek": None, "alpha": .3, "beta": 5, "daysOff": []})
         self.add(1)      # adding a course creates the row; the defaults must survive it
         self.assertEqual(self.plan()["preferences"]["dayStart"], "08:00")
 
@@ -184,17 +184,16 @@ class PreferenceTests(ScheduleApiCase):
         self.prefs({"studyHoursPerWeek": 14})
         self.generate()
         self.assertLess(self.studied(), default)
-        # And raising it above what a week holds plans every free slot.
+        # A budget above what a week holds is the same as none.
         self.prefs({"studyHoursPerWeek": 168})
         self.generate()
-        self.assertGreater(self.studied(), default)
+        self.assertEqual(self.studied(), default)
 
-    def test_a_semester_that_never_said_gets_a_full_time_week(self):
+    def test_with_no_budget_every_free_slot_is_used(self):
         self.add(1)
         self.generate(fromDate="2027-02-01")
-        # Two weeks at 35 h, minus what the exam date and the block layout cut off.
-        self.assertLessEqual(self.studied() / 60, 2 * 35 + 1)
-        self.assertGreater(self.studied() / 60, 35)
+        # 08:00-20:00 less lunch and dinner is 10 h, every day until the exam on the 14th.
+        self.assertEqual(self.studied() / 60, 10 * 13)
 
     def test_the_day_window_and_block_size_reach_the_plan(self):
         self.add(1)
@@ -203,7 +202,10 @@ class PreferenceTests(ScheduleApiCase):
         self.generate()
         blocks = self.blocks()
         self.assertTrue(all("10:00" <= block["start"] and block["end"] <= "14:00" for block in blocks))
-        self.assertTrue(all(self.minutes(block) <= 30 for block in blocks if block["type"] != "meal"))
+        # Learning is joined into sessions; a recall block is still one study block long.
+        recall = [block for block in blocks if block["type"] == "recall"]
+        self.assertTrue(recall)
+        self.assertTrue(all(self.minutes(block) <= 30 for block in recall))
 
     def test_preferences_belong_to_one_user_and_one_semester(self):
         self.prefs({"dayStart": "09:00"})
@@ -309,3 +311,129 @@ class TargetHoursTests(ScheduleApiCase):
         self.add(1)
         self.generate(dryRun=True)
         self.assertEqual(self.plan()["subjects"][0]["targetHours"], 0)
+
+
+class SlotTests(ScheduleApiCase):
+    """The user's own slots: drawn, moved, resized, deleted, and planned around."""
+
+    def slot(self, user=ALICE, **body):
+        return self.client.post("/api/semesters/2026W/plan/blocks", json=body, headers=user)
+
+    def move(self, block_id, user=ALICE, **body):
+        return self.client.patch(f"/api/semesters/2026W/plan/blocks/{block_id}", json=body, headers=user)
+
+    def remove(self, block_id, user=ALICE):
+        return self.client.delete(f"/api/semesters/2026W/plan/blocks/{block_id}", headers=user)
+
+    def mine(self):
+        return [b for b in self.blocks() if b["source"] == "manual"]
+
+    def test_draw_a_course_slot_before_any_plan_exists(self):
+        self.add(1)
+        response = self.slot(date="2027-02-02", start="09:00", end="11:00", kind="course", courseId=1)
+        self.assertEqual(response.status_code, 201)
+        plan = self.plan()["plan"]
+        self.assertIsNone(plan["generatedAt"])
+        self.assertEqual([(b["start"], b["end"], b["subjectId"], b["type"]) for b in plan["blocks"]],
+                         [("09:00", "11:00", "course-1", "active_learning")])
+        self.assertEqual(self.plan()["subjects"][0]["targetHours"], 2)    # counts towards the target
+
+    def test_a_break_is_a_slot_without_a_course(self):
+        self.add(1)
+        self.slot(date="2027-02-02", start="14:00", end="15:30", kind="break")
+        (block,) = self.mine()
+        self.assertEqual((block["type"], block["label"], block["subjectId"]), ("meal", "Break", None))
+
+    def test_regenerating_keeps_my_slots_and_plans_around_them(self):
+        self.add(1)
+        self.generate()
+        self.slot(date="2027-02-02", start="09:00", end="11:00", kind="break")
+        self.slot(date="2027-02-03", start="13:00", end="14:00", kind="course", courseId=1)
+        self.generate()
+        self.assertEqual(len(self.mine()), 2)
+        for date, start, end in (("2027-02-02", "09:00", "11:00"), ("2027-02-03", "13:00", "14:00")):
+            others = [b for b in self.blocks() if b["date"] == date and b["source"] == "generated"
+                      and b["type"] != "meal" and b["start"] < end and b["end"] > start]
+            self.assertEqual(others, [], f"a generated slot sits on {date} {start}")
+
+    def test_my_course_slots_count_against_its_cap(self):
+        self.add(1)
+        self.client.patch("/api/semesters/2026W/courses/1", json={"maxStudyHours": 5}, headers=ALICE)
+        self.slot(date="2027-02-01", start="08:00", end="12:00", kind="course", courseId=1)
+        self.generate()
+        generated = sum(self.minutes(b) for b in self.blocks()
+                        if b["source"] == "generated" and b["type"] == "active_learning") / 60
+        self.assertLessEqual(generated, 1 + 1e-8)          # 5 h cap, 4 already mine
+
+    def test_drawing_over_a_generated_slot_replaces_it(self):
+        self.add(1)
+        self.generate()
+        target = next(b for b in self.blocks() if b["type"] == "active_learning")
+        self.slot(date=target["date"], start=target["start"], end=target["end"], kind="break")
+        self.assertNotIn(target["id"], [b["id"] for b in self.blocks()])
+
+    def test_my_slots_cannot_overlap_each_other(self):
+        self.add(1)
+        self.slot(date="2027-02-02", start="09:00", end="11:00", kind="break")
+        response = self.slot(date="2027-02-02", start="10:30", end="12:00", kind="course", courseId=1)
+        self.assertEqual(response.status_code, 409)
+        # Touching is fine.
+        self.assertEqual(self.slot(date="2027-02-02", start="11:00", end="12:00", kind="break").status_code, 201)
+
+    def test_moving_a_generated_slot_makes_it_mine(self):
+        self.add(1)
+        self.generate()
+        block = next(b for b in self.blocks() if b["type"] == "active_learning")
+        response = self.move(block["id"], date="2027-02-10", start="21:00", end="22:15")
+        self.assertEqual(response.status_code, 200)
+        moved = next(b for b in self.blocks() if b["id"] == block["id"])
+        self.assertEqual((moved["date"], moved["start"], moved["end"], moved["source"]),
+                         ("2027-02-10", "21:00", "22:15", "manual"))
+        self.assertEqual(self.move(block["id"], end="22:45").status_code, 200)      # resize just the end
+        self.assertEqual(next(b for b in self.blocks() if b["id"] == block["id"])["end"], "22:45")
+
+    def test_deleting_a_slot(self):
+        self.add(1)
+        self.slot(date="2027-02-02", start="09:00", end="11:00", kind="course", courseId=1)
+        (block,) = self.mine()
+        self.assertEqual(self.remove(block["id"]).status_code, 200)
+        self.assertIsNone(self.plan()["plan"])
+        self.assertEqual(self.remove(block["id"]).status_code, 404)
+
+    def test_bad_slots_are_refused(self):
+        self.add(1)
+        for bad in ({"date": "2027-02-02", "start": "09:00", "end": "11:00"},                 # no kind
+                    {"date": "2027-02-02", "start": "11:00", "end": "09:00", "kind": "break"},
+                    {"date": "2026-01-01", "start": "09:00", "end": "11:00", "kind": "break"},
+                    {"date": "2027-02-02", "start": "9", "end": "11:00", "kind": "break"},
+                    {"date": "2027-02-02", "start": "09:00", "end": "11:00", "kind": "course"},
+                    {"date": "2027-02-02", "start": "09:00", "end": "11:00", "kind": "course", "courseId": 2}):
+            self.assertEqual(self.slot(**bad).status_code, 400, bad)
+
+    def test_another_user_cannot_touch_my_slots(self):
+        self.add(1)
+        self.slot(date="2027-02-02", start="09:00", end="11:00", kind="break")
+        (block,) = self.mine()
+        self.assertEqual(self.move(block["id"], user=BOB, start="10:00").status_code, 404)
+        self.assertEqual(self.remove(block["id"], user=BOB).status_code, 404)
+        self.assertEqual(len(self.mine()), 1)
+
+    minutes = GenerateTests.minutes
+
+
+class SessionTests(ScheduleApiCase):
+
+    def test_back_to_back_blocks_of_a_course_are_one_slot(self):
+        self.add(1)
+        self.generate()
+        by_day = {}
+        for block in self.blocks():
+            by_day.setdefault(block["date"], []).append(block)
+        for date, blocks in by_day.items():
+            blocks.sort(key=lambda b: b["start"])
+            for a, b in zip(blocks, blocks[1:]):
+                self.assertFalse(a["subjectId"] and a["subjectId"] == b["subjectId"] and a["type"] == b["type"]
+                                 and a["end"] == b["start"], f"{date}: {a['start']}-{a['end']} and {b['start']}-{b['end']}")
+        # Morning learning, 08:00 until lunch, is one session.
+        first = sorted(by_day["2027-02-01"], key=lambda b: b["start"])[0]
+        self.assertEqual((first["start"], first["end"], first["type"]), ("08:00", "12:00", "active_learning"))

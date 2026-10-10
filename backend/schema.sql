@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS semesters (
     id INTEGER PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     label TEXT NOT NULL,              -- e.g. 'HS26'
-    study_hours_per_week INTEGER,     -- the week's study budget; NULL = planner.DEFAULT_HOURS_PER_WEEK
+    study_hours_per_week INTEGER,     -- the week's study budget; NULL = every free slot
     -- How the scheduler lays a day out (backend/schedule_planner/). Defaults make a new
     -- semester plannable before the user has said anything about their habits.
     day_start TEXT NOT NULL DEFAULT '08:00',
@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS semesters (
     lunch_end TEXT NOT NULL DEFAULT '13:00',
     dinner_start TEXT NOT NULL DEFAULT '18:00',
     dinner_end TEXT NOT NULL DEFAULT '19:00',
-    study_block_size INTEGER NOT NULL DEFAULT 90,   -- minutes
+    study_block_size INTEGER NOT NULL DEFAULT 60,   -- minutes
     alpha REAL NOT NULL DEFAULT 0.3,  -- weight of difficulty against priority
     beta REAL NOT NULL DEFAULT 5,     -- how hard a near exam pulls hours forward
     UNIQUE (user_id, label),
@@ -230,7 +230,10 @@ CREATE TABLE IF NOT EXISTS plan_blocks (
     start_time TEXT NOT NULL,         -- 'HH:MM'
     end_time TEXT NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('active_learning', 'recall', 'meal')),
-    label TEXT,                       -- 'Lunch' for a meal block
+    label TEXT,                       -- 'Lunch' for a meal block, 'Break' for one the user drew
+    -- 'manual' once the user created, moved or resized it: regenerating keeps it and plans
+    -- around it. Also in db.ADDED_COLUMNS.
+    source TEXT NOT NULL DEFAULT 'generated' CHECK (source IN ('generated', 'manual')),
     FOREIGN KEY (semester_id, course_id) REFERENCES semester_courses(semester_id, course_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS plan_blocks_semester_date ON plan_blocks (semester_id, date);

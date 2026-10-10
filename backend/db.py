@@ -72,9 +72,10 @@ ADDED_COLUMNS = {
         ("day_start", "TEXT NOT NULL DEFAULT '08:00'"), ("day_end", "TEXT NOT NULL DEFAULT '20:00'"),
         ("lunch_start", "TEXT NOT NULL DEFAULT '12:00'"), ("lunch_end", "TEXT NOT NULL DEFAULT '13:00'"),
         ("dinner_start", "TEXT NOT NULL DEFAULT '18:00'"), ("dinner_end", "TEXT NOT NULL DEFAULT '19:00'"),
-        ("study_block_size", "INTEGER NOT NULL DEFAULT 90"), ("alpha", "REAL NOT NULL DEFAULT 0.3"),
+        ("study_block_size", "INTEGER NOT NULL DEFAULT 60"), ("alpha", "REAL NOT NULL DEFAULT 0.3"),
         ("beta", "REAL NOT NULL DEFAULT 5"),
     ),
+    "plan_blocks": (("source", "TEXT NOT NULL DEFAULT 'generated'"),),
 }
 
 
