@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
     display_name TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     birth_date TEXT,                  -- 'YYYY-MM-DD'; age is computed from it
-    study_start TEXT                  -- 'YYYY-MM-DD'
+    study_start TEXT,                 -- 'YYYY-MM-DD'
+    selected_semkez TEXT              -- the semester the app shows, e.g. '2026W'; NULL = the current one
 );
 
 -- Course catalog, shared by all users. One row per ETH unit number (code), across semesters.
@@ -259,3 +260,18 @@ CREATE TABLE IF NOT EXISTS document_chat_turns (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(document_id, request_id)
 );
+
+-- A user's to-do list per subject, like Google Tasks: add, tick off, edit, reorder, delete.
+CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,              -- the uuid the browser generates
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    subject_id TEXT NOT NULL,         -- the subject's id in the frontend's study data
+    title TEXT NOT NULL,
+    notes TEXT NOT NULL DEFAULT '',
+    due TEXT,                         -- 'YYYY-MM-DD' or NULL
+    done INTEGER NOT NULL DEFAULT 0,
+    completed_at INTEGER,             -- milliseconds since the epoch, NULL while open
+    position REAL NOT NULL,           -- manual order among open tasks, ascending
+    created_at INTEGER NOT NULL       -- milliseconds since the epoch
+);
+CREATE INDEX IF NOT EXISTS tasks_by_subject ON tasks (user_id, subject_id);

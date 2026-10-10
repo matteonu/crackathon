@@ -100,6 +100,17 @@ cd frontend && npm install && npm start
 Serving the built frontend instead of the dev server: `cd frontend && npm run build`, then open
 <http://localhost:8080>.
 
+**Or run it in Docker, in dev mode:**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build   # :8080 as alice@ethz.ch
+```
+
+Plain `docker compose up -d --build` is the production setup: it expects the reverse proxy to
+say who is calling, and locally there is none, so every `/api` route answers 401 and the file
+library, the TODO list and the dashboard show "unauthorized". That is not a bug. Use the dev
+override locally (it also loads the demo data and sets `DEV_USER`); see "Who is signed in".
+
 **Checks:**
 
 ```bash
@@ -167,6 +178,12 @@ JSON the frontend sends. The server never reads inside them, so the card shape c
 without a migration. Everything else -- names, parents, categories, uniqueness within a
 folder -- is validated server-side, and every row is scoped to the caller: another user's id
 is a 404, not a peek.
+
+**Tasks.** Each subject has a TODO list (`backend/tasks.py`, `/api/tasks`, table `tasks`),
+one row per task with title, notes, due date, done flag and a manual position; new tasks go
+to the top, done ones are listed separately and can be cleared per subject. Same rules as
+materials: validated server-side and scoped to the caller. The frontend side is
+`TaskStore` and `TaskListComponent` in the subject sidebar.
 
 The study plan itself (subjects, hours, sessions) is still kept in the browser by
 `StudyStore`. Moving it to the server is the next step, and the shape to aim for is in
