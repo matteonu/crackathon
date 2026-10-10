@@ -10,23 +10,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # main is only ever fast-forwarded to dev, so every commit here is also on dev.
-  # Anything else is a mistake, and a mistake must not reach the VM.
+  # Everything we deploy goes through dev first. A pull request's merge button rewrites
+  # commits, so identical content counts: what must not reach the VM is a change that
+  # was never on dev at all, such as a fix committed straight onto main.
   from-dev:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: This commit must already be on dev
+      - name: This commit must come from dev
         run: |
           git fetch origin dev
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/dev; then
-            echo "::error::$GITHUB_SHA is not on origin/dev, so it is not deployed."
-            echo "Merge into dev first, then: git switch main && git merge --ff-only origin/dev"
-            exit 1
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/dev; then
+            echo "$GITHUB_SHA is a commit on dev."
+            exit 0
           fi
-          echo "$GITHUB_SHA is on dev."
+          tree=$(git rev-parse "$GITHUB_SHA^{tree}")
+          if git rev-list origin/dev --max-count=300 --pretty=%T --no-commit-header | grep -qx "$tree"; then
+            echo "$GITHUB_SHA is not on dev, but its content is identical to a commit on dev."
+            exit 0
+          fi
+          echo "::error::$GITHUB_SHA holds changes that were never on dev, so it is not deployed."
+          echo "Open a pull request from dev into main instead of committing on main."
+          exit 1
 
   check:
     runs-on: ubuntu-latest

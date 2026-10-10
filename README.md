@@ -27,23 +27,22 @@ Nobody force-pushes `dev`.
 
 ### Releasing to the VM
 
-```bash
-git switch main && git pull
-git merge --ff-only origin/dev        # main stays exactly a dev commit
-git push                              # this deploys
-```
+`main` is protected: it cannot be pushed to, so a release is a pull request from `dev` into
+`main`. Open it at
+<https://github.com/matteonu/crackathon/compare/main...dev>, merge it, and the merge deploys.
 
-`--ff-only` is the point: every commit on `main` is also on `dev`, so there is nothing on
-`main` that was never integrated, and rolling back is one commit. Then watch the Actions run
--- it refuses to deploy if the tests fail or the container does not come back healthy -- and
-**open <https://13.hackathon.ethz.ch> yourself**. A health check does not catch a blank page.
+Then watch the Actions run -- it refuses to deploy if the tests fail or if the container does
+not come back healthy -- and **open <https://13.hackathon.ethz.ch> yourself**. A health check
+does not catch a blank page.
 
-Rolling back, in order of preference:
+Rolling back:
 
 ```bash
-git revert <bad-sha> && git push                              # forward fix, redeploys
-git reset --hard <good-sha> && git push --force-with-lease     # only if a revert is messy
+git switch dev && git revert <bad-sha> && git push   # then release dev again
 ```
+
+Reverting on `dev` and releasing keeps the two branches in step. Resetting `main` by hand
+needs the ruleset turned off, so it is a last resort.
 
 Merge `dev` into `main` early and often, not once at the deadline: each release is a
 rehearsal of the thing that has to work on Sunday. Freeze `main` a couple of hours before
@@ -52,22 +51,22 @@ noon and only revert after that. Never `ssh` in and edit files on the VM -- the 
 
 ### What keeps a stray commit off main
 
-1. **The deploy refuses it.** The `from-dev` job in `.github/workflows/deploy.yml` checks
-   that the pushed commit is already on `origin/dev` and fails the run otherwise, so the VM
-   never sees it. A non-fast-forward merge commit fails this too, which is deliberate.
+1. **The deploy refuses it.** The `from-dev` job in `.github/workflows/deploy.yml` fails the
+   run unless the commit is on `origin/dev` or holds content identical to a commit there, so
+   a fix committed straight onto `main` never reaches the VM. A merge button rewrites commits,
+   which is why identical content counts.
 2. **A pre-push hook catches the accident locally.** Run this once per clone:
 
    ```bash
    git config core.hooksPath .githooks
    ```
 
-   It then refuses to push anything to `main` that is not on `origin/dev`, and refuses to
-   delete `main`. `--no-verify` skips it, so it is a seatbelt, not a wall.
-3. **A branch ruleset on GitHub** is the only server-side half, and needs repo admin:
-   Settings -> Rules -> Rulesets -> New branch ruleset, target `main`, and enable *Require a
-   pull request before merging*, *Require status checks* (`from-dev` and `check`), *Require
-   linear history*, *Block force pushes* and *Restrict deletions*. With those on, a direct
-   push to `main` is rejected by GitHub itself.
+   It then refuses to push `main` anything whose content was never on `origin/dev`, and
+   refuses to delete `main`. `--no-verify` skips it, so it is a seatbelt, not a wall.
+3. **The branch ruleset on GitHub** already requires a pull request for `main`, which is why
+   a direct push is rejected outright. Worth adding to it, if you have repo admin: *Require
+   status checks* (`from-dev` and `check`), so a red run cannot be merged at all, and *Block
+   force pushes*.
 
 ## Running the app
 
