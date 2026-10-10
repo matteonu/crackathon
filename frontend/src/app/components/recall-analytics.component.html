@@ -1,0 +1,23 @@
+<section class="panel anki-panel" aria-labelledby="recall-title">
+  <div class="panel-heading"><div><div class="section-label">FLASHCARD PROGRESS</div><h2 id="recall-title">Your recall progress.</h2><p>Expand a folder to explore its decks. Select its name for detailed analytics.</p></div><button class="button secondary" (click)="scheduler.refreshAnalytics()">Refresh</button></div>
+  @if(scheduler.analyticsError()){<p class="form-error" role="alert">{{scheduler.analyticsError()}}</p>}
+  <div class="chart-legend"><span><i class="snapshot-mature"></i>Mature</span><span><i class="snapshot-learned"></i>Learned</span><span><i class="snapshot-left"></i>Left</span></div>
+  <div class="horizontal-scroll" tabindex="0" role="region" aria-label="Flashcard folder progress"><table class="anki-table recall-table"><thead><tr><th>Folder / deck</th><th>Progress</th><th>Mature</th><th>Learned</th><th>Left</th><th>Total</th></tr></thead><tbody>
+    @for(item of rows();track item.key){<tr><th scope="row"><div class="recall-folder" [style.--depth]="item.depth">
+      @if(item.hasChildren){<button class="tree-chevron" [attr.aria-label]="(expanded().has(item.key)?'Collapse ':'Expand ')+name(item.row)" [attr.aria-expanded]="expanded().has(item.key)" (click)="toggle(item.key)"><app-icon [name]="expanded().has(item.key)?'down':'right'" /></button>}@else{<span class="tree-chevron tree-spacer"></span>}
+      <button class="recall-folder-name" [attr.aria-label]="'Detailed analytics for '+name(item.row)" (click)="showDetails(item.row)">{{name(item.row)}}</button>
+    </div></th><td><div class="snapshot-progress"><div class="stacked-bar" [attr.aria-label]="item.snapshot.mature+' mature, '+item.snapshot.learned+' learned, '+item.snapshot.left+' left'"><span class="snapshot-mature" [style.width.%]="item.snapshot.total?item.snapshot.mature/item.snapshot.total*100:0"></span><span class="snapshot-learned" [style.width.%]="item.snapshot.total?item.snapshot.learned/item.snapshot.total*100:0"></span><span class="snapshot-left" [style.width.%]="item.snapshot.total?item.snapshot.left/item.snapshot.total*100:0"></span></div><small>{{item.snapshot.progress | number:'1.0-0'}}%</small></div></td><td>{{item.snapshot.mature}}</td><td>{{item.snapshot.learned}}</td><td>{{item.snapshot.left}}</td><td><strong>{{item.snapshot.total}}</strong></td></tr>}
+    @empty{<tr><td colspan="6">No flashcard decks yet.</td></tr>}
+  </tbody></table></div>
+  <p class="field-hint">Mature: review interval ≥ 21 days · Learned: seen but not mature · Left: unseen. Folder totals include all descendants.</p>
+</section>
+<dialog #detailDialog class="edit-dialog recall-detail-dialog" aria-label="Detailed folder analytics" (close)="selectedKey.set(null)">
+  <div class="dialog-top"><span class="eyebrow">FOLDER ANALYTICS</span><button class="icon-button" aria-label="Close detailed analytics" (click)="detailDialog.close()"><app-icon name="close" /></button></div>
+  @if(selected();as row){
+    <h2>{{name(row)}}</h2><p class="muted">{{label(row.label)}}</p>
+    <div class="recall-metrics"><div><span>Reviews</span><strong>{{row.reviews}}</strong></div><div><span>Success rate</span><strong>{{row.success_rate===null?'—':(row.success_rate*100 | number:'1.0-1')+'%'}}</strong></div><div><span>Mistakes</span><strong>{{row.mistakes}}</strong></div><div><span>Lapses</span><strong>{{row.lapses}}</strong></div></div>
+    <div class="recall-charts"><figure><figcaption>Review ratings</figcaption>@for(bar of ratingBars();track bar.label){<div class="recall-chart-row"><span>{{bar.label}}</span><div class="recall-chart-track"><i [class]="bar.color" [style.width.%]="bar.percent"></i></div><strong>{{bar.value}}</strong></div>}@if(!row.reviews){<p class="field-hint">No reviews recorded yet.</p>}</figure><figure><figcaption>Card states</figcaption>@for(bar of stateBars();track bar.label){<div class="recall-chart-row"><span>{{bar.label}}</span><div class="recall-chart-track"><i [class]="bar.color" [style.width.%]="bar.percent"></i></div><strong>{{bar.value}}</strong></div>}</figure></div>
+    <dl class="recall-secondary-metrics"><div><dt>Due cards</dt><dd>{{row.due_cards}}</dd></div><div><dt>Overdue review cards</dt><dd>{{row.overdue_review_cards}}</dd></div><div><dt>Average interval</dt><dd>{{row.average_interval_days | number:'1.0-2'}} days</dd></div><div><dt>Average response time</dt><dd>{{row.average_response_seconds===null?'—':(row.average_response_seconds | number:'1.0-1')+' s'}}</dd></div></dl>
+    <p class="field-hint">Includes this collection and its descendants. Success rate is the share of reviews rated Hard, Good, or Easy.</p>
+  }
+</dialog>

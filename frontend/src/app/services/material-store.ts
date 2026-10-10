@@ -3,7 +3,7 @@ import { Material, MaterialCategory, MaterialKind, Flashcard, LearningMode, Lear
 import { learningPatch } from '../models/learning';
 import { LearningPipelineService } from './learning-pipeline.service';
 
-type MaterialPatch=Partial<Pick<Material,'category'|'type'|'marker'|'outputs'|'name'|'description'|'parentId'|'content'|'processing'>>;
+type MaterialPatch=Partial<Pick<Material,'category'|'type'|'marker'|'outputs'|'name'|'description'|'parentId'|'content'|'processing'|'folderWeight'>>;
 class MaterialRequestError extends Error {
   constructor(readonly status:number,message:string){super(message);}
 }
@@ -64,7 +64,7 @@ export class MaterialStore {
     this.files.update(values=>values.some(f=>f.id===saved.id)?values.map(f=>f.id===saved.id?saved:f):[...values,saved]);
     return saved;
   }
-  async create(subjectId:string,parentId:string|null,kind:Exclude<MaterialKind,'pdf'>,name:string):Promise<Material>{
+  async create(subjectId:string,parentId:string|null,kind:Exclude<MaterialKind,'pdf'|'deck'>,name:string):Promise<Material>{
     return this.queue(async()=>{
       this.assertParent(subjectId,parentId);
       const content=kind==='md'?'# New note\n\nStart writing here.\n':'';
@@ -100,7 +100,11 @@ export class MaterialStore {
     try{
       // The response includes every row removed from this folder's subtree.
       const result=await this.request<{deleted:string[]}>(`/api/materials/${id}`,{method:'DELETE'});
-      this.forget(id,result.deleted);this.error.set('');return true;
+      this.forget(id,result.deleted);
+      // Independent decks survive source deletion with their PDF reference cleared.
+      try{this.files.set((await this.request<Material[]>('/api/materials')).map(normalizeMaterial));}
+      catch{/* Keep the known committed deletion if a background refresh fails. */}
+      this.error.set('');return true;
     }catch(e){
       if(e instanceof MaterialRequestError&&e.status===404){this.forget(id);this.error.set('');return true;}
       // A server error or lost response can happen after the deletion committed.
@@ -122,6 +126,7 @@ export class MaterialStore {
       if(!resume&&!await this.update(id,{processing:{status:'queued',mode,task,requestedQuestions}}))throw new Error(this.error());
       await this.pipeline.process(file,async result=>{
         if(!await this.update(id,current=>learningPatch(current,result)))throw new Error(this.error()||'Could not save generated results.');
+        if(result.status==='complete')await this.refresh();
       },resume,mode,task,requestedQuestions);
     }catch(e){await this.update(id,{processing:{status:'error',mode,task,requestedQuestions,error:e instanceof Error?e.message:'Processing failed. Retry this file.'}});}
     finally{this.activeJobs.delete(id);}
@@ -140,8 +145,7 @@ export class MaterialStore {
   });}
   appendCards(id:string,cards:Flashcard[]):Promise<boolean>{return this.queue(async()=>{
     const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)==='folder')return false;
-    const outputs={...file.outputs,flashcards:{cards:[...file.outputs?.flashcards?.cards??[],...cards.map(c=>({...c,id:crypto.randomUUID()}))]}};
-    try{this.store(await this.request<Material>(`/api/materials/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({outputs})}));return true;}
+    try{this.store(await this.request<Material>(`/api/materials/${id}/cards`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cards})}));return true;}
     catch(e){if(e instanceof MaterialRequestError&&e.status===404)this.forget(id);this.error.set(e instanceof Error?e.message:'Could not save flashcards. Please retry.');return false;}
   });}
 }

@@ -73,7 +73,7 @@ jobs retain completed checkpoints and expose a sanitized error for retry.
 
 ### Document types in SQLite
 
-`materials.kind` stores the format (`pdf`, `md`, `txt`, or `folder`). `materials.type`
+`materials.kind` stores the format (`pdf`, `md`, `txt`, `folder`, or `deck`). `materials.type`
 stores the document's purpose, independently of that format:
 
 | Upload option / legacy category | Stored `type` |
@@ -87,8 +87,9 @@ stores the document's purpose, independently of that format:
 Startup adds the column to existing databases and backfills these categories without
 removing rows, PDFs, or generated results. Folders have a null type; legacy Notes, Books,
 and Transcripts remain unclassified rather than being guessed. The schema also reserves
-`summary`, `cards`, and `mcq` from the backend roadmap; generated outputs still use the
-existing JSON storage described above.
+`summary`, `cards`, and `mcq` from the backend roadmap. Summaries and pipeline checkpoints
+use the JSON storage described above; generated flashcards also persist into an independent
+deck material and the `flashcards` table, with scheduler progress and review history.
 
 The materials API returns `type`. Create/update requests accept it, derive the matching
 display category, and reject invalid or conflicting type/category pairs. Older clients

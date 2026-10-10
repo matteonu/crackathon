@@ -163,7 +163,7 @@ into `backend/seed_demo/`.
 
 ## Files and materials
 
-A material is a folder, a lecture PDF or a small text note, and belongs to one user and one
+A material is a folder, a lecture PDF, a text note or a flashcard deck, and belongs to one user and one
 subject (`backend/materials.py`, `/api/materials`). The metadata is in SQLite; a PDF's bytes
 are written once to `data/learning/<id>/source.pdf`, which is also where the pipeline reads
 them, so nothing is stored twice and `POST /api/learning/documents/<id>` needs no body.
@@ -173,11 +173,35 @@ Each document also has a validated `type` flag (`slides`, `mock_exam`, `exercise
 migrated in place from their categories at startup. See the [learning pipeline documentation](backend/learning/README.md)
 for compatibility rules and the independent fast-summary model configuration.
 
-`outputs` (summary and flashcards) and `processing` (the last run's state) are stored as the
-JSON the frontend sends. The server never reads inside them, so the card shape can change
-without a migration. Everything else -- names, parents, categories, uniqueness within a
-folder -- is validated server-side, and every row is scoped to the caller: another user's id
-is a 404, not a peek.
+PDF summaries remain in `outputs`; `processing` stores the last pipeline run's state.
+Each PDF has one independent deck material, linked by nullable `source_pdf_id`.
+Generation replaces the deck's generated cards when its mode changes, preserves manual
+cards, and retains IDs and progress for unchanged question/answer pairs. Decks can move or
+be renamed independently. Deleting the PDF clears the source reference and retains its deck.
+
+`backend/schema.sql` declares `flashcards` (stable IDs and deck content),
+`flashcard_progress` (per-user, per-deck, per-card scheduler fields), and
+`flashcard_reviews` (rating history). Startup transactionally migrates old material schemas
+and embedded cards without resetting the database. Existing cards start as new cards.
+Changing card content resets its progress and increments its version; deck moves retain it.
+All materials, sessions, ratings and analytics are scoped to the signed-in user.
+
+The Python scheduler in `backend/learning/scheduler.py` is extracted from
+`anki_flashcard_scheduler.ipynb`. Its Anki-like SM-2 rules use Again/Hard/Good/Easy,
+1/10-minute learning steps, 1-day graduation (Easy: 4 days), ease-based reviews,
+relearning after lapses, and a 21-day maturity threshold. This is not Anki FSRS.
+`GET /api/practice/session` takes `subject`, optional `folder` or `deck`, `limit` (default 20),
+and `newCardLimit` (default 5). Eligible cards are interleaved recursively using positive
+folder weights (default 1). Limits apply per call; selection neither reserves cards nor
+changes progress. `POST /api/practice/review` atomically checks the card version, applies
+the notebook's transition, and records response timing and history. Duplicate or stale
+ratings receive a conflict. `GET /api/practice/analytics` aggregates scheduler statistics
+for the selected scope and every descendant folder/deck.
+
+The learning UI finishes each selected batch, shows the next due time, and enables another
+batch when due. The Analytics page shows expandable folder progress and detailed recall
+statistics. Space reveals answers and rates Good; 1/2/3/4 rate Again/Hard/Good/Easy on the back.
+`.apkg` exports still contain fresh cards, without this app's review progress.
 
 **Tasks.** Each subject has a TODO list (`backend/tasks.py`, `/api/tasks`, table `tasks`),
 one row per task with title, notes, due date, done flag and a manual position; new tasks go
