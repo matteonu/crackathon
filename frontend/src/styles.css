@@ -58,15 +58,26 @@ app-schedule, app-next, app-analytics, app-root { display: block; min-width: 0; 
 .sidebar-subjects a { padding: 9px 12px; display: flex; gap: 10px; align-items: center; font-size: 11px; color: #68756c; border-radius: 7px; }
 .sidebar-subjects a:hover, .sidebar-subjects a.active { background: #e2e8dc; color: #304735; }
 .nav-label-actions { display: inline-flex; align-items: center; gap: 8px; }
-.sidebar-subjects .add-course { width: 22px; height: 22px; border-radius: 6px; }
-.sidebar-subjects .add-course app-icon { width: 12px; height: 12px; }
-.sidebar-subject { position: relative; display: flex; align-items: center; }
+/* Notion-like section header: the row tints on hover, the + is a bare icon with its own hover tint. */
+.sidebar-subjects > .nav-label { margin: 0 0 8px; padding: 4px 6px 4px 12px; min-height: 30px; border-radius: 7px; transition: background .15s; }
+.sidebar-subjects > .nav-label:hover { background: #e2e8dc; }
+.sidebar-subjects .add-course { width: 24px; height: 24px; border: none; border-radius: 5px; background: transparent; color: #7d8a7c; }
+.sidebar-subjects .add-course:hover:not(:disabled) { background: #d3dccb; border: none; color: #304735; }
+.sidebar-subjects .add-course:focus-visible { outline: 2px solid #9fb596; outline-offset: 0; }
+.sidebar-subjects .add-course app-icon { width: 15px; height: 15px; }
+.sidebar-subject { position: relative; display: flex; align-items: center; min-width: 0; }
 .sidebar-subject > a { flex: 1; min-width: 0; padding-right: 30px; }
 .sidebar-subject > a > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.remove-course { position: absolute; right: 6px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; border-radius: 5px; background: transparent; color: #8b958a; opacity: 0; cursor: pointer; }
-.remove-course app-icon { width: 11px; height: 11px; }
-.sidebar-subject:hover .remove-course, .remove-course:focus-visible { opacity: 1; }
-.remove-course:hover { background: #d9e1d2; color: #9f453f; }
+.course-menu-button { position: absolute; right: 6px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; border-radius: 5px; background: transparent; color: #68756c; opacity: 0; cursor: pointer; }
+.course-menu-button app-icon { width: 14px; height: 14px; }
+.sidebar-subject:hover .course-menu-button, .course-menu-button:focus-visible, .sidebar-subject.menu-open .course-menu-button { opacity: 1; }
+.course-menu-button:hover, .sidebar-subject.menu-open .course-menu-button { background: #d9e1d2; color: #304735; }
+.course-menu { position: absolute; top: calc(100% + 2px); right: 4px; z-index: 20; min-width: 150px; padding: 5px; background: white; border: 1px solid #dfe6d6; border-radius: 9px; box-shadow: 0 10px 30px #1e301e24; }
+.course-menu [role=menuitem] { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: none; border-radius: 6px; background: transparent; font-size: 12px; color: #3d5134; text-align: left; cursor: pointer; }
+.course-menu [role=menuitem] app-icon { width: 14px; height: 14px; }
+.course-menu [role=menuitem]:hover, .course-menu [role=menuitem]:focus-visible { background: #f2f6ed; }
+.course-menu [role=menuitem].danger { color: #9f453f; }
+.course-menu [role=menuitem].danger:hover, .course-menu [role=menuitem].danger:focus-visible { background: #fff3f0; }
 .sidebar-hint { padding: 4px 12px; font-size: 11px; line-height: 1.6; color: #8b958a; }
 .course-search-dialog { width: min(620px, calc(100vw - 32px)); }
 .course-search-dialog input[type=search] { width: 100%; margin-bottom: 14px; }

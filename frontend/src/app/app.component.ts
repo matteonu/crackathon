@@ -1,4 +1,4 @@
-import { Component, ElementRef, inject, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, NavigationEnd, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
@@ -15,6 +15,20 @@ export class AppComponent {
   readonly main=viewChild<ElementRef<HTMLElement>>('main');
   readonly settings=viewChild<ElementRef<HTMLDialogElement>>('settings');
   constructor(){this.router.events.pipe(filter(e=>e instanceof NavigationEnd),takeUntilDestroyed()).subscribe(()=>{requestAnimationFrame(()=>{this.main()?.nativeElement.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});});});}
+  /** The sidebar course whose ⋯ menu is open. */
+  readonly menuFor=signal<string|null>(null);
+  toggleMenu(id:string,event:Event):void {
+    event.stopPropagation();
+    const opening=this.menuFor()!==id;this.menuFor.set(opening?id:null);
+    // Move focus into the menu so it can be used from the keyboard.
+    if(opening)requestAnimationFrame(()=>document.querySelector<HTMLElement>('.course-menu [role=menuitem]')?.focus());
+  }
+  @HostListener('document:click') closeMenu():void {this.menuFor.set(null);}
+  @HostListener('document:keydown.escape') closeMenuOnEscape():void {
+    const id=this.menuFor();if(!id)return;
+    this.menuFor.set(null);
+    document.querySelector<HTMLElement>(`.sidebar-subject a[href$="${id}"] + .course-menu-button`)?.focus();
+  }
   openSettings():void {this.settings()?.nativeElement.showModal();}
   async removeCourse(subject:Subject):Promise<void> {
     if(!confirm(`Remove ${subject.name} from ${this.store.data().semester}? Its recorded hours and planned sessions are deleted too. Your materials stay and come back if you add the course again.`))return;
