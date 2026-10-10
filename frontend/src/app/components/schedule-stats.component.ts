@@ -61,7 +61,7 @@ const DAY_W = 18, CHART_H = 150, PAD_L = 34, PAD_B = 26, PAD_T = 18;
           <rect class="planned" [attr.x]="xWeek(i)+weekSlot()*0.5" [attr.y]="yScale(w.planned,weekMax())" [attr.width]="weekSlot()*0.3" [attr.height]="yScale(0,weekMax())-yScale(w.planned,weekMax())" rx="2"><title>Week of {{dayLabel(w.start)}}: {{w.planned}} h planned</title></rect>
           <rect class="recorded" [attr.x]="xWeek(i)+weekSlot()*0.15" [attr.y]="yScale(w.recorded,weekMax())" [attr.width]="weekSlot()*0.3" [attr.height]="yScale(0,weekMax())-yScale(w.recorded,weekMax())" rx="2"><title>Week of {{dayLabel(w.start)}}: {{w.recorded}} h recorded</title></rect>
           <line class="target-tick" [attr.x1]="xWeek(i)+weekSlot()*0.1" [attr.x2]="xWeek(i)+weekSlot()*0.9" [attr.y1]="yScale(w.target,weekMax())" [attr.y2]="yScale(w.target,weekMax())"><title>Target share {{w.target}} h</title></line>
-          <text class="axis" [attr.x]="xWeek(i)+weekSlot()/2" [attr.y]="chartHeight-8" text-anchor="middle">{{shortDate(w.start)}}</text>
+          @if(i%weekLabelEvery()===0){<text class="axis" [attr.x]="xWeek(i)+weekSlot()/2" [attr.y]="chartHeight-8" text-anchor="middle">{{shortDate(w.start)}}</text>}
         }
         <line class="baseline" [attr.x1]="padL" [attr.x2]="smallW" [attr.y1]="yScale(0,weekMax())" [attr.y2]="yScale(0,weekMax())" />
       </svg>
@@ -117,6 +117,7 @@ export class ScheduleStatsComponent {
   readonly profileMax=computed(()=>Math.max(1,...this.profile()));
   readonly dailyWidth=computed(()=>PAD_L+this.days().length*DAY_W+8);
   readonly weekSlot=computed(()=>(this.smallW-PAD_L)/Math.max(1,this.weeks().length));
+  readonly weekLabelEvery=computed(()=>Math.max(1,Math.ceil(this.weeks().length/7)));   // at most ~7 week labels
   readonly daySlot=computed(()=>(this.smallW-PAD_L)/7);
   readonly phaseLabel=computed(()=>`${this.store.data().semester} study phase`);
   readonly paceBadge=computed(()=>{const p=this.pace();const d=Math.round((p.recorded-p.expected)*10)/10;return d>=0?`${d} h ahead of pace`:`${Math.abs(d)} h behind pace`;});
