@@ -35,7 +35,6 @@ export class FolderFlashcardsComponent implements OnDestroy {
   });
   private batchLimit=20;private batchNewLimit=5;
   private displayedAt=0;private offset=0;private destroyed=false;private readonly timer=setInterval(()=>this.clock.set(Date.now()+this.offset),1000);
-<<<<<<< HEAD
   constructor(){
     effect(()=>{if(this.learning())untracked(()=>void this.start());});
     effect(()=>{
@@ -45,9 +44,6 @@ export class FolderFlashcardsComponent implements OnDestroy {
       });
     });
   }
-=======
-  constructor(){effect(()=>{if(this.learning())untracked(()=>void this.start());});}
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
   ngOnDestroy():void{this.destroyed=true;clearInterval(this.timer);}
   onKeydown(event:KeyboardEvent):void{
     if(!this.learning()||!this.current()||event.defaultPrevented||event.isComposing||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
@@ -75,10 +71,7 @@ export class FolderFlashcardsComponent implements OnDestroy {
       this.offset=Date.parse(session.serverNow)-Date.now();this.clock.set(Date.now()+this.offset);
       this.queue.set(session.cards);this.reviewed.set(0);this.revealed.set(false);this.nextDue.set(session.nextDue);this.dueCount.set(session.dueCount);this.available.set(false);this.displayedAt=performance.now();
       void this.refreshSummary();
-<<<<<<< HEAD
       if(!session.cards.length&&(limit!==this.limit()||newLimit!==this.newLimit()))await this.fetchNext();
-=======
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
     }catch(e){this.error.set(e instanceof Error?e.message:'Could not start learning.');}finally{this.busy.set(false);}
   }
   async rate(rating:Rating):Promise<void>{
@@ -100,17 +93,10 @@ export class FolderFlashcardsComponent implements OnDestroy {
     // An unfinished numeric edit must not turn a successfully saved review into an error.
     const limit=this.validLimits()?this.limit():this.batchLimit,newLimit=this.validLimits()?this.newLimit():this.batchNewLimit;
     const session=await this.scheduler.session(this.scope(),limit,newLimit);if(this.destroyed)return;
-<<<<<<< HEAD
     if(this.validLimits()&&(limit!==this.limit()||newLimit!==this.newLimit()))return this.fetchNext();
     this.nextDue.set(session.nextDue);this.dueCount.set(session.dueCount);this.available.set(session.cards.length>0);
   }
   private async refreshSummary():Promise<void>{try{const rows=await this.scheduler.statistics(this.scope());if(!this.destroyed)this.summary.set(rows[0]??null);}catch{/* Review errors are shown separately; summary can refresh next time. */}}
   private async refreshAvailability():Promise<void>{if(this.busy()||!this.validLimits())return;this.busy.set(true);this.error.set('');try{await this.fetchNext();}catch(e){this.error.set(e instanceof Error?e.message:'Could not load the next session.');}finally{this.busy.set(false);}}
-=======
-    this.nextDue.set(session.nextDue);this.dueCount.set(session.dueCount);this.available.set(session.cards.length>0);
-  }
-  private async refreshSummary():Promise<void>{try{const rows=await this.scheduler.statistics(this.scope());if(!this.destroyed)this.summary.set(rows[0]??null);}catch{/* Review errors are shown separately; summary can refresh next time. */}}
-  async checkNext():Promise<void>{if(this.busy()||!this.validLimits())return;this.busy.set(true);this.error.set('');try{await this.fetchNext();}catch(e){this.error.set(e instanceof Error?e.message:'Could not check availability.');}finally{this.busy.set(false);}}
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
   delay(seconds:number):string{const days=Math.round(seconds/86400*10)/10;return seconds<3600?`${Math.round(seconds/60*10)/10} min`:seconds<86400?`${Math.round(seconds/3600*10)/10} h`:`${days} ${days===1?'day':'days'}`;}
 }

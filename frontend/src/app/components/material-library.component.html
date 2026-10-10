@@ -29,14 +29,8 @@
             <button class="icon-button small delete-material" [attr.aria-label]="'Delete folder '+row.material.name" title="Delete folder" [disabled]="deleting().has(row.material.id)" (click)="requestFolderDelete(row.material.id)"><app-icon name="trash" /></button>
           </div>
         }@else{
-<<<<<<< HEAD
           <span class="tree-chevron tree-spacer"></span><button class="explorer-name" (click)="open(row.material.id)"><span class="file-type-icon" [class.pdf-type]="kind(row.material)==='pdf'">{{kind(row.material)==='md'?'M↓':kind(row.material).toUpperCase()}}</span><span class="tree-file-label"><span class="tree-file-heading"><strong>{{row.material.name}}</strong>@if(kind(row.material)==='pdf'){<span class="tree-document-type">{{typeLabel(row.material)}}</span>}</span>@if(row.material.description){<small>{{row.material.description}}</small>}</span></button>
           @if(row.material.processing?.status==='queued'||row.material.processing?.status==='running'){<span class="processing-status" role="status"><app-loading-dots [label]="row.material.processing.task==='summary'?'Writing summary':'Generating flashcards'" /></span>}
-=======
-          @if(kind(row.material)==='pdf'||kind(row.material)==='deck'){<button class="icon-button small delete-material" [attr.aria-label]="'Delete '+row.material.name" [title]="kind(row.material)==='deck'?'Delete deck':'Delete PDF'" [disabled]="deleting().has(row.material.id)" (click)="remove(row.material.id)"><app-icon name="trash" /></button>}
-          <span class="tree-chevron tree-spacer"></span><button class="explorer-name" (click)="open(row.material.id)"><span class="file-type-icon" [class.pdf-type]="kind(row.material)==='pdf'">{{kind(row.material)==='md'?'M↓':kind(row.material).toUpperCase()}}</span><span class="tree-file-label"><strong>{{row.material.name}}</strong>@if(row.material.description){<small>{{row.material.description}}</small>}</span></button>
-          @if(row.material.processing?.status==='queued'||row.material.processing?.status==='running'){<span class="processing-status" role="status"><app-loading-dots [label]="row.material.processing.mode==='deep'?'Reading full PDF':'Reading PDF text'" /></span>}
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
           @if(row.material.processing?.status==='error'){<button class="text-button processing-status failed" (click)="open(row.material.id)">Processing failed · Retry</button>}
           <select class="tree-marker" [attr.aria-label]="'Marker for '+row.material.name" [ngModel]="row.material.marker" (ngModelChange)="setMarker(row.material.id,$event)">@for(m of markers;track m){<option>{{m}}</option>}</select>
           <button class="icon-button small delete-material" [attr.aria-label]="'Delete '+row.material.name" title="Delete file" [disabled]="deleting().has(row.material.id)" (click)="remove(row.material.id)"><app-icon name="minus" /></button>
@@ -50,7 +44,6 @@
 <dialog #createDialog class="edit-dialog" aria-labelledby="create-title"><form (ngSubmit)="create()"><div class="dialog-top"><span class="eyebrow">IN {{folderName()}}</span><button type="button" class="icon-button" aria-label="Cancel creation" (click)="createDialog.close()"><app-icon name="close" /></button></div><h2 id="create-title">New {{createType==='folder'?'folder':createType==='md'?'Markdown file':'text file'}}</h2><label>Name<input name="new-name" aria-label="New item name" [(ngModel)]="newName" [placeholder]="createType==='folder'?'e.g. Week 1':createType==='md'?'e.g. Lecture notes.md':'e.g. Questions.txt'" maxlength="180" required autofocus></label>@if(creationError()){<p class="form-error" role="alert">{{creationError()}}</p>}<div class="dialog-actions"><button class="text-button" type="button" (click)="createDialog.close()">Cancel</button><button class="button primary" type="submit" [disabled]="creating()||!newName.trim()">{{creating()?'Creating…':'Create'}}</button></div></form></dialog>
 <dialog #collectionDialog class="edit-dialog folder-cards-dialog" aria-label="Folder flashcards" (close)="collectionOpen.set(false)"><div class="dialog-top"><span class="eyebrow">MATERIALS / FLASHCARDS</span><button class="icon-button" aria-label="Close folder flashcards" (click)="collectionDialog.close()"><app-icon name="close" /></button></div>@if(collectionOpen()){<app-folder-flashcards [cards]="collectionCards()" [name]="collectionName()" [subjectId]="subjectId()" [folderId]="collectionFolder()" (openFile)="openSource($event)" (startLearning)="startLearning(collectionFolder())" />}</dialog>
 <dialog #learningDialog class="edit-dialog learning-dialog" aria-label="Flashcard learning" (close)="learningOpen.set(false)"><button class="icon-button learning-close" aria-label="Close learning" (click)="learningDialog.close()"><app-icon name="close" /></button>@if(learningOpen()){<app-folder-flashcards [cards]="learningCards()" [name]="learningName()" [subjectId]="subjectId()" [folderId]="learningFolder()" [deckId]="learningDeck()" [learning]="true" />}</dialog>
-<<<<<<< HEAD
 
 <dialog #deleteDialog class="edit-dialog" aria-labelledby="delete-folder-title" (close)="pendingDelete.set(null)">
   @if(pendingDelete();as folder){
@@ -60,5 +53,3 @@
     <div class="dialog-actions"><button type="button" class="button secondary" autofocus [disabled]="deleting().has(folder.id)" (click)="deleteDialog.close()">Cancel</button><button type="button" class="button danger" [disabled]="deleting().has(folder.id)" (click)="confirmFolderDelete()">{{deleting().has(folder.id)?'Deleting…':'Delete folder'}}</button></div>
   }
 </dialog>
-=======
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0

@@ -86,12 +86,9 @@ def replace_cards(conn, deck_id, cards):
             VALUES(?,?,?,?)""", (deck["user_id"], deck_id, card_id, utc_now()))
         seen.add(card_id)
     for card_id in existing.keys() - seen:
-<<<<<<< HEAD
         # Startup rebuilds materials with foreign keys disabled inside its transaction.
         # Perform this cascade explicitly too, so removed cards cannot orphan progress.
         conn.execute("DELETE FROM flashcard_progress WHERE card_id=? AND deck_id=?", (card_id, deck_id))
-=======
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
         conn.execute("DELETE FROM flashcards WHERE id=? AND deck_id=?", (card_id, deck_id))
 
 
@@ -122,15 +119,11 @@ def migrate_embedded_cards(conn):
             continue
         cards = outputs["flashcards"].get("cards", [])
         if cards:
-<<<<<<< HEAD
             validate_cards(cards)
-=======
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
             mode = (json.loads(source["processing"] or "{}")).get("mode", "shallow")
             deck_id = ensure_deck(conn, source, mode if source["kind"] == "pdf" else None)
             if source["kind"] != "pdf":
                 conn.execute("UPDATE materials SET source_pdf_id=NULL WHERE id=?", (deck_id,))
-<<<<<<< HEAD
             # An older app can write embedded cards after this PDF already has a deck.
             # Reuse its identities and progress; consume matches once for duplicate Q/A.
             available = deck_cards(conn, deck_id)
@@ -147,10 +140,6 @@ def migrate_embedded_cards(conn):
                                  "id": match["id"] if match else str(uuid.uuid4())})
             migrated.extend(c for c in available if not c["generated"] and not c["demo"])
             replace_cards(conn, deck_id, migrated)
-=======
-            # Legacy IDs might be reused by different PDFs; fresh UUIDs are stable thereafter.
-            replace_cards(conn, deck_id, [{**c, "id": str(uuid.uuid4())} for c in cards])
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
         del outputs["flashcards"]
         conn.execute("UPDATE materials SET outputs=? WHERE id=?", (json.dumps(outputs), source["id"]))
 
@@ -164,7 +153,6 @@ def persist_result(conn, source_id, result):
         source = conn.execute("SELECT * FROM materials WHERE id=? AND kind='pdf'", (source_id,)).fetchone()
         if not source:
             return
-<<<<<<< HEAD
         task = result.get("task", "flashcards")
         if task == "flashcards":
             sync_generated(conn, source, document["questions"], result.get("mode", "shallow"))
@@ -175,13 +163,5 @@ def persist_result(conn, source_id, result):
         processing = {"status": "complete", "mode": result.get("mode", "shallow"), "task": task,
                       "requestedQuestions": (previous.get("requestedQuestions") or 60) if task == "summary"
                       else result.get("requested_questions", 60), "error": ""}
-=======
-        sync_generated(conn, source, document["questions"], result.get("mode", "shallow"))
-        outputs = json.loads(source["outputs"] or "{}")
-        outputs.pop("flashcards", None)
-        outputs["summary"] = {"text": document["abstract"]}
-        processing = {"status": "complete", "mode": result.get("mode", "shallow"),
-                      "requestedQuestions": result.get("requested_questions", 60), "error": ""}
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
         conn.execute("UPDATE materials SET outputs=?,processing=? WHERE id=?",
                      (json.dumps(outputs), json.dumps(processing), source_id))

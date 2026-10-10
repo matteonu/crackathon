@@ -96,7 +96,6 @@ def init_db():
                 db.execute('ALTER TABLE materials_new RENAME TO materials')
             for statement in statements:
                 db.execute(statement)
-<<<<<<< HEAD
             for table, added_columns in ADDED_COLUMNS.items():
                 present = {row["name"] for row in db.execute(f'PRAGMA table_info("{table}")')}
                 for column, definition in added_columns:
@@ -111,12 +110,6 @@ def init_db():
                     'Foreign key check failed during deck migration: '
                     f'table={violation["table"]}, rowid={violation["rowid"]}, '
                     f'parent={violation["parent"]}, foreign_key={violation["fkid"]}')
-=======
-            from decks import migrate_embedded_cards
-            migrate_embedded_cards(db)
-            if db.execute('PRAGMA foreign_key_check').fetchone():
-                raise sqlite3.IntegrityError('Foreign key check failed during deck migration')
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
             db.commit()
         except Exception:
             db.rollback()
@@ -153,10 +146,7 @@ def reset_db():
                 cols = ", ".join(f'"{c}"' for c in row)
                 marks = ", ".join("?" for _ in row)
                 db.execute(f'INSERT INTO "{table}" ({cols}) VALUES ({marks})', list(row.values()))
-<<<<<<< HEAD
         migrate_material_types(db)
-=======
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
         from decks import migrate_embedded_cards
         migrate_embedded_cards(db)
 
@@ -172,11 +162,7 @@ def dump_seed():
     existing = {table: path for path, table in seed_files()}
     next_num = len(existing) + 1
     written = []
-<<<<<<< HEAD
     with closing(connect()) as db, db:
-=======
-    with closing(connect()) as db:
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
         tables = [r["name"] for r in db.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid"
         )]

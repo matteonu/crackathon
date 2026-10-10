@@ -179,7 +179,6 @@ class PersistedScheduler(unittest.TestCase):
         self.assertEqual(cards[2]['question'], 'Manual?')
         self.assertNotIn(first['id'], [c['id'] for c in self.session()['cards']])
 
-<<<<<<< HEAD
     def test_summary_completion_does_not_create_a_deck_or_reset_existing_cards(self):
         pdf = self.material()
         summary = {'status': 'complete', 'task': 'summary', 'mode': 'deep', 'requested_questions': 0,
@@ -206,8 +205,6 @@ class PersistedScheduler(unittest.TestCase):
         with self.app.app_context():
             self.assertEqual(db.get_db().execute('SELECT count(*) FROM flashcard_reviews').fetchone()[0], 1)
 
-=======
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
     def test_content_changes_reset_progress_and_invalidate_open_sessions(self):
         deck = self.generated(self.material())
         before = self.session()['cards'][0]
@@ -289,7 +286,6 @@ class PersistedScheduler(unittest.TestCase):
             self.assertEqual((row['n_times_seen'], row['status'], row['version']), (1, 'review', 1))
 
 
-<<<<<<< HEAD
     def test_startup_reconciles_embedded_cards_with_existing_progress(self):
         pdf = self.material()
         second = {'question': 'Second?', 'answer': 'Two.'}
@@ -347,8 +343,6 @@ class PersistedScheduler(unittest.TestCase):
         self.assertEqual(self.rate(first).status_code, 409)
 
 
-=======
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 class LegacyMigration(unittest.TestCase):
     def test_failed_migration_leaves_original_schema_and_content_intact(self):
         with tempfile.TemporaryDirectory() as temp:

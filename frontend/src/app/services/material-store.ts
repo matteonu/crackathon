@@ -3,14 +3,10 @@ import { Material, MaterialCategory, MaterialKind, Flashcard, LearningMode, Lear
 import { learningPatch } from '../models/learning';
 import { LearningPipelineService } from './learning-pipeline.service';
 
-<<<<<<< HEAD
 type MaterialPatch=Partial<Pick<Material,'category'|'type'|'marker'|'outputs'|'name'|'description'|'parentId'|'content'|'processing'|'folderWeight'>>;
 class MaterialRequestError extends Error {
   constructor(readonly status:number,message:string){super(message);}
 }
-=======
-type MaterialPatch=Partial<Pick<Material,'category'|'marker'|'outputs'|'name'|'description'|'parentId'|'content'|'processing'|'folderWeight'>>;
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
 /** The file library, stored on the server: metadata in SQLite, PDFs and generated JSON on disk. */
 @Injectable({providedIn:'root'})
 export class MaterialStore {
@@ -59,7 +55,6 @@ export class MaterialStore {
   private assertParent(subjectId:string,parentId:string|null,id?:string):void {
     if(!validParent(this.files(),subjectId,parentId,id))throw new Error('Choose a folder in this subject. A folder cannot contain itself.');
   }
-  async refresh():Promise<void>{this.files.set((await this.request<Material[]>('/api/materials')).map(normalizeMaterial));}
   private assertUnique(file:Material):void {
     if(this.files().some(f=>f.id!==file.id&&f.subjectId===file.subjectId&&(f.parentId??null)===(file.parentId??null)&&f.name.toLowerCase()===file.name.toLowerCase()))throw new Error('That name already exists in this folder.');
   }
@@ -101,7 +96,6 @@ export class MaterialStore {
     });}catch(e){this.error.set(e instanceof Error?e.message:'Could not save PDFs. Please retry.');}finally{this.busy.set(false);for(const file of added)void this.process(file.id,false,'deep',60,'summary');}
   }
   remove(id:string):Promise<boolean>{return this.queue(async()=>{
-<<<<<<< HEAD
     const file=this.files().find(f=>f.id===id);if(!file)return true;
     try{
       // The response includes every row removed from this folder's subtree.
@@ -119,14 +113,6 @@ export class MaterialStore {
       catch{/* Keep the last known list when the server cannot be reached. */}
       this.error.set(e instanceof Error?e.message:'Could not delete this item. Please retry.');return false;
     }
-=======
-    const file=this.files().find(f=>f.id===id);if(!file||!['pdf','deck'].includes(materialKind(file)))return false;
-    try{
-      // The server deletes the row, the stored PDF and every generated result together.
-      await this.request(`/api/materials/${id}`,{method:'DELETE'});
-      await this.refresh();this.error.set('');return true;
-    }catch(e){this.error.set(e instanceof Error?e.message:'Could not delete this PDF. Please retry.');return false;}
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
   });}
   async process(id:string,resume=false,selectedMode?:LearningMode,count?:number,selectedTask?:LearningTask):Promise<void>{
     const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)!=='pdf'||this.activeJobs.has(id))return;
@@ -141,13 +127,8 @@ export class MaterialStore {
       await this.pipeline.process(file,async result=>{
         if(!await this.update(id,current=>learningPatch(current,result)))throw new Error(this.error()||'Could not save generated results.');
         if(result.status==='complete')await this.refresh();
-<<<<<<< HEAD
       },resume,mode,task,requestedQuestions);
     }catch(e){await this.update(id,{processing:{status:'error',mode,task,requestedQuestions,error:e instanceof Error?e.message:'Processing failed. Retry this file.'}});}
-=======
-      },resume,mode);
-    }catch(e){await this.update(id,{processing:{status:'error',mode,requestedQuestions,error:e instanceof Error?e.message:'Processing failed. Retry this file.'}});}
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
     finally{this.activeJobs.delete(id);}
   }
   update(id:string,change:MaterialPatch|((file:Material)=>MaterialPatch)):Promise<boolean>{return this.queue(async()=>{
@@ -165,10 +146,6 @@ export class MaterialStore {
   appendCards(id:string,cards:Flashcard[]):Promise<boolean>{return this.queue(async()=>{
     const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)==='folder')return false;
     try{this.store(await this.request<Material>(`/api/materials/${id}/cards`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cards})}));return true;}
-<<<<<<< HEAD
     catch(e){if(e instanceof MaterialRequestError&&e.status===404)this.forget(id);this.error.set(e instanceof Error?e.message:'Could not save flashcards. Please retry.');return false;}
-=======
-    catch(e){this.error.set(e instanceof Error?e.message:'Could not save flashcards. Please retry.');return false;}
->>>>>>> 08e7f8f77946891bcf932333d6d2f8c785987ee0
   });}
 }
