@@ -3,5 +3,19 @@ services:
     build: .
     ports:
       - "8080:8080"
-    env_file: .env
+    env_file:
+      # A fresh clone can start without one; the VM's .env holds SECRET_KEY and the model key.
+      - path: .env
+        required: false
+    # The database, uploaded PDFs and generated results live here. Without this bind
+    # mount, `docker compose up -d --build` would throw away everything users added.
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped
+    # `up --wait` uses this, so a deploy fails loudly instead of leaving a broken app.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s

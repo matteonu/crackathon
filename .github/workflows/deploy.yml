@@ -10,21 +10,59 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  # Everything we deploy goes through dev first. A pull request's merge button rewrites
+  # commits, so identical content counts: what must not reach the VM is a change that
+  # was never on dev at all, such as a fix committed straight onto main.
+  from-dev:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: This commit must come from dev
+        run: |
+          git fetch origin dev
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/dev; then
+            echo "$GITHUB_SHA is a commit on dev."
+            exit 0
+          fi
+          tree=$(git rev-parse "$GITHUB_SHA^{tree}")
+          if git rev-list origin/dev --max-count=300 --pretty=%T --no-commit-header | grep -qx "$tree"; then
+            echo "$GITHUB_SHA is not on dev, but its content is identical to a commit on dev."
+            exit 0
+          fi
+          echo "::error::$GITHUB_SHA holds changes that were never on dev, so it is not deployed."
+          echo "Open a pull request from dev into main instead of committing on main."
+          exit 1
+
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Build frontend
+      - name: Frontend checks
         working-directory: frontend
-        run: npm ci && npm run build
+        run: |
+          npm ci
+          npm run check
+          npm test
+          npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Backend tests
+        run: |
+          pip install -r backend/requirements.txt
+          cd backend && python -m unittest discover -s tests -t . -v
 
   deploy:
-    needs: build
+    needs: [from-dev, check]
     runs-on: ubuntu-latest
     steps:
       - name: Set up SSH
@@ -46,6 +84,14 @@ jobs:
             cd ~/crackathon
             git fetch origin main
             git reset --hard origin/main
-            docker compose up -d --build
+            [ -f .env ] || echo "WARNING: no .env on the VM, so SECRET_KEY and OPENAI_API_KEY are unset"
+            # --wait holds until the health check passes, so a broken image fails the job.
+            if ! docker compose up -d --build --wait; then
+              echo "::error::the app did not become healthy"
+              docker compose ps
+              docker compose logs --tail 80 app
+              exit 1
+            fi
             docker image prune -f
+            docker compose ps
           '

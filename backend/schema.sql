@@ -1,9 +1,13 @@
 -- Every table the app uses. Add new tables here; their starting data goes in backend/seed/.
 
+-- Identity comes from the reverse proxy, which authenticates every request and sends
+-- X-User-Id (the email) and X-User-Name. A row is created the first time we see an email;
+-- there are no passwords in this app.
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL COLLATE NOCASE,
+    display_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
     birth_date TEXT,                  -- 'YYYY-MM-DD'; age is computed from it
     study_start TEXT                  -- 'YYYY-MM-DD'
 );
@@ -54,3 +58,31 @@ CREATE TABLE IF NOT EXISTS statistics (
     -- the semester must belong to the same user
     FOREIGN KEY (semester_id, user_id) REFERENCES semesters(id, user_id) ON DELETE CASCADE
 );
+
+-- A user's file library per subject: folders, lecture PDFs and small text notes.
+-- The PDF bytes are not in here; they live in the pipeline's folder for the same id
+-- (DATA_DIR/learning/<id>/source.pdf), so an upload is stored exactly once.
+CREATE TABLE IF NOT EXISTS materials (
+    id TEXT PRIMARY KEY,              -- the uuid the browser generates
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    subject_id TEXT NOT NULL,         -- the subject's id in the frontend's study data
+    parent_id TEXT REFERENCES materials(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('folder', 'pdf', 'md', 'txt')),
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL,
+    marker TEXT NOT NULL,
+    size INTEGER NOT NULL DEFAULT 0,
+    content TEXT,                     -- md and txt only; PDFs keep their bytes on disk
+    sha256 TEXT,                      -- of the stored PDF
+    added_at INTEGER NOT NULL,        -- milliseconds since the epoch
+    -- Summaries, flashcards and the state of the last pipeline run, as the JSON the
+    -- frontend sends. The server stores them whole and never reads inside them.
+    outputs TEXT,
+    processing TEXT
+);
+
+-- One name per folder, per subject, per user, ignoring case. ifnull() covers the root,
+-- where parent_id is NULL and NULLs would otherwise all count as different.
+CREATE UNIQUE INDEX IF NOT EXISTS materials_unique_name
+    ON materials (user_id, subject_id, ifnull(parent_id, ''), lower(name));

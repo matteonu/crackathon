@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "email": "alice@ethz.ch",
+    "display_name": "Alice Example",
+    "birth_date": "2005-03-14",
+    "study_start": "2024-09-16"
+  },
+  {
+    "id": 2,
+    "email": "bob@ethz.ch",
+    "display_name": "Bob Example",
+    "birth_date": "2004-11-02",
+    "study_start": "2025-09-15"
+  }
+]

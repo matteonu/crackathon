@@ -1,0 +1,45 @@
+@if(file();as file){
+<div class="file-viewer" (click)="surfaceClick($event)" (keydown.escape)="escape($event)">
+  <form class="file-details" [formGroup]="details" (ngSubmit)="saveDetails()">
+    <label class="sr-only" for="file-title">File title</label><input id="file-title" class="editable-file-title" formControlName="name" maxlength="180" required (blur)="kind()==='pdf'&&saveDetails()">
+    @if(kind()==='pdf'){
+      <p class="generated-file-description" aria-label="Generated file summary" aria-live="polite">@if(file.outputs?.summary?.text){ {{file.outputs.summary.text}} }@else if(generating()){<app-loading-dots label="Generating a one-sentence summary" />}@else{ {{file.processing?.status==='error'?'Summary generation could not finish. Retry processing below.':'Process this PDF to generate its summary and flashcards.'}} }</p>
+    }@else{
+      <label class="sr-only" for="file-description">File description</label><textarea id="file-description" class="editable-file-description" formControlName="description" rows="2" maxlength="2000" placeholder="Add a short description of this file…"></textarea>
+    }
+    @if(kind()!=='pdf'){<div class="file-detail-actions"><button class="button secondary" type="submit" [disabled]="saving()">{{saving()?'Saving…':'Save details'}}</button></div>}
+  </form>
+  <div class="file-meta-bar"><button type="button" class="file-kind source-file-button" [attr.aria-label]="kind()==='pdf'?'Back to PDF':'Back to file'" [attr.aria-pressed]="!card()" (click)="returnToFile()">{{kind().toUpperCase()}}</button><a class="text-button" [href]="fileUrl()" [download]="file.name"><app-icon name="download" />Download file</a></div>
+  @if(error()||materials.error()){<p class="form-error" role="alert">{{error()||materials.error()}}</p>}<p class="viewer-notice" aria-live="polite">{{notice()}}</p>
+  @if(file.processing?.error){<p class="form-error" role="alert">{{file.processing!.error}}</p>}
+  <div class="file-viewer-columns">
+    <section #stage class="file-stage" aria-label="File and flashcard viewer">
+      <div class="file-stage-toolbar"><span>{{card()?'FLASHCARD PREVIEW':'SOURCE FILE'}}</span>@if(!card()&&kind()!=='pdf'){<button class="text-button" (click)="editing.set(!editing())">{{editing()?'Preview':'Edit file'}}</button>}</div>
+      <div [hidden]="!!card()" class="source-pane">
+        @if(kind()==='pdf'){<app-pdf-preview [url]="fileUrl()" [name]="file.name" />}
+        @else if(editing()){
+          <label class="sr-only" for="text-content">File content</label><textarea id="text-content" class="text-file-editor" [formControl]="content" spellcheck="false"></textarea><div class="action-buttons"><button class="button primary" (click)="saveContent()">Save file</button><button class="text-button" (click)="cancelContent()">Discard changes</button></div>
+        }@else{
+          <article class="text-file-preview" [class.markdown-preview]="kind()==='md'" aria-label="File content preview">
+            @if(!file.content){<p class="muted">This file is empty. Choose Edit file to start writing.</p>}
+            @else if(kind()==='txt'){<pre>{{file.content}}</pre>}
+            @else{@for(line of lines();track $index){@switch(heading(line)){@case(1){<h1>{{text(line)}}</h1>}@case(2){<h2>{{text(line)}}</h2>}@case(3){<h3>{{text(line)}}</h3>}@default{<p>{{text(line)||' '}}</p>}}}}
+          </article>
+        }
+      </div>
+      @if(card();as card){<article class="flashcard-stage" aria-label="Selected flashcard"><div class="flashcard-stage-top"><span class="eyebrow">QUESTION</span>@if(card.demo){<span class="demo-badge">Demo card</span>}</div><h2>{{card.question}}</h2>@if(revealed()){<div class="flashcard-answer"><span class="eyebrow">ANSWER</span><p>{{card.answer}}</p></div>}@else{<button class="button primary" (click)="revealed.set(true)">Reveal answer</button>}<p class="field-hint">Click outside this card, press Escape, or click the file badge above to return to your source.</p></article>}
+    </section>
+    <aside class="flashcard-panel" aria-label="File flashcards"><div class="tool-heading"><div><span class="eyebrow">ACTIVE RECALL</span><h3>Flashcards <span class="card-count">{{cards().length}}</span></h3></div><app-icon name="book" /></div>
+      @if(kind()==='pdf'){
+        <app-learning-mode [mode]="selectedMode()" [disabled]="generating()" (modeChange)="selectedMode.set($event)" />
+        @if(file.processing?.status!=='complete'||modeChanged()){<button class="button primary generate-cards" [disabled]="generating()" (click)="generate()">@if(generating()){<app-loading-dots label="Generating summary and flashcards" />}@else{ {{modeChanged()?'Generate in '+selectedMode()+' mode':file.processing?.status==='error'?'Retry processing':'Generate summary and flashcards'}} }</button>}
+        <p class="field-hint" aria-live="polite">@if(generating()){<app-loading-dots [label]="selectedMode()==='deep'?'Reading text and visuals':'Reading extracted text'" />}@else if(file.processing?.status==='complete'){Generated in {{file.processing.mode??'shallow'}} mode.}@else{Processing uses the PDF contents to create your summary and flashcards.}</p>
+      }
+      <div class="flashcard-list">@for(card of cards();track card.id){<button class="flashcard-choice" [class.selected]="selectedCard()===card.id" [attr.aria-pressed]="selectedCard()===card.id" (click)="selectCard(card.id!)"><span class="flashcard-number">{{ $index+1 }}</span><span><strong>{{card.question}}</strong><small>{{card.generated?'Generated from PDF':card.demo?'Demo card':'Your card'}} · Click to review</small></span><app-icon name="right" /></button>}@empty{<div class="empty-state">@if(generating()){<app-loading-dots label="Preparing your flashcards" />}@else{No flashcards yet.}</div>}</div>
+      <button class="text-button" (click)="addingCard.set(!addingCard())"><app-icon name="plus" /> Add a flashcard</button>
+      @if(addingCard()){<form class="add-card-form" [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><button class="button secondary" type="submit">Save flashcard</button></form>}
+    </aside>
+  </div>
+</div>
+}
+
