@@ -32,7 +32,9 @@ def add_catalogue(app):
             conn.execute("INSERT INTO course_lecturers (offering_id, lecturer_id, role) VALUES (900, 1, 'lecturer')")
 
 
-class PlannerTests(unittest.TestCase):
+class PlannerCase(unittest.TestCase):
+    """An app with the tiny catalogue, two users, and "today" in HS26."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.app = build_app(self.tmp.name)
@@ -50,6 +52,9 @@ class PlannerTests(unittest.TestCase):
 
     def add(self, course_id, semkez="2026W", user=ALICE):
         return self.client.post(f"/api/semesters/{semkez}/courses", json={"courseId": course_id}, headers=user)
+
+
+class PlannerTests(PlannerCase):
 
     def test_semesters_lists_current_and_available(self):
         body = self.get("/api/semesters").get_json()
@@ -125,6 +130,120 @@ class PlannerTests(unittest.TestCase):
     def test_needs_a_user(self):
         for path in ("/api/semesters", "/api/semesters/2026W/courses", "/api/courses?q=algebra&semkez=2026W"):
             self.assertEqual(self.client.get(path).status_code, 401, path)
+
+
+class PlanTests(PlannerCase):
+    """The study plan of a semester: subjects, recorded hours and planned sessions."""
+
+    def plan(self, user=ALICE):
+        return self.get("/api/semesters/2026W/plan", user=user).get_json()
+
+    def patch(self, body, course_id=1, user=ALICE):
+        return self.client.patch(f"/api/semesters/2026W/courses/{course_id}", json=body, headers=user)
+
+    def hours(self, date, hours, course_id=1, user=ALICE):
+        return self.client.put(f"/api/semesters/2026W/courses/{course_id}/hours/{date}", json={"hours": hours}, headers=user)
+
+    def sessions(self, sessions, user=ALICE):
+        return self.client.put("/api/semesters/2026W/sessions", json=sessions, headers=user)
+
+    def test_an_empty_plan_has_the_study_phase(self):
+        self.assertEqual(self.plan(), {"semkez": "2026W", "label": "HS26", "start": "2026-12-21", "end": "2027-02-14",
+                                       "subjects": [], "sessions": []})
+        self.assertEqual(self.get("/api/semesters/2027S/plan").get_json()["start"], "2027-06-01")
+
+    def test_an_added_course_is_a_subject_with_defaults(self):
+        self.add(1)
+        self.add(2)
+        first, second = self.plan()["subjects"]
+        self.assertEqual(first, {
+            "id": "course-1", "courseId": 1, "name": "Algorithms and Data Structures",
+            "shortName": "Algorithms and Data Structures", "color": "#2598A2", "targetHours": 0,
+            "examDate": "2027-02-14", "completed": False, "nextAction": "", "ects": 7,
+            "lectureId": "252-0026-00L", "homepage": first["homepage"], "desiredGrade": None, "hours": {}})
+        self.assertIn("lerneinheitId=900", first["homepage"])
+        self.assertEqual(second["color"], "#E4AC17")   # the next colour
+
+    def test_update_a_subject(self):
+        self.add(1)
+        response = self.patch({"targetHours": 65.5, "examDate": "2027-01-28", "completed": True,
+                               "nextAction": "Exercise sheet 3", "color": "#5586CA", "desiredGrade": 5.5})
+        self.assertEqual(response.status_code, 200)
+        subject = self.plan()["subjects"][0]
+        self.assertEqual((subject["targetHours"], subject["examDate"], subject["completed"], subject["nextAction"],
+                          subject["color"], subject["desiredGrade"]),
+                         (65.5, "2027-01-28", True, "Exercise sheet 3", "#5586CA", 5.5))
+        for bad in ({"targetHours": -1}, {"targetHours": "5"}, {"examDate": "2027-02-30"}, {"completed": "yes"},
+                    {"nextAction": "x" * 1001}, {"color": "blue"}, {"desiredGrade": 7}, {}):
+            self.assertEqual(self.patch(bad).status_code, 400, bad)
+        self.assertEqual(self.patch({"targetHours": 1}, course_id=2).status_code, 404)   # not added
+
+    def test_record_and_clear_hours(self):
+        self.add(1)
+        self.add(2)
+        self.assertEqual(self.hours("2027-01-05", 2.5).status_code, 200)
+        self.assertEqual(self.plan()["subjects"][0]["hours"], {"2027-01-05": 2.5})
+        self.assertEqual(self.hours("2027-01-05", 3).status_code, 200)            # replaces
+        self.assertEqual(self.hours("2027-01-05", 22, course_id=2).status_code, 400)   # 3 + 22 > 24 h
+        self.assertEqual(self.hours("2027-01-05", 21, course_id=2).status_code, 200)
+        self.assertEqual(self.hours("2027-01-05", None).status_code, 200)         # clears
+        self.assertEqual(self.plan()["subjects"][0]["hours"], {})
+        self.assertEqual(self.hours("2026-11-01", 1).status_code, 400)            # outside the study phase
+        self.assertEqual(self.hours("2027-01-06", 25).status_code, 400)
+
+    def test_save_sessions(self):
+        self.add(1)
+        a = {"id": "a", "subjectId": "course-1", "date": "2027-01-05", "start": "09:00", "hours": 2}
+        b = {"id": "b", "subjectId": "course-1", "date": "2027-01-05", "start": "11:00", "hours": 1.5}
+        self.assertEqual(self.sessions([b, a]).status_code, 200)
+        self.assertEqual([s["id"] for s in self.plan()["sessions"]], ["a", "b"])
+        self.assertEqual(self.sessions([a]).status_code, 200)                       # replaces the list
+        self.assertEqual([s["id"] for s in self.plan()["sessions"]], ["a"])
+        overlapping = {**b, "start": "10:30"}
+        self.assertEqual(self.sessions([a, overlapping]).json["error"], "Study sessions cannot overlap. Choose another time.")
+        for bad in ({**a, "subjectId": "course-2"}, {**a, "date": "2026-11-01"}, {**a, "start": "9:00"},
+                    {**a, "start": "23:00", "hours": 2}, {**a, "hours": 0}):
+            self.assertEqual(self.sessions([bad]).status_code, 400, bad)
+        self.assertEqual(self.sessions([a, a]).status_code, 400)                    # duplicate id
+        self.assertEqual([s["id"] for s in self.plan()["sessions"]], ["a"])         # a failed save changes nothing
+
+    def test_removing_a_course_removes_its_hours_and_sessions(self):
+        self.add(1)
+        self.hours("2027-01-05", 2)
+        self.sessions([{"id": "a", "subjectId": "course-1", "date": "2027-01-05", "start": "09:00", "hours": 2}])
+        self.client.delete("/api/semesters/2026W/courses/1", headers=ALICE)
+        with self.app.app_context():
+            conn = db.get_db()
+            self.assertEqual(conn.execute("SELECT count(*) FROM study_hours").fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT count(*) FROM study_sessions").fetchone()[0], 0)
+        self.add(1)
+        self.assertEqual(self.plan()["subjects"][0]["hours"], {})
+
+    def test_plans_are_per_user(self):
+        self.add(1)
+        self.hours("2027-01-05", 2)
+        self.assertEqual(self.plan(user=BOB)["subjects"], [])
+        self.assertEqual(self.patch({"targetHours": 1}, user=BOB).status_code, 404)
+        self.assertEqual(self.hours("2027-01-05", 1, user=BOB).status_code, 404)
+        self.assertEqual(self.sessions([{"id": "x", "subjectId": "course-1", "date": "2027-01-05", "start": "09:00",
+                                         "hours": 1}], user=BOB).status_code, 400)
+
+
+class SchemaUpgradeTests(unittest.TestCase):
+    def test_an_old_semester_courses_table_gets_the_plan_columns(self):
+        with tempfile.TemporaryDirectory() as temp:
+            import sqlite3
+            from pathlib import Path
+            old = sqlite3.connect(Path(temp) / "app.db")
+            old.executescript("""CREATE TABLE semester_courses (semester_id INTEGER NOT NULL, course_id INTEGER NOT NULL,
+                                 desired_grade REAL, PRIMARY KEY (semester_id, course_id));
+                                 INSERT INTO semester_courses VALUES (1, 2, NULL);""")
+            old.commit()
+            old.close()
+            app = build_app(temp)
+            with app.app_context():
+                row = db.get_db().execute("SELECT target_hours, completed, next_action, exam_date FROM semester_courses").fetchone()
+            self.assertEqual(tuple(row), (0, 0, "", None))
 
 
 if __name__ == "__main__":
