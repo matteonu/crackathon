@@ -59,9 +59,12 @@ class CatalogueInAppTests(unittest.TestCase):
         self.assertNotIn("vvz_meta.json", names)
         with open(next(p for p in written if p.endswith("_courses.json"))) as f:
             codes = {row["code"] for row in json.load(f)}
-        # Only the courses the demo data references, not every VVZ course.
+        # Only the courses the demo data references (seed_demo/02_courses.json), not every VVZ course.
         self.assertIn("401-0212-16L", codes)
-        self.assertEqual(len(codes), 5)
+        with open(os.path.join(os.path.dirname(db.BACKEND_DIR), "backend", "seed_demo", "02_courses.json")) as f:
+            demo_codes = {row["code"] for row in json.load(f)}
+        self.assertTrue(codes <= demo_codes, codes - demo_codes)
+        self.assertLess(len(codes), 50)
 
 
 if __name__ == "__main__":
