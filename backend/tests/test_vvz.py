@@ -190,6 +190,24 @@ class ImportTest(unittest.TestCase):
         self.assertEqual((counts["courses"], counts["offerings"]), (1, 1))
         self.assertEqual(one(self.db, "SELECT id FROM course_offerings")["id"], 204999)
 
+    def test_a_database_from_before_this_schema_is_upgraded_in_place(self):
+        # The courses table as dev created it before the sync existed, with a row users point at.
+        os.makedirs(os.path.dirname(self.db))
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.executescript("""
+                CREATE TABLE courses (id INTEGER PRIMARY KEY, code TEXT UNIQUE NOT NULL, title TEXT NOT NULL,
+                    term TEXT CHECK (term IN ('HS', 'FS')), ects INTEGER NOT NULL, professor TEXT);
+                INSERT INTO courses VALUES (7, '401-0212-16L', 'Analysis I', 'FS', 8, 'Prof. Example');
+            """)
+        counts = sync.import_dump(self.dump, self.db, ["2025S"])
+        self.assertEqual(counts["offerings"], 1)
+        course = one(self.db, "SELECT * FROM courses WHERE code = '401-0212-16L'")
+        self.assertEqual((course["id"], course["ects"], course["latest_semkez"], course["exam_mode"]), (7, 7, "2025S", "written 180 minutes"))
+        self.assertEqual(one(self.db, "SELECT course_id FROM course_offerings")["course_id"], 7)
+        # Running it again adds nothing.
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            self.assertEqual(sync.upgrade_schema(db), [])
+
     def test_import_rejects_empty_semesters(self):
         with self.assertRaises(ValueError):
             sync.import_dump(self.dump, self.db, [])

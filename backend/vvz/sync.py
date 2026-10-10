@@ -53,6 +53,16 @@ RETRY_SECONDS = 1800
 CACHE_NAME = "vvz-dump.zip"
 USER_AGENT = "crackathon-vvz-sync (+https://github.com/matteonu/crackathon)"
 
+# Columns the sync added to the pre-existing `courses` table. schema.sql only does CREATE TABLE
+# IF NOT EXISTS, so a database created before them needs ALTER TABLE; see upgrade_schema().
+COURSES_COLUMNS = (
+    ("title_english", "TEXT"), ("language", "TEXT"), ("exam_mode", "TEXT"), ("exam_type", "TEXT"),
+    ("exam_block", "TEXT"), ("course_frequency", "TEXT"), ("weekly_hours", "REAL"), ("levels", "TEXT"),
+    ("departments", "TEXT"), ("abstract", "TEXT"), ("objective", "TEXT"), ("content", "TEXT"),
+    ("lecture_notes", "TEXT"), ("literature", "TEXT"), ("written_aids", "TEXT"), ("latest_semkez", "TEXT"),
+    ("vvz_updated_at", "TEXT"),
+)
+
 COURSE_TYPE_NAMES = {
     "V": "lecture",
     "G": "lecture with exercise",
@@ -191,6 +201,21 @@ def _lecturer_names(lecturers: list[sqlite3.Row]) -> str | None:
     return ", ".join(names) or None
 
 
+def upgrade_schema(db: sqlite3.Connection) -> list[str]:
+    """Create missing tables and add the columns a pre-existing `courses` table lacks. Returns what was added."""
+    with open(SCHEMA_PATH) as f:
+        db.executescript(f.read())  # idempotent; lets the CLI run before the app ever did
+    present = {row[1] for row in db.execute("PRAGMA table_info(courses)")}
+    added = []
+    for column, sql_type in COURSES_COLUMNS:
+        if column not in present:
+            db.execute(f"ALTER TABLE courses ADD COLUMN {column} {sql_type}")
+            added.append(column)
+    if added:
+        log.info("Added columns to courses: %s", ", ".join(added))
+    return added
+
+
 def import_dump(source_path: str, db_path: str, semesters: list[str], meta: dict | None = None) -> dict:
     """Import the given semesters from a vvzapi dump into the app database. Returns row counts.
 
@@ -208,8 +233,7 @@ def import_dump(source_path: str, db_path: str, semesters: list[str], meta: dict
     dst = sqlite3.connect(db_path, timeout=30, isolation_level=None)
     dst.row_factory = sqlite3.Row
     try:
-        with open(SCHEMA_PATH) as f:
-            dst.executescript(f.read())  # idempotent; lets the CLI run before the app ever did
+        upgrade_schema(dst)
         dst.execute("PRAGMA foreign_keys = ON")
         dst.execute("BEGIN")
         marks = ",".join("?" for _ in semesters)
