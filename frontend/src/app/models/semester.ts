@@ -16,6 +16,59 @@ export interface PlanSubject {
   homepage: string | null;
   desiredGrade: number | null;
   hours: Record<string, number>;
+  /** What the scheduler uses. `difficulty` is already resolved from the course rating. */
+  priority: number;
+  difficulty: number;
+  maxStudyHours: number | null;
+  lecturePerWeek: number | null;
+}
+
+/** A stretch of days the user does not study. */
+export interface DayOff {
+  startDate: string;
+  rangeLength: number;
+}
+
+/** How the scheduler lays a day out, per semester. */
+export interface Preferences {
+  dayStart: string;
+  dayEnd: string;
+  lunch: [string, string];
+  dinner: [string, string];
+  studyBlockSize: number;
+  studyHoursPerWeek: number | null;
+  alpha: number;
+  beta: number;
+  daysOff: DayOff[];
+}
+
+export type BlockType = 'active_learning' | 'recall' | 'meal';
+
+/** One block of a generated plan. A meal block has no subject. */
+export interface PlanBlock {
+  id: number | null;
+  subjectId: string | null;
+  courseId: number | null;
+  date: string;
+  start: string;
+  end: string;
+  type: BlockType;
+  label: string | null;
+}
+
+export interface PlanTotals {
+  subjectId: string;
+  courseId: number;
+  scheduledHours: number;
+  activeLearningHours: number;
+}
+
+/** What POST .../plan/generate returns and GET .../plan carries. */
+export interface GeneratedPlan {
+  generatedAt: string;
+  fromDate: string;
+  blocks: PlanBlock[];
+  summary: PlanTotals[];
 }
 
 /** The whole study plan of a semester. */
@@ -26,6 +79,9 @@ export interface Plan {
   end: string;
   subjects: PlanSubject[];
   sessions: PlannedSession[];
+  preferences: Preferences;
+  /** null until a schedule has been generated for this semester. */
+  plan: GeneratedPlan | null;
 }
 
 /** A search result from GET /api/courses. */
@@ -82,4 +138,25 @@ export function planToData(plan: Plan, today: string): StudyData {
 export function emptyData(today: string): StudyData {
   return {version: 1, semester: '', referenceDate: today, dates: [today], subjects: [], anki: [], notes: '',
     examSession: {start: today, end: today}, sessions: []};
+}
+
+/** Minutes a block covers. Blocks never cross midnight. */
+export function blockMinutes(block: PlanBlock): number {
+  return minutesOf(block.end) - minutesOf(block.start);
+}
+
+export function minutesOf(time: string): number {
+  return Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+}
+
+/** Hours of study a set of blocks holds. Meals are not study. */
+export function studyHours(blocks: readonly PlanBlock[]): number {
+  return Math.round(blocks.filter(b => b.type !== 'meal')
+    .reduce((sum, b) => sum + blockMinutes(b), 0) / 60 * 100) / 100;
+}
+
+/** 'active_learning' -> 'Learning'. What the legend and the tooltips say. */
+export function blockLabel(block: PlanBlock): string {
+  return block.type === 'meal' ? block.label ?? 'Break'
+    : block.type === 'recall' ? 'Recall' : 'Learning';
 }

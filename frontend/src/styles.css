@@ -484,6 +484,34 @@ textarea { resize: vertical; line-height: 1.7; }
 .calendar-legend > div > span { display:inline-flex; align-items:center; gap:7px; font-size:10px; color:var(--muted); }
 .calendar-legend strong { font-weight:600; color:var(--ink); }
 .calendar-empty { font-size:12px; color:var(--muted); margin-top:18px; padding:13px; background:var(--canvas); border-radius:8px; }
+
+/* A block of the generated plan. Behind the user's own sessions, and not clickable: the
+   scheduler owns it, so it is changed by generating again, not by dragging. */
+.calendar-block { position:absolute; left:4px; right:4px; border-radius:5px; padding:6px 7px; display:flex; flex-direction:column; gap:3px; overflow:hidden; font-size:10px; pointer-events:none;
+  border-left:3px solid var(--subject-color); background:color-mix(in srgb, var(--subject-color) 13%, transparent); color:#354e31; }
+.calendar-block strong { font-weight:600; line-height:1.25; overflow-wrap:anywhere; }
+.calendar-block span { font-size:9px; color:var(--muted); white-space:nowrap; }
+.calendar-block.is-recall { border-left-style:dashed; background:color-mix(in srgb, var(--subject-color) 7%, transparent); }
+.calendar-block.is-meal { border-left-color:var(--line); background:var(--canvas); }
+.calendar-block.is-meal strong { color:var(--muted); font-weight:500; }
+.block-key { display:inline-block; flex:0 0 3px; width:3px; height:12px; border-radius:2px; background:#81a17b; }
+.block-key.is-recall { background:repeating-linear-gradient(to bottom,#81a17b 0 3px,transparent 3px 5px); }
+.proposal-totals { display:flex; flex-wrap:wrap; gap:8px 18px; margin:14px 0 18px; }
+.proposal-totals > span { display:inline-flex; align-items:center; gap:7px; font-size:11px; color:var(--muted); }
+.proposal-totals strong { font-weight:600; color:var(--ink); }
+
+/* The study setup form. */
+.schedule-setup-dialog { width:min(720px,calc(100vw - 32px)); }
+.setup-heading { font-size:12px; font-weight:600; margin:22px 0 10px; }
+.setup-courses { display:grid; gap:12px; }
+.setup-course { border:1px solid var(--line); border-radius:8px; padding:13px; }
+.setup-course-name { display:flex; align-items:center; gap:8px; margin-bottom:11px; font-size:12px; }
+.setup-course-fields { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.setup-days-off { display:grid; gap:9px; }
+.setup-day-off { display:flex; align-items:end; gap:10px; }
+.setup-day-off > label { flex-direction:row; align-items:center; gap:7px; font-size:11px; color:var(--muted); }
+.setup-day-off input[type=number] { width:62px; }
+@media(max-width:700px){.setup-course-fields{grid-template-columns:1fr 1fr;}}
 .proposal-dialog { width:min(600px,calc(100vw - 32px)); }
 .proposal-list { display:grid; gap:10px; margin-bottom:20px; }
 .proposal-list > div { display:flex; gap:10px; align-items:center; padding:12px; border:1px solid var(--line); border-radius:8px; }

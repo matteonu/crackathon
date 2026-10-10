@@ -1,6 +1,15 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { StudyData, Subject, PlannedSession, validSession, sessionsOverlap, addDays, dailyTotal, mondayOf, round, sumHours, validateData, weekDays } from '../models/study';
-import { CourseHit, Plan, courseIdOf, emptyData, planToData } from '../models/semester';
+import { CourseHit, GeneratedPlan, Plan, PlanBlock, PlanSubject, Preferences, courseIdOf, emptyData,
+  planToData, studyHours } from '../models/semester';
+
+/** The habits of a semester nobody has configured, mirroring the server's defaults. */
+const DEFAULT_PREFERENCES: Preferences = {dayStart:'08:00', dayEnd:'20:00', lunch:['12:00','13:00'],
+  dinner:['18:00','19:00'], studyBlockSize:90, studyHoursPerWeek:null, alpha:.3, beta:5, daysOff:[]};
+
+/** The scheduler fields of one course that the setup form may change. */
+export type CoursePlanPatch = Partial<{priority:number; difficulty:number|null; maxStudyHours:number|null;
+  lecturePerWeek:number|null; examDate:string; targetHours:number}>;
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -32,6 +41,14 @@ export class StudyStore {
   readonly canGoBack = computed(() => this.weekStart() > this.firstWeek());
   readonly canGoNext = computed(() => this.weekStart() < this.lastWeek());
   readonly editor = signal<{subjectId:string,date:string} | null>(null);
+  /** The courses as the server describes them, scheduler fields included. */
+  readonly planSubjects = signal<PlanSubject[]>([]);
+  readonly preferences = signal<Preferences>(DEFAULT_PREFERENCES);
+  /** The generated schedule, or null while none has been generated. */
+  readonly generatedPlan = signal<GeneratedPlan | null>(null);
+  readonly planError = signal('');
+  readonly generating = signal(false);
+  readonly planHours = computed(() => studyHours(this.generatedPlan()?.blocks ?? []));
   readonly notice = signal('');
   private noticeTimer?: ReturnType<typeof setTimeout>;
   private writes: Promise<unknown> = Promise.resolve();
@@ -56,9 +73,13 @@ export class StudyStore {
   async load():Promise<void> {
     try {
       if (!this.semkez()) this.semkez.set((await this.request<{current:string}>('/api/semesters')).current);
-      const data = planToData(await this.request<Plan>(`/api/semesters/${this.semkez()}/plan`), today());
+      const plan = await this.request<Plan>(`/api/semesters/${this.semkez()}/plan`);
+      const data = planToData(plan, today());
       const first = !this.loaded();
       this.state.set(data);
+      this.planSubjects.set(plan.subjects);
+      this.preferences.set(plan.preferences ?? DEFAULT_PREFERENCES);
+      this.generatedPlan.set(plan.plan);
       if (first || this.weekStart() < mondayOf(data.dates[0]) || this.weekStart() > mondayOf(data.dates.at(-1)!)) this.weekStart.set(mondayOf(data.referenceDate));
       this.loaded.set(true); this.loadError.set(''); this.persistence.set('Saved to your account');
     } catch (e) {
@@ -132,6 +153,62 @@ export class StudyStore {
     this.state.set(data); this.announce('Subject changes saved.');
     void this.write(url,this.json('PATCH',patch));
   }
+  /** The blocks of a generated plan on one day, earliest first. */
+  planOn(date:string):PlanBlock[] {
+    return (this.generatedPlan()?.blocks ?? []).filter(block => block.date === date);
+  }
+  /** Hours of study the plan holds for a subject, over the given dates or all of them. */
+  planHoursFor(subjectId:string, dates?:readonly string[]):number {
+    return studyHours((this.generatedPlan()?.blocks ?? []).filter(block =>
+      block.subjectId === subjectId && (!dates || dates.includes(block.date))));
+  }
+
+  /** Ask the server for a schedule. `dryRun` previews it without storing anything. */
+  async generate(options:{fromDate?:string; dryRun?:boolean} = {}):Promise<GeneratedPlan | null> {
+    await this.writes;        // Let a queued change to a course land before planning around it.
+    this.generating.set(true); this.planError.set('');
+    try {
+      const plan = await this.request<GeneratedPlan>(
+        `/api/semesters/${this.semkez()}/plan/generate`, this.json('POST', options));
+      if (!options.dryRun) { this.generatedPlan.set(plan); this.announce('Your schedule proposal is saved.'); }
+      return plan;
+    } catch (e) {
+      this.planError.set(e instanceof Error ? e.message : 'Could not generate a schedule.');
+      return null;
+    } finally { this.generating.set(false); }
+  }
+
+  /** Save study habits. Only the fields given are changed. */
+  async savePreferences(patch:Partial<Preferences>):Promise<boolean> {
+    this.planError.set('');
+    try {
+      this.preferences.set(await this.request<Preferences>(
+        `/api/semesters/${this.semkez()}/preferences`, this.json('PUT', patch)));
+      this.announce('Study habits saved.');
+      return true;
+    } catch (e) {
+      this.planError.set(e instanceof Error ? e.message : 'Could not save your habits.');
+      return false;
+    }
+  }
+
+  /** Save what the scheduler should know about one course. */
+  async updateCoursePlan(courseId:number, patch:CoursePlanPatch):Promise<boolean> {
+    this.planError.set('');
+    try {
+      const subject = await this.request<PlanSubject>(
+        `/api/semesters/${this.semkez()}/courses/${courseId}`, this.json('PATCH', patch));
+      this.planSubjects.update(list => list.map(s => s.courseId === courseId ? subject : s));
+      // Keep the copy the pages read in step with what came back.
+      this.state.update(d => ({...d, subjects: d.subjects.map(s => s.courseId === courseId
+        ? {...s, examDate:subject.examDate, targetHours:subject.targetHours, completed:subject.completed} : s)}));
+      return true;
+    } catch (e) {
+      this.planError.set(e instanceof Error ? e.message : 'Could not save that course.');
+      return false;
+    }
+  }
+
   toggleDone(id:string):void {
     const subject=this.subjects().find(s=>s.id===id);
     if(subject) this.updateSubject(id,{completed:!subject.completed});

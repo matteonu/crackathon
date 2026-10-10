@@ -163,9 +163,9 @@ without a migration. Everything else -- names, parents, categories, uniqueness w
 folder -- is validated server-side, and every row is scoped to the caller: another user's id
 is a 404, not a peek.
 
-The study plan itself (subjects, hours, sessions) is still kept in the browser by
-`StudyStore`. Moving it to the server is the next step, and the shape to aim for is in
-CLAUDE.md.
+The study plan -- subjects, recorded hours, planned sessions and the generated schedule --
+lives on the server too, in `backend/planner.py`; see "Study plan and schedule" below.
+`StudyStore` is the in-memory copy the pages read, and nothing is kept in browser storage.
 
 ## Who is signed in
 
@@ -228,6 +228,63 @@ cd backend
 ```
 
 No endpoints yet: read the tables directly (`courses`, `course_offerings`, `course_lectures`, `course_timeslots`, ...) from whatever backend code needs them.
+
+## Study plan and schedule
+
+A semester holds the courses you take, what you recorded, what you planned yourself, and a
+generated schedule. `backend/planner.py` owns the endpoints, `backend/schedule_planner/` the
+algorithm.
+
+- **The scheduler** (`backend/schedule_planner/`) is plain Python: a JSON request in, a
+  week-by-week plan out, no Flask, no database, no clock. It fills each day with blocks of
+  `studyBlockSize` minutes around fixed meals, groups a subject's learning blocks together,
+  and ends each day with one short recall block per subject studied. Hours go where the exam
+  is closest and the remaining workload (`30 x ECTS` minus lectures attended minus hours
+  already planned) is largest, tilted by difficulty against priority. Try it by hand:
+
+  ```bash
+  cd backend
+  ../.venv/bin/python -m schedule_planner.main < tests/example_input.json
+  ```
+
+- **Generating** is `POST /api/semesters/<semkez>/plan/generate`. `dryRun: true` returns a
+  proposal without storing it, which is what the preview dialog shows. `fromDate` is the first
+  day to plan and defaults to today clamped into the study phase: blocks before it are kept
+  and fed back to the scheduler as history, so pressing the button again next week does not
+  rewrite the weeks already behind, and the hours they used still count against a course's cap.
+- **Reading** is `GET /api/semesters/<semkez>/plan`, which carries the subjects, your own
+  sessions, the habits the plan was built from, and `plan: null` until one has been generated.
+  Its totals are added up from the stored blocks, not from the last run, because earlier weeks
+  outlive the run that made them.
+- **Storage:** `study_plans` holds one row per semester (the run, and the request that produced
+  it, so a plan can be reproduced), `plan_blocks` one row per block with its type
+  (`active_learning`, `recall`, `meal`). A meal block has no course, which the composite
+  foreign key tolerates because SQLite does not enforce one when a column is NULL -- so
+  deleting a course still takes its blocks with it. Generated blocks are kept apart from
+  `study_sessions`, which is yours: regenerating never touches what you typed.
+- **Preferences** are split in two. How a day is laid out belongs to the semester
+  (`day_start`, `day_end`, meals, `study_block_size`, `study_hours_per_week`, `alpha`, `beta`)
+  and is saved with `PUT /api/semesters/<semkez>/preferences`, along with `semester_days_off`.
+  What the scheduler needs per course (`priority`, `difficulty`, `max_study_hours`,
+  `lecture_per_week`) goes on `semester_courses` and is saved with the existing
+  `PATCH .../courses/<id>`. Every column has a default, so a semester can be planned the
+  moment you add a course -- the form only refines it.
+- **Where the numbers come from:** ECTS and weekly contact hours from the VVZ offering,
+  difficulty from the scraped `course_ratings` rounded to 1-5, and the rest from you. Exam
+  dates are not in the VVZ, so they default to the end of the study phase until you set them.
+  A course marked finished is left out of the plan.
+- **`study_hours_per_week` is the brake.** Left empty, the scheduler fills every free slot
+  before your exams, which for a winter phase of 56 days at 08:00-20:00 is around 500 hours.
+  Set it and each week stops at that many hours, pro-rated over a part week. Recall blocks are
+  placed either way, so a tight week can end a little above the budget -- the same exemption
+  `max_study_hours` has.
+- **The study phase itself** is fixed per semester in `planner.phase()`: HS runs 21 Dec to
+  14 Feb, FS 1 Jun to 31 Aug. It is not user-settable yet; the VVZ API would be the place to
+  get the real session dates from.
+
+```bash
+cd backend && ../.venv/bin/python -m unittest tests.test_schedule tests.test_schedule_api
+```
 
 ## Deadlines
 

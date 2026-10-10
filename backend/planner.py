@@ -542,22 +542,40 @@ def store_plan(sid, from_date, payload, result):
 
 
 def stored_plan(sid):
-    """The plan held for a semester, or None if none was generated."""
+    """The plan held for a semester, or None if none was generated.
+
+    The totals are added up from the blocks rather than taken from the last run, because the
+    blocks of earlier weeks outlive the run that made them.
+    """
     conn = db.get_db()
-    row = conn.execute("""SELECT generated_at, from_date, summary_json FROM study_plans
-                          WHERE semester_id = ?""", (sid,)).fetchone()
+    row = conn.execute("SELECT generated_at, from_date FROM study_plans WHERE semester_id = ?",
+                       (sid,)).fetchone()
     if row is None:
         return None
-    return {"generatedAt": row["generated_at"], "fromDate": row["from_date"],
-            "summary": json.loads(row["summary_json"]),
-            "blocks": [{"id": r["id"],
-                        "subjectId": None if r["course_id"] is None else f"course-{r['course_id']}",
-                        "courseId": r["course_id"], "date": r["date"], "start": r["start_time"],
-                        "end": r["end_time"], "type": r["type"], "label": r["label"]}
-                       for r in conn.execute(
-                           """SELECT id, course_id, date, start_time, end_time, type, label
-                              FROM plan_blocks WHERE semester_id = ?
-                              ORDER BY date, start_time, end_time, type""", (sid,))]}
+    blocks = [{"id": r["id"],
+               "subjectId": None if r["course_id"] is None else f"course-{r['course_id']}",
+               "courseId": r["course_id"], "date": r["date"], "start": r["start_time"],
+               "end": r["end_time"], "type": r["type"], "label": r["label"]}
+              for r in conn.execute(
+                  """SELECT id, course_id, date, start_time, end_time, type, label
+                     FROM plan_blocks WHERE semester_id = ?
+                     ORDER BY date, start_time, end_time, type""", (sid,))]
+    totals = {}
+    for block in blocks:
+        if block["courseId"] is None:
+            continue
+        entry = totals.setdefault(block["courseId"], {"subjectId": block["subjectId"],
+                                                      "courseId": block["courseId"],
+                                                      "scheduledHours": 0.0, "activeLearningHours": 0.0})
+        hours = (minutes_of(block["end"]) - minutes_of(block["start"])) / 60
+        entry["scheduledHours"] += hours
+        if block["type"] == "active_learning":
+            entry["activeLearningHours"] += hours
+    for entry in totals.values():
+        entry["scheduledHours"] = round(entry["scheduledHours"], 2)
+        entry["activeLearningHours"] = round(entry["activeLearningHours"], 2)
+    return {"generatedAt": row["generated_at"], "fromDate": row["from_date"], "blocks": blocks,
+            "summary": [totals[course_id] for course_id in sorted(totals)]}
 
 
 @bp.put("/semesters/<semkez>/preferences")

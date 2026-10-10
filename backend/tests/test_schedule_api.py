@@ -248,3 +248,26 @@ class CoursePreferenceTests(ScheduleApiCase):
         self.assertGreater(summary["course-1"], summary["course-2"])
 
     patch = GenerateTests.patch
+
+
+class StoredTotalsTests(ScheduleApiCase):
+
+    def test_the_totals_describe_every_block_held_not_just_the_last_run(self):
+        self.add(1)
+        self.generate(fromDate="2027-02-01")
+        whole = {entry["subjectId"]: entry["scheduledHours"] for entry in self.plan()["plan"]["summary"]}
+        self.generate(fromDate="2027-02-08")
+        after = {entry["subjectId"]: entry["scheduledHours"] for entry in self.plan()["plan"]["summary"]}
+        # The second run planned one week, but the first week's blocks are still there.
+        self.assertEqual(sorted(after), sorted(whole))
+        self.assertAlmostEqual(after["course-1"], self.studied() / 60, places=2)
+
+    def test_meals_are_not_counted_as_study(self):
+        self.add(1)
+        plan = self.generate().get_json()
+        hours = sum(entry["scheduledHours"] for entry in plan["summary"])
+        self.assertAlmostEqual(hours, self.studied() / 60, places=2)
+        self.assertTrue(any(block["type"] == "meal" for block in plan["blocks"]))
+
+    studied = PreferenceTests.studied
+    minutes = GenerateTests.minutes
