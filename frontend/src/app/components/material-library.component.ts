@@ -1,7 +1,7 @@
 import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MaterialStore } from '../services/material-store';
-import { MATERIAL_MARKERS, Material, MaterialKind, MaterialMarker, MaterialCategory, UPLOAD_CATEGORIES, materialKind, folderCards, treeRows } from '../models/material';
+import { MATERIAL_MARKERS, Material, MaterialKind, MaterialMarker, MaterialCategory, UPLOAD_CATEGORIES, materialKind, materialTypeLabel, folderCards, treeRows } from '../models/material';
 import { IconComponent } from '../shared/icon.component';
 import { FileViewerComponent } from './file-viewer.component';
 import { FolderFlashcardsComponent } from './folder-flashcards.component';
@@ -13,7 +13,7 @@ export class MaterialLibraryComponent {
   readonly subjectId=input.required<string>();readonly materials=inject(MaterialStore);private readonly exporter=inject(FlashcardExportService);
   readonly preview=viewChild<ElementRef<HTMLDialogElement>>('preview');readonly createDialog=viewChild<ElementRef<HTMLDialogElement>>('createDialog');readonly collectionDialog=viewChild<ElementRef<HTMLDialogElement>>('collectionDialog');
   readonly practice=viewChild(FolderFlashcardsComponent);
-  readonly markers=MATERIAL_MARKERS;readonly kind=materialKind;
+  readonly markers=MATERIAL_MARKERS;readonly kind=materialKind;readonly typeLabel=materialTypeLabel;
   readonly uploadCategories=UPLOAD_CATEGORIES;readonly uploadCategory=signal<MaterialCategory>('Slides');
   private uploadParent:string|null=null;
   prepareUpload(category:MaterialCategory):void{this.uploadCategory.set(category);this.uploadParent=this.activeFolder();}

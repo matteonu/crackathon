@@ -8,6 +8,10 @@ export type DocumentType = 'slides' | 'mock_exam' | 'exercise' | 'exercise_solut
 export const CATEGORY_DOCUMENT_TYPES:Partial<Record<MaterialCategory,DocumentType>> = {
   Slides:'slides', Exams:'mock_exam', Exercises:'exercise', Solutions:'exercise_solution', Scripts:'script'
 };
+const DOCUMENT_TYPE_LABELS:Record<DocumentType,string> = {
+  slides:'slides', mock_exam:'exam', exercise:'exercise', exercise_solution:'exercise solution',
+  script:'script', summary:'summary', cards:'flashcards', mcq:'multiple choice'
+};
 export type ToolId = 'summary' | 'flashcards';
 export interface Flashcard { id?:string; question:string; answer:string; demo?:boolean; generated?:boolean; }
 export type LearningMode = 'shallow' | 'deep';
@@ -30,6 +34,10 @@ export function materialKind(file:Material):MaterialKind { return file.kind??'pd
 export function materialType(file:Material):DocumentType|null {
   if(materialKind(file)==='folder')return null;
   return file.type===undefined?(CATEGORY_DOCUMENT_TYPES[file.category]??null):file.type;
+}
+export function materialTypeLabel(file:Material):string {
+  const type=materialType(file);
+  return type?DOCUMENT_TYPE_LABELS[type]:file.category.toLowerCase();
 }
 export function canGenerateFlashcards(file:Material):boolean { return materialKind(file)==='pdf'&&['slides','exercise_solution','script'].includes(materialType(file)??''); }
 /** Where the server serves this file's bytes: the PDF itself, or a text file's content. */
