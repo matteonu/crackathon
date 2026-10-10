@@ -21,9 +21,9 @@ git push -u origin study-state        # then open a PR into dev
 
 While others move `dev`, keep your branch current with `git fetch origin && git rebase
 origin/dev` (your own branch) or `git merge origin/dev` (one somebody else also works on).
-`dev` is protected too, so everything lands through a pull request. The checks -- frontend
-tests, `tsc`, build, backend tests -- run on every pull request and on every push to `dev`, so
-a PR tells you it is green before you merge. Nobody force-pushes `dev`.
+PRs for anything touching shared files -- `backend/app.py`, `backend/schema.sql`,
+`frontend/src/app/services/` -- and a direct push to `dev` is fine for your own new files.
+Nobody force-pushes `dev`.
 
 ### Releasing to the VM
 
@@ -182,29 +182,12 @@ Locally there is no proxy. `python backend/app.py` stands in as `alice@ethz.ch`;
 `DEV_USER=bob@ethz.ch` in `.env` to be someone else. A real header always wins over it, and
 on the VM `DEV_USER` is unset, so a request that bypasses the proxy gets 401.
 
-### Signing out only goes two layers deep
-
-There are three sessions between a visitor and this app:
-
-| Session | Who owns it | Can we end it? |
-|---|---|---|
-| `_oauth2_proxy` cookie | the hackathon proxy | yes, `/oauth2/sign_out` |
-| VSETH Keycloak SSO | `auth.vseth.ethz.ch` | yes, its logout endpoint |
-| SWITCH AAI / Shibboleth + the ETH IdP | the university | **no** |
-
-`SIGN_OUT_URL` chains the first two: Keycloak's logout (with
-`post_logout_redirect_uri`) into the proxy's `/oauth2/sign_out?rd=`, then back here. Keycloak
-has to come first, because oauth2-proxy only redirects to `*.hackathon.ethz.ch`.
-
-**You will be signed straight back in**, because the Shibboleth session is still live and the
-whole domain is auth-gated, so there is nowhere to land that does not re-authenticate. That is
-not a bug we can fix: `auth.vseth.ethz.ch/Shibboleth.sso/Logout` refuses a `return=` with an
-`opensaml::SecurityPolicyException`, and a university SSO session is not ours to end anyway.
-
-So: to use the app as somebody else, **open it in a private window**. If a real sign-out
-matters for a demo, ask the organizers whether the proxy can send `prompt=login` instead of
-`approval_prompt=force` -- that is their config, and it would force a fresh login for every
-team's app. Set `SIGN_OUT_URL` empty in `.env` to hide the button entirely.
+**Signing out** is the login provider's job, so the server hands the frontend a URL and the
+sidebar shows the button only for a request that came through the proxy. The default chain is
+VSETH's Keycloak logout (which ends the single-sign-on session) redirecting to the proxy's
+`/oauth2/sign_out` (which clears its cookie) and back to us, where the browser is asked to log
+in again. Keycloak has to come first: oauth2-proxy only redirects to `*.hackathon.ethz.ch`.
+Override it with `SIGN_OUT_URL` in `.env`, or set it empty to hide the button.
 
 ## Deadlines
 
