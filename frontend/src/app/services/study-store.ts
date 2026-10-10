@@ -35,7 +35,6 @@ export class StudyStore {
   readonly sessions = computed(() => this.data().sessions ?? []);
   readonly totalHours = computed(() => round(this.subjects().reduce((s, subject) => s + sumHours(subject), 0)));
   readonly targetHours = computed(() => round(this.subjects().reduce((s, subject) => s + subject.targetHours, 0)));
-  readonly completedCount = computed(() => this.subjects().filter(s => s.completed).length);
   readonly recordedDays = computed(() => this.dates().filter(date => this.subjects().some(s => s.hours[date] != null)).length);
   readonly exams = computed(() => [...this.subjects()].sort((a,b) => a.examDate.localeCompare(b.examDate)));
   readonly weekStart = signal(mondayOf(this.data().referenceDate));

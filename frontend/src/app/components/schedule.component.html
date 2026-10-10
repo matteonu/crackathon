@@ -28,7 +28,6 @@
         @if(store.generatedPlan()){<tr class="planned-row"><th scope="row" class="subject-col">Planned <span>by the scheduler</span></th><td class="remaining-col">{{expanded()?plannedWeek():store.planHours()}}</td>@for(date of visibleDates();track date){<td>{{store.plannedDaily(date)||'—'}}</td>}</tr>}</tfoot>
     </table>
   </div>
-  @if(!expanded()) {<div class="panel-foot"><span>Scroll sideways to explore <span class="optional-text">· Select any cell to edit</span></span><app-scroll-buttons [target]="scheduleViewport" label="schedule" /></div>}
   @if(expanded()) {
     <div class="week-insights">
       <div><span class="eyebrow">AT A GLANCE</span><h3>Your week, by subject.</h3><p class="muted">Recorded study time across these seven days.</p></div>
