@@ -7,6 +7,7 @@ tasks sort by priority and keep a manual order within each priority.
     PATCH  /api/tasks/<id>              any of title, notes, due, priority, done, position
     DELETE /api/tasks/<id>
     DELETE /api/tasks/completed?subject=<id>   clear the done tasks of one subject
+    DELETE /api/tasks/completed?before=<ms>    clear tasks completed before local midnight
 """
 import datetime as dt
 import time
@@ -161,12 +162,29 @@ def update(task_id):
 @bp.delete("/completed")
 def clear_completed():
     subject = request.args.get("subject")
-    if not subject:
+    before = request.args.get("before")
+    if not subject and before is None:
         raise RequestError(400, "Say which subject to clear: ?subject=<id>.")
+    # The browser supplies its local midnight as an epoch timestamp, including DST.
+    # Never accept a future cutoff that could erase today's newly completed tasks.
+    if before is not None:
+        try:
+            before = int(before)
+        except (ValueError, TypeError):
+            raise RequestError(400, "Use a past timestamp for the daily cleanup.") from None
+        if before < 0 or before > int(time.time() * 1000):
+            raise RequestError(400, "Use a past timestamp for the daily cleanup.")
+    sql = "DELETE FROM tasks WHERE user_id = ? AND done = 1"
+    values = [current_user()["id"]]
+    if subject:
+        sql += " AND subject_id = ?"
+        values.append(subject)
+    if before is not None:
+        sql += " AND COALESCE(completed_at, created_at) < ?"
+        values.append(before)
     conn = db.get_db()
     with conn:
-        deleted = conn.execute("DELETE FROM tasks WHERE user_id = ? AND subject_id = ? AND done = 1",
-                               (current_user()["id"], subject)).rowcount
+        deleted = conn.execute(sql, values).rowcount
     return jsonify(deleted=deleted)
 
 
