@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { addDays, dailyTotal, isValidDate, mondayOf, sumHours, validateData, weekDays, segmentedDate, validSession, sessionsOverlap } from '../src/app/models/study.ts';
 import type { StudyData } from '../src/app/models/study.ts';
 
-const seed=JSON.parse(readFileSync(new URL('../src/app/data/study-data.json',import.meta.url),'utf8')) as StudyData;
+const seed=JSON.parse(readFileSync(new URL('./fixtures/study-data.json',import.meta.url),'utf8')) as StudyData;
 
 test('sample preserves the five spreadsheet totals and 320-hour target',()=>{
   assert.equal(validateData(seed),true);

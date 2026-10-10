@@ -11,6 +11,8 @@ export interface Subject {
   ects?: number;
   lectureId?: string;
   homepage?: string;
+  /** The VVZ course this subject is (id 'course-<courseId>'). */
+  courseId?: number;
 }
 
 export interface AnkiDeck {
@@ -110,7 +112,7 @@ export function validateData(value: unknown): value is StudyData {
     || !Array.isArray(d.dates) || !d.dates.length || d.dates.length > 730
     || !d.dates.every(isValidDate) || new Set(d.dates).size !== d.dates.length
     || d.dates.some((date, i) => i > 0 && date <= d.dates[i-1]) || !d.dates.includes(d.referenceDate)
-    || !Array.isArray(d.subjects) || !d.subjects.length || d.subjects.length > 50
+    || !Array.isArray(d.subjects) || d.subjects.length > 50
     || !Array.isArray(d.anki) || d.anki.length > 100 || typeof d.notes !== 'string') return false;
   if (new Set(d.subjects.map(s => s?.id)).size !== d.subjects.length) return false;
   if (d.examSession && (!isValidDate(d.examSession.start) || !isValidDate(d.examSession.end)

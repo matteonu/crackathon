@@ -148,12 +148,41 @@ CREATE TABLE IF NOT EXISTS semesters (
     UNIQUE (id, user_id)              -- target for the statistics foreign key
 );
 
--- Courses a user takes in a semester, plus values known during the semester
+-- Courses a user takes in a semester, plus their plan for it. In the app each one is a
+-- subject with id 'course-<course_id>'. Columns added later are also listed in
+-- db.ADDED_COLUMNS, so an older database gets them too.
 CREATE TABLE IF NOT EXISTS semester_courses (
     semester_id INTEGER NOT NULL REFERENCES semesters(id) ON DELETE CASCADE,
     course_id INTEGER NOT NULL REFERENCES courses(id),
     desired_grade REAL CHECK (desired_grade BETWEEN 1 AND 6),
+    target_hours REAL NOT NULL DEFAULT 0,
+    exam_date TEXT,                   -- 'YYYY-MM-DD'
+    completed INTEGER NOT NULL DEFAULT 0,
+    next_action TEXT NOT NULL DEFAULT '',
+    color TEXT,                       -- '#2598A2'
     PRIMARY KEY (semester_id, course_id)
+);
+
+-- Hours the user recorded for a course on a day. No row = nothing recorded (not 0).
+CREATE TABLE IF NOT EXISTS study_hours (
+    semester_id INTEGER NOT NULL,
+    course_id INTEGER NOT NULL,
+    date TEXT NOT NULL,               -- 'YYYY-MM-DD'
+    hours REAL NOT NULL CHECK (hours BETWEEN 0 AND 24),
+    PRIMARY KEY (semester_id, course_id, date),
+    FOREIGN KEY (semester_id, course_id) REFERENCES semester_courses(semester_id, course_id) ON DELETE CASCADE
+);
+
+-- Study sessions the user planned in the calendar. id is the uuid the browser generates.
+CREATE TABLE IF NOT EXISTS study_sessions (
+    semester_id INTEGER NOT NULL,
+    id TEXT NOT NULL,
+    course_id INTEGER NOT NULL,
+    date TEXT NOT NULL,               -- 'YYYY-MM-DD'
+    start TEXT NOT NULL,              -- 'HH:MM'
+    hours REAL NOT NULL CHECK (hours > 0 AND hours <= 24),
+    PRIMARY KEY (semester_id, id),
+    FOREIGN KEY (semester_id, course_id) REFERENCES semester_courses(semester_id, course_id) ON DELETE CASCADE
 );
 
 -- Statistics per user and semester
