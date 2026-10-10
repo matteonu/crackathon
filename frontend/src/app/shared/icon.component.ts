@@ -22,6 +22,7 @@ const paths:Record<string,string> = {
   clock:'M12 8v5l3 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
   download:'M12 3v12 M7 10l5 5 5-5 M4 16v5h16v-5',
   upload:'M12 16V4 M7 9l5-5 5 5 M4 16v5h16v-5',
+  logout:'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
   settings:'M4 7h16 M4 17h16 M8 4v6 M16 14v6',
   flag:'M5 22V3 M5 3c5-4 9 4 15 0v10c-6 4-10-4-15 0',
   leaf:'M20 4C6 2 1 8 6 16c6 7 15 2 14-12Z M4 21L16 9',

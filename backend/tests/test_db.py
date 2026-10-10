@@ -17,21 +17,24 @@ def emails(app):
 
 
 class SeedTests(unittest.TestCase):
-    def test_the_production_seed_has_the_catalog_but_no_users(self):
+    def test_production_starts_with_an_empty_database(self):
         with tempfile.TemporaryDirectory() as temp:
             app = build_app(temp, seed=True, SEED_DIRS=PRODUCTION_SEED)
             with app.app_context():
-                courses = db.connect().execute('SELECT count(*) FROM courses').fetchone()[0]
-            self.assertGreater(courses, 0)
-            self.assertEqual(emails(app), [])
+                conn = db.connect()
+                counts = {table: conn.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0]
+                          for table in ('users', 'courses', 'course_resources', 'semesters', 'materials')}
+            self.assertEqual(counts, {'users': 0, 'courses': 0, 'course_resources': 0,
+                                      'semesters': 0, 'materials': 0})
 
-    def test_the_demo_overlay_adds_users_to_the_same_catalog(self):
+    def test_the_demo_overlay_fills_the_same_database(self):
         with tempfile.TemporaryDirectory() as temp:
             app = build_app(temp, seed=True, SEED_DIRS=DEMO_SEED)
             with app.app_context():
                 conn = db.connect()
                 self.assertGreater(conn.execute('SELECT count(*) FROM courses').fetchone()[0], 0)
                 self.assertGreater(conn.execute('SELECT count(*) FROM semesters').fetchone()[0], 0)
+                self.assertGreater(conn.execute('SELECT count(*) FROM course_resources').fetchone()[0], 0)
             self.assertEqual(emails(app), ['alice@ethz.ch', 'bob@ethz.ch'])
 
     def test_a_restart_keeps_the_data_and_still_applies_the_schema(self):
