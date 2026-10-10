@@ -7,7 +7,7 @@ import { IconComponent } from '../shared/icon.component';
 /** The subject's to-do list: add on Enter, tick off, click a title to edit, reorder, clear completed. */
 @Component({selector:'app-task-list',standalone:true,imports:[FormsModule,IconComponent],template:`
   <section class="panel task-panel">
-    <div class="panel-heading"><div><span class="eyebrow">TASKS</span><h2>To do</h2><p>{{open().length}} open @if(done().length){· {{done().length}} done}</p></div><app-icon name="check" /></div>
+    <div class="panel-heading"><div><span class="eyebrow">TASKS</span><h2>TODO</h2><p>{{open().length}} open @if(done().length){· {{done().length}} done}</p></div><app-icon name="check" /></div>
     <form class="task-add" (ngSubmit)="add()">
       <label class="sr-only" for="task-title">New task</label>
       <input id="task-title" name="title" [(ngModel)]="draft" [maxlength]="maxTitle" placeholder="Add a task and press Enter" autocomplete="off" [disabled]="store.loading()">
