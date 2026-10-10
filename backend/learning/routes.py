@@ -10,6 +10,8 @@ from urllib.parse import unquote
 
 from flask import Blueprint, current_app, jsonify, request
 
+import materials
+
 from . import pdf_study
 from .jobs import SUMMARY_SENTENCES, RequestError
 
@@ -18,6 +20,14 @@ bp = Blueprint("learning", __name__, url_prefix="/api/learning")
 
 def jobs():
     return current_app.extensions["learning_jobs"]
+
+
+def owned(document_id):
+    """A document is a material of the caller's. Ids are uuids, but obscurity is not access."""
+    document_id = str(document_id)
+    if not materials.owns(document_id):
+        raise RequestError(404, "This file does not exist.")
+    return document_id
 
 
 @bp.get("/health")
@@ -29,11 +39,15 @@ def health():
 
 @bp.post("/documents/<uuid:document_id>")
 def submit(document_id):
-    if (request.content_type or "").split(";", 1)[0] != "application/pdf":
-        raise RequestError(415, "Upload the PDF with Content-Type: application/pdf.")
-    pdf = request.get_data(cache=False)
-    if not 0 < len(pdf) < pdf_study.MAX_PDF_BYTES:
-        raise RequestError(413, "Choose a PDF smaller than 50 MB.")
+    document_id = owned(document_id)
+    # The PDF is already stored by the upload, so a body is optional.
+    pdf = None
+    if request.content_length:
+        if (request.content_type or "").split(";", 1)[0] != "application/pdf":
+            raise RequestError(415, "Upload the PDF with Content-Type: application/pdf.")
+        pdf = request.get_data(cache=False)
+        if not 0 < len(pdf) < pdf_study.MAX_PDF_BYTES:
+            raise RequestError(413, "Choose a PDF smaller than 50 MB.")
     name = unquote(request.headers.get("X-Filename", "document.pdf"))
     name = name.replace("\\", "/").rsplit("/", 1)[-1][:180]
     mode = request.headers.get("X-Learning-Mode", "shallow")
@@ -41,15 +55,15 @@ def submit(document_id):
         questions = int(request.headers.get("X-Flashcard-Count", str(jobs().questions)))
     except ValueError:
         raise RequestError(400, "Enter a whole number of flashcards from 5 to 300.") from None
-    return jsonify(jobs().submit(str(document_id), name, pdf, mode, questions)), 202
+    return jsonify(jobs().submit(document_id, name, pdf, mode, questions)), 202
 
 
 @bp.get("/documents/<uuid:document_id>/result.json")
 def result(document_id):
-    return jsonify(jobs().result(str(document_id), request.args.get("mode", "shallow")))
+    return jsonify(jobs().result(owned(document_id), request.args.get("mode", "shallow")))
 
 
 @bp.delete("/documents/<uuid:document_id>")
 def delete(document_id):
-    jobs().delete(str(document_id))
+    jobs().delete(owned(document_id))
     return jsonify(deleted=True)

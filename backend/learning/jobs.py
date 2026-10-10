@@ -14,19 +14,15 @@ import re
 import shutil
 import threading
 
+from errors import RequestError
+
 from . import pdf_study
 
 SUMMARY_SENTENCES = 1
 DEFAULT_QUESTIONS = 60
 DOCUMENT_ID = re.compile(r"[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}")
 
-
-class RequestError(Exception):
-    """An error with a status code and a message that is safe to show the user."""
-
-    def __init__(self, status: int, message: str):
-        self.status = status
-        super().__init__(message)
+__all__ = ["DEFAULT_QUESTIONS", "SUMMARY_SENTENCES", "RequestError", "StudyJobs"]
 
 
 class StudyJobs:
@@ -84,7 +80,21 @@ class StudyJobs:
                 self.remove_folder(document_id)
 
     def source_path(self, document_id: str) -> Path:
+        """Where this document's PDF lives. Uploads write it; the pipeline reads it."""
         return self.folder(document_id) / "source.pdf"
+
+    def store_source(self, document_id: str, pdf: bytes) -> str:
+        """Save an uploaded PDF. Returns its digest; refuses to replace a different PDF."""
+        digest = hashlib.sha256(pdf).hexdigest()
+        with self.lock:
+            if self.is_deleted(document_id):
+                raise RequestError(410, "This PDF was deleted. Upload it again as a new file.")
+            source = self.source_path(document_id)
+            if source.exists() and hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+                raise RequestError(409, "This file ID belongs to a different PDF. Upload it as a new file.")
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes(pdf)
+        return digest
 
     def result_path(self, document_id: str, mode: str) -> Path:
         if mode not in {"shallow", "deep"}:
@@ -99,12 +109,18 @@ class StudyJobs:
             raise RequestError(404, "This PDF was deleted.")
         return self.read(self.result_path(document_id, mode))
 
-    def submit(self, document_id: str, name: str, pdf: bytes, mode: str = "shallow", questions: int | None = None) -> dict:
+    def submit(self, document_id: str, name: str, pdf: bytes | None = None, mode: str = "shallow", questions: int | None = None) -> dict:
+        """Start a run. Without `pdf`, the PDF stored for this document is used."""
         questions = self.questions if questions is None else questions
         if type(questions) is not int or not 5 <= questions <= 300:
             raise RequestError(400, "Enter a whole number of flashcards from 5 to 300.")
         if mode not in {"shallow", "deep"}:
             raise RequestError(400, "Choose shallow or deep processing mode.")
+        if pdf is None:
+            stored = self.source_path(document_id)
+            if not stored.exists():
+                raise RequestError(404, "Upload the PDF before processing it.")
+            pdf = stored.read_bytes()
         if not pdf or len(pdf) >= pdf_study.MAX_PDF_BYTES:
             raise RequestError(413, "Choose a PDF smaller than 50 MB.")
         if not name.lower().endswith(".pdf") or b"%PDF-" not in pdf[:1024]:

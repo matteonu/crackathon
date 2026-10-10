@@ -1,7 +1,7 @@
 import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MaterialStore } from '../services/material-store';
-import { LearningMode, materialKind } from '../models/material';
+import { LearningMode, materialFileUrl, materialKind } from '../models/material';
 import { PdfPreviewComponent } from './pdf-preview.component';
 import { IconComponent } from '../shared/icon.component';
 import { LoadingDotsComponent } from '../shared/loading-dots.component';
@@ -16,14 +16,12 @@ export class FileViewerComponent {
   readonly file=computed(()=>this.materials.files().find(f=>f.id===this.fileId()));readonly kind=computed(()=>this.file()?materialKind(this.file()!):'pdf');
   readonly cards=computed(()=>this.file()?.outputs?.flashcards?.cards??[]);readonly selectedCard=signal<string|null>(null);readonly card=computed(()=>this.cards().find(c=>c.id===this.selectedCard()));
   readonly revealed=signal(false);readonly generating=computed(()=>['queued','running'].includes(this.file()?.processing?.status??''));readonly saving=signal(false);readonly editing=signal(false);readonly addingCard=signal(false);
-  readonly error=signal('');readonly notice=signal('');readonly downloadUrl=signal('');
+  readonly error=signal('');readonly notice=signal('');readonly fileUrl=computed(()=>materialFileUrl(this.fileId()));
   readonly details=new FormGroup({name:new FormControl('',{nonNullable:true}),description:new FormControl('',{nonNullable:true})});
   readonly content=new FormControl('',{nonNullable:true});readonly cardForm=new FormGroup({question:new FormControl('',{nonNullable:true}),answer:new FormControl('',{nonNullable:true})});
-  private readonly blob=computed(()=>this.file()?.blob);
   readonly lines=computed(()=>(this.file()?.content??'').split('\n'));
   constructor(){
     effect(()=>{const id=this.fileId();const f=this.materials.files().find(f=>f.id===id);if(f&&!this.loaded.has(id)){this.loaded.add(id);this.selectedMode.set(f.processing?.mode??'shallow');this.details.reset({name:f.name,description:f.description??''});this.content.setValue(f.content??'');}});
-    effect(onCleanup=>{const blob=this.blob();if(!blob)return;const url=URL.createObjectURL(blob);this.downloadUrl.set(url);onCleanup(()=>URL.revokeObjectURL(url));});
   }
   private readonly loaded=new Set<string>();
   selectCard(id:string):void{this.selectedCard.set(id);this.revealed.set(false);requestAnimationFrame(()=>this.stage()?.nativeElement.scrollIntoView({block:'nearest'}));}

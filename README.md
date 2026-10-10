@@ -47,9 +47,9 @@ and generated results all survive `docker compose up -d --build`. The seed is lo
 when there is no database file yet — a deploy never discards what users added.
 
 - **`backend/schema.sql`:** all tables. Add new tables here. Currently: `users` (identified by
-  email, created on first sight), `courses` (shared catalog) with `course_resources`, each
-  user's `semesters`, the courses taken per semester (`semester_courses`, with
-  `desired_grade`), and `statistics` per user and semester.
+  email, created on first sight), `materials` (each user's file library), `courses` (shared
+  catalog) with `course_resources`, each user's `semesters`, the courses taken per semester
+  (`semester_courses`, with `desired_grade`), and `statistics` per user and semester.
 - **`backend/seed/NN_<table>.json`:** the starting rows for each table, as a list of
   `{column: value}` objects. Files load in number order, so a table that others reference
   needs a lower number.
@@ -78,6 +78,23 @@ cd backend
 To build demo data by hand, click it together in the app, run `dump-seed`, check the diff, and
 commit. Each table keeps the file it was loaded from; a table that has no file yet is written
 into `backend/seed_demo/`.
+
+## Files and materials
+
+A material is a folder, a lecture PDF or a small text note, and belongs to one user and one
+subject (`backend/materials.py`, `/api/materials`). The metadata is in SQLite; a PDF's bytes
+are written once to `data/learning/<id>/source.pdf`, which is also where the pipeline reads
+them, so nothing is stored twice and `POST /api/learning/documents/<id>` needs no body.
+
+`outputs` (summary and flashcards) and `processing` (the last run's state) are stored as the
+JSON the frontend sends. The server never reads inside them, so the card shape can change
+without a migration. Everything else -- names, parents, categories, uniqueness within a
+folder -- is validated server-side, and every row is scoped to the caller: another user's id
+is a 404, not a peek.
+
+The study plan itself (subjects, hours, sessions) is still kept in the browser by
+`StudyStore`. Moving it to the server is the next step, and the shape to aim for is in
+CLAUDE.md.
 
 ## Who is signed in
 

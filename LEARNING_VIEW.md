@@ -20,7 +20,7 @@ whether it found a key, and `GET /api/learning/health` reports it.
 
 1. Open a subject from Exam view or Your subjects. Choose **Shallow** or **Deep**
    under Materials, set **Flashcards per PDF** (5–300, default 60), then upload or drop a PDF.
-2. The PDF is saved in the browser and submitted to the backend.
+2. The PDF is uploaded once and stored on the server; processing reads it from there.
 3. Python uses the chosen mode for both the summary and flashcards, with
    `--sentences 1`, automatic acceptance of the preview, and the chosen number of final cards.
 4. A one-sentence summary is saved first. It appears automatically as a read-only
@@ -38,8 +38,8 @@ overall count applies to new uploads.
 The PDF viewer scrolls through every page continuously; nearby pages render on demand.
 Click the **PDF** badge to return from a flashcard without losing your scroll position.
 The toolbar keeps only the source badge and download link, and PDF title edits save on blur.
-Use the trash button beside a PDF to delete its browser copy, generated cards, and all
-server-side results. Deleting an active job stops subsequent model requests and removes
+Use the trash button beside a PDF to delete its row, the stored PDF, its generated cards and
+all server-side results. Deleting an active job stops subsequent model requests and removes
 its files when the current request finishes; interrupted cleanup resumes after restart.
 
 **Shallow** extracts readable text only and is faster. **Deep** sends the complete PDF

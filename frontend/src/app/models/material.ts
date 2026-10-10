@@ -10,7 +10,9 @@ export interface ProcessingState { status:'queued'|'running'|'complete'|'error';
 export interface ToolResult { text?: string; cards?: Flashcard[]; }
 export interface Material {
   id:string; subjectId:string; name:string; size:number; category:MaterialCategory;
-  marker:MaterialMarker; blob:Blob; added:number;
+  marker:MaterialMarker; added:number;
+  /** Only while a newly chosen file is still being uploaded; the server is the source. */
+  blob?:Blob;
   kind?:MaterialKind; parentId?:string|null; description?:string; content?:string;
   outputs?:Partial<Record<ToolId,ToolResult>>;
   processing?:ProcessingState;
@@ -19,6 +21,8 @@ export interface FolderCard extends Flashcard { key:string; fileId:string; fileN
 export interface TreeRow { material:Material; depth:number; }
 
 export function materialKind(file:Material):MaterialKind { return file.kind??'pdf'; }
+/** Where the server serves this file's bytes: the PDF itself, or a text file's content. */
+export function materialFileUrl(id:string):string { return `/api/materials/${encodeURIComponent(id)}/file`; }
 export function normalizeMaterial(file:Material):Material {
   return {...file,kind:materialKind(file),parentId:file.parentId??null,description:file.description??'',
     outputs:{...file.outputs,flashcards:file.outputs?.flashcards?{...file.outputs.flashcards,cards:file.outputs.flashcards.cards?.map((card,i)=>({...card,id:card.id??`${file.id}-${i}`,demo:card.demo??true}))}:undefined}};

@@ -15,21 +15,21 @@ export class LearningPipelineService {
     try {
       response = await fetch(url, { ...init, cache: 'no-store', signal: AbortSignal.timeout(30000) });
     } catch {
-      throw new Error('Cannot reach the Python server. Start it and retry processing.');
+      throw new Error('Cannot reach the server. Check your connection and retry processing.');
     }
     let data: unknown;
     try { data = await response.json(); }
-    catch { throw new Error('The learning API is unavailable. Start the Python server and use the integrated learning view.'); }
+    catch { throw new Error('The learning API is unavailable. Reload the page and retry processing.'); }
     if (!response.ok) {
       throw new Error(typeof (data as {error?:unknown})?.error === 'string'
-        ? (data as {error:string}).error : 'The Python server could not process this file. Retry processing.');
+        ? (data as {error:string}).error : 'The server could not process this file. Retry processing.');
     }
     return data;
   }
 
   async process(file: Material, receive: (result: StudyResult) => Promise<void>, resume = false, mode: LearningMode = 'shallow'): Promise<void> {
     let data = await this.request(resume ? this.resultUrl(file.id,mode) : `/api/learning/documents/${encodeURIComponent(file.id)}`,
-      resume ? undefined : { method: 'POST', headers: { 'Content-Type': 'application/pdf', 'X-Filename': encodeURIComponent(file.name), 'X-Learning-Mode': mode, 'X-Flashcard-Count': String(file.processing?.requestedQuestions ?? 60) }, body: file.blob });
+      resume ? undefined : { method: 'POST', headers: { 'X-Filename': encodeURIComponent(file.name), 'X-Learning-Mode': mode, 'X-Flashcard-Count': String(file.processing?.requestedQuestions ?? 60) } });
     let previous = '';
     const deadline = Date.now() + 30 * 60 * 1000;
     while (true) {

@@ -123,8 +123,14 @@ class PipelineTests(unittest.TestCase):
             document_id = str(uuid.uuid4())
             url = f'/api/learning/documents/{document_id}'
             pdf = FIXTURE.read_bytes()
-            def upload(**headers):
-                return client.post(url, data=pdf, content_type='application/pdf',
+            # The pipeline only works on a document the caller owns.
+            self.assertEqual(client.post('/api/materials', json={
+                'id': document_id, 'subjectId': 'subject', 'kind': 'pdf',
+                'name': 'lecture.pdf', 'category': 'Slides'}).status_code, 201)
+            self.assertEqual(client.post(f'/api/learning/documents/{uuid.uuid4()}', data=pdf,
+                                         content_type='application/pdf').status_code, 404)
+            def upload(data=pdf, **headers):
+                return client.post(url, data=data, content_type='application/pdf',
                                    headers={'X-Filename': 'lecture.pdf', 'X-Flashcard-Count': '7', **headers})
             try:
                 self.assertEqual(upload().status_code, 202)
@@ -140,8 +146,7 @@ class PipelineTests(unittest.TestCase):
                 self.assertEqual(data, json.loads(jobs.result_path(document_id, 'shallow').read_text()))
                 self.assertEqual(data['mode'], 'shallow')
                 self.assertEqual(upload().get_json()['status'], 'complete')
-                self.assertEqual(client.post(f'/api/learning/documents/{uuid.uuid4()}', data=b'not a pdf',
-                                             content_type='application/pdf').status_code, 400)
+                self.assertEqual(upload(data=b'not a pdf').status_code, 400)
                 self.assertEqual(upload(**{'X-Learning-Mode': 'invalid'}).status_code, 400)
                 self.assertEqual(client.get(url + '/result.json?mode=deep').status_code, 404)
                 self.assertEqual(client.post(url, data=pdf, content_type='text/plain').status_code, 415)

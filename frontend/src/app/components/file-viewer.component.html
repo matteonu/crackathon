@@ -9,14 +9,14 @@
     }
     @if(kind()!=='pdf'){<div class="file-detail-actions"><button class="button secondary" type="submit" [disabled]="saving()">{{saving()?'Saving…':'Save details'}}</button></div>}
   </form>
-  <div class="file-meta-bar"><button type="button" class="file-kind source-file-button" [attr.aria-label]="kind()==='pdf'?'Back to PDF':'Back to file'" [attr.aria-pressed]="!card()" (click)="returnToFile()">{{kind().toUpperCase()}}</button><a class="text-button" [href]="downloadUrl()" [download]="file.name"><app-icon name="download" />Download file</a></div>
+  <div class="file-meta-bar"><button type="button" class="file-kind source-file-button" [attr.aria-label]="kind()==='pdf'?'Back to PDF':'Back to file'" [attr.aria-pressed]="!card()" (click)="returnToFile()">{{kind().toUpperCase()}}</button><a class="text-button" [href]="fileUrl()" [download]="file.name"><app-icon name="download" />Download file</a></div>
   @if(error()||materials.error()){<p class="form-error" role="alert">{{error()||materials.error()}}</p>}<p class="viewer-notice" aria-live="polite">{{notice()}}</p>
   @if(file.processing?.error){<p class="form-error" role="alert">{{file.processing!.error}}</p>}
   <div class="file-viewer-columns">
     <section #stage class="file-stage" aria-label="File and flashcard viewer">
       <div class="file-stage-toolbar"><span>{{card()?'FLASHCARD PREVIEW':'SOURCE FILE'}}</span>@if(!card()&&kind()!=='pdf'){<button class="text-button" (click)="editing.set(!editing())">{{editing()?'Preview':'Edit file'}}</button>}</div>
       <div [hidden]="!!card()" class="source-pane">
-        @if(kind()==='pdf'){<app-pdf-preview [blob]="file.blob" [name]="file.name" />}
+        @if(kind()==='pdf'){<app-pdf-preview [url]="fileUrl()" [name]="file.name" />}
         @else if(editing()){
           <label class="sr-only" for="text-content">File content</label><textarea id="text-content" class="text-file-editor" [formControl]="content" spellcheck="false"></textarea><div class="action-buttons"><button class="button primary" (click)="saveContent()">Save file</button><button class="text-button" (click)="cancelContent()">Discard changes</button></div>
         }@else{
