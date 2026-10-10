@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canGenerateFlashcards, CATEGORY_DOCUMENT_TYPES, UPLOAD_CATEGORIES, descendants, folderCards, materialName, normalizeMaterial, treeRows, validParent } from '../src/app/models/material.ts';
+import { canGenerateFlashcards, CATEGORY_DOCUMENT_TYPES, UPLOAD_CATEGORIES, descendants, folderCards, materialCards, materialName, normalizeMaterial, sourcePageUrl, treeRows, validParent } from '../src/app/models/material.ts';
 import type { Material } from '../src/app/models/material.ts';
 import { buildApkg } from '../src/app/models/apkg.ts';
 import initSqlJs from 'sql.js';
@@ -97,6 +97,54 @@ test('APKG is a readable Anki SQLite package with escaped content and stable not
   db.close();reopened.close();
 });
 
+
+test('folder APKG includes every nested deck, while a deck APKG contains only its own cards',async()=>{
+  const deck=(id:string,parentId:string|null,count:number):Material=>({...file(id,parentId,'deck'),
+    marker:'Done',outputs:{flashcards:{cards:Array.from({length:count},(_,i)=>({id:`${id}-${i}`,question:`${id} question ${i}`,answer:'Answer'}))}}});
+  const direct=deck('direct','folder',8),nested=deck('nested','child',7),deep=deck('deep','grandchild',6);
+  const files=[file('folder',null,'folder'),file('child','folder','folder'),file('grandchild','child','folder'),
+    direct,nested,deep,deck('outside',null,3)];
+  // Filtering and collapsed folders change the explorer, not what the folder download contains.
+  assert.deepEqual(treeRows(files,new Set(),'direct').map(row=>row.material.id),['folder','direct']);
+  const SQL=await initSqlJs();
+  for(const [cards,name,key,expected] of [
+    [folderCards(files,'folder'),'Folder','subject:folder',21],
+    [materialCards(nested),'Nested deck','subject:nested',7],
+  ] as const){
+    const entries=unzipSync(await buildApkg(SQL,cards,name,key));
+    const db=new SQL.Database(entries['collection.anki2']);
+    try{
+      assert.equal(db.exec('PRAGMA integrity_check')[0].values[0][0],'ok');
+      assert.equal(db.exec('SELECT count(*) FROM cards')[0].values[0][0],expected);
+      assert.equal(db.exec('SELECT count(DISTINCT guid) FROM notes')[0].values[0][0],expected);
+      assert.equal(db.exec("SELECT count(*) FROM notes WHERE flds LIKE 'outside %'")[0].values[0][0],0);
+      if(key==='subject:nested')assert.equal(db.exec("SELECT count(*) FROM notes WHERE flds NOT LIKE 'nested %'")[0].values[0][0],0);
+    }finally{db.close();}
+  }
+});
+
+test('source links survive collections and APKG exports without changing note IDs or field counts',async()=>{
+  const source={pdfId:'pdf-id',pdfName:'Lecture <1>.pdf',pages:[2,4],evidence:'The reference passage.'};
+  const deck={...file('deck','folder','deck'),outputs:{flashcards:{cards:[{id:'card-id',question:'Question?',answer:'Answer.',source}]}}};
+  const cards=folderCards([file('folder',null,'folder'),deck],'folder');
+  assert.deepEqual(cards[0].source,source);
+  const SQL=await initSqlJs();
+  const unpack=async(items:typeof cards)=>new SQL.Database(unzipSync(await buildApkg(SQL,items,'Folder','deck-id','https://study.example/'))['collection.anki2']);
+  const original=await unpack(cards.map(card=>({...card,source:undefined}))),referenced=await unpack(cards);
+  const deleted=await unpack(cards.map(card=>({...card,source:{...source,pdfId:null}})));
+  try{
+    assert.deepEqual(referenced.exec('SELECT guid FROM notes')[0].values,original.exec('SELECT guid FROM notes')[0].values);
+    const fields=(referenced.exec('SELECT flds FROM notes')[0].values[0][0] as string).split('\x1f');
+    assert.equal(fields.length,2);assert.equal(fields[1],'Answer.');
+    for(const page of source.pages){
+      assert.ok(fields[0].includes('https://study.example'+sourcePageUrl(source.pdfId,page)));
+      assert.ok(fields[0].includes(`Lecture &lt;1&gt;.pdf page ${page}`));
+    }
+    const removed=deleted.exec('SELECT flds FROM notes')[0].values[0][0] as string;
+    assert.ok(removed.includes('(PDF deleted)'));assert.ok(!removed.includes('href='));
+    assert.equal(referenced.exec('PRAGMA integrity_check')[0].values[0][0],'ok');
+  }finally{original.close();referenced.close();deleted.close();}
+});
 
 test('only slides, solutions and scripts offer PDF flashcards, including folder collections',()=>{
   assert.deepEqual(UPLOAD_CATEGORIES,['Slides','Exercises','Solutions','Exams','Scripts']);

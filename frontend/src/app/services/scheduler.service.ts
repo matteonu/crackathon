@@ -1,10 +1,12 @@
 import { Injectable, signal } from '@angular/core';
 import type { Rating, RecallAnalytics } from '../models/recall';
+import type { FlashcardSource } from '../models/material';
 export type { Rating, RecallAnalytics } from '../models/recall';
 
 export interface PracticeScope {subjectId?:string;folderId?:string|null;deckId?:string|null;}
 export interface PracticeCard {
   id:string;deckId:string;version:number;question:string;answer:string;demo:boolean;
+  generated?:boolean;source?:FlashcardSource;
   fileId:string;fileName:string;predictions:Record<Rating,{due:string;seconds:number}>;
 }
 export interface PracticeSession {cards:PracticeCard[];serverNow:string;nextDue:string|null;dueCount:number;}

@@ -10,9 +10,19 @@ def utc_now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def card_source(card, source_pdf=None):
+    if not card["source_pdf_name"] or not card["source_pages"]:
+        return None
+    return {"pdfId": card["source_pdf_id"], "pdfName": source_pdf["name"] if source_pdf else card["source_pdf_name"],
+            "pages": json.loads(card["source_pages"]), "evidence": card["source_evidence"] or ""}
+
+
 def deck_cards(conn, deck_id):
+    sources = {r["id"]: r for r in conn.execute("""SELECT id, name FROM materials WHERE id IN
+        (SELECT source_pdf_id FROM flashcards WHERE deck_id=?)""", (deck_id,))}
     return [{"id": r["id"], "question": r["question"], "answer": r["answer"],
-             "demo": bool(r["demo"]), "generated": bool(r["generated"])}
+             "demo": bool(r["demo"]), "generated": bool(r["generated"]),
+             **({"source": source} if (source := card_source(r, sources.get(r["source_pdf_id"]))) else {})}
             for r in conn.execute("SELECT * FROM flashcards WHERE deck_id = ? ORDER BY position, id", (deck_id,))]
 
 
@@ -48,6 +58,15 @@ def validate_cards(cards):
             raise RequestError(400, "Each card needs a question and an answer within the supported length.")
         if "id" in card and (not isinstance(card["id"], str) or not card["id"] or len(card["id"]) > 200):
             raise RequestError(400, "Invalid card ID.")
+        source = card.get("source")
+        if source is not None:
+            if (not isinstance(source, dict) or set(source) != {"pdfId", "pdfName", "pages", "evidence"}
+                    or (source["pdfId"] is not None and (not isinstance(source["pdfId"], str) or not source["pdfId"]))
+                    or not isinstance(source["pdfName"], str) or not source["pdfName"].strip() or len(source["pdfName"]) > 180
+                    or not isinstance(source["pages"], list) or not 1 <= len(source["pages"]) <= 100
+                    or any(type(page) is not int or page < 1 for page in source["pages"])
+                    or not isinstance(source["evidence"], str) or not source["evidence"].strip() or len(source["evidence"]) > 8000):
+                raise RequestError(400, "A card source needs a PDF, positive page numbers and supporting evidence.")
     ids = [c["id"] for c in cards if "id" in c]
     if len(ids) != len(set(ids)):
         raise RequestError(400, "Card IDs must be unique within a deck.")
@@ -75,13 +94,26 @@ def replace_cards(conn, deck_id, cards):
         if other and other["deck_id"] != deck_id:
             raise RequestError(400, "This card ID belongs to another deck.")
         previous = existing.get(card_id)
-        if previous and (previous["question"], previous["answer"]) != (card["question"], card["answer"]):
+        changed = previous and (previous["question"], previous["answer"]) != (card["question"], card["answer"])
+        if changed:
             reset_progress(conn, deck_id, card_id)
-        conn.execute("""INSERT INTO flashcards(id,deck_id,question,answer,position,demo,generated)
-            VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET question=excluded.question,
-            answer=excluded.answer,position=excluded.position,demo=excluded.demo,generated=excluded.generated""",
+        source = card.get("source", previous.get("source") if previous and not changed else None)
+        if source and source["pdfId"]:
+            pdf = conn.execute("SELECT id,name FROM materials WHERE id=? AND user_id=? AND kind='pdf'",
+                               (source["pdfId"], deck["user_id"])).fetchone()
+            if not pdf:
+                raise RequestError(400, "Choose a source PDF from your library.")
+            source = {**source, "pdfName": pdf["name"]}
+        conn.execute("""INSERT INTO flashcards(id,deck_id,question,answer,position,demo,generated,
+            source_pdf_id,source_pdf_name,source_pages,source_evidence)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET question=excluded.question,
+            answer=excluded.answer,position=excluded.position,demo=excluded.demo,generated=excluded.generated,
+            source_pdf_id=excluded.source_pdf_id,source_pdf_name=excluded.source_pdf_name,
+            source_pages=excluded.source_pages,source_evidence=excluded.source_evidence""",
             (card_id, deck_id, card["question"], card["answer"], position,
-             bool(card.get("demo", False)), bool(card.get("generated", False))))
+             bool(card.get("demo", False)), bool(card.get("generated", False)),
+             source["pdfId"] if source else None, source["pdfName"] if source else None,
+             json.dumps(sorted(set(source["pages"]))) if source else None, source["evidence"] if source else None))
         conn.execute("""INSERT OR IGNORE INTO flashcard_progress(user_id,deck_id,card_id,due)
             VALUES(?,?,?,?)""", (deck["user_id"], deck_id, card_id, utc_now()))
         seen.add(card_id)
@@ -104,7 +136,10 @@ def sync_generated(conn, source, questions, mode):
                       (card["question"], card["answer"])), None)
         if match:
             available.remove(match)
-        generated.append({**card, "id": match["id"] if match else str(uuid.uuid4()),
+        reference = ({"pdfId": source["id"], "pdfName": source["name"], "pages": card["source_pages"],
+                      "evidence": card["evidence"]} if card.get("source_pages") and card.get("evidence")
+                     else card.get("source", match.get("source") if match else None))
+        generated.append({**card, **({"source": reference} if reference else {}), "id": match["id"] if match else str(uuid.uuid4()),
                           "generated": True, "demo": False})
     replace_cards(conn, deck_id, generated + manual)
     conn.execute("UPDATE materials SET generation_mode=? WHERE id=?", (mode, deck_id))

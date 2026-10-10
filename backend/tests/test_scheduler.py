@@ -256,7 +256,7 @@ class PersistedScheduler(unittest.TestCase):
         fixture = Path(__file__).resolve().parents[2] / 'frontend/tests/fixtures/study-demo.pdf'
         def runner(args):
             result = jobs.read(Path(args.output))
-            result['documents'] = [{'abstract': 'Generated summary.', 'questions': [CARD]*5,
+            result['documents'] = [{'abstract': 'Generated summary.', 'questions': [{**CARD, 'source_pages': [1], 'evidence': 'Source text.'}]*5,
                                     'complete': True, 'sentence_count': 1}]
             pdf_study.write_json(Path(args.output), result)
         jobs.runner = runner
@@ -268,6 +268,53 @@ class PersistedScheduler(unittest.TestCase):
         deck = next(m for m in listing if m['sourcePdfId'] == pdf['id'])
         self.assertEqual(len(deck['outputs']['flashcards']['cards']), 5)
         self.assertEqual(len(self.session()['cards']), 5)
+
+    def test_delete_one_card_preserves_other_cards_and_progress_after_restart(self):
+        folder = self.material('folder', 'Chapter')
+        pdf = self.material(parent=folder['id'])
+        deck = self.generated(pdf, [CARD, {'question': 'Second?', 'answer': 'Two.'}])
+        removed, kept = self.session()['cards']
+        self.assertEqual(self.rate(kept, 'easy').status_code, 200)
+        with self.app.app_context():
+            before = tuple(db.get_db().execute('SELECT * FROM flashcard_progress WHERE card_id=?',
+                                               (kept['id'],)).fetchone())
+        # An addition made after the browser loaded must survive deleting an older card.
+        added = self.client.post('/api/materials/'+deck['id']+'/cards', headers=ALICE,
+                                 json={'cards': [{'question': 'Manual?', 'answer': 'Mine.'}]}).get_json()
+        expected = [c for c in added['outputs']['flashcards']['cards'] if c['id'] != removed['id']]
+        url = '/api/materials/'+deck['id']+'/cards/'+removed['id']
+        for _ in range(2):
+            response = self.client.delete(url, headers=ALICE)
+            self.assertEqual(response.status_code, 200, response.get_json())
+            self.assertEqual(response.get_json()['outputs']['flashcards']['cards'], expected)
+        self.assertEqual(self.rate(removed).status_code, 409)
+        self.assertNotIn(removed['id'], [c['id'] for c in self.session(folder=folder['id'])['cards']])
+        restarted = build_app(self.temp.name)
+        self.addCleanup(restarted.extensions['learning_jobs'].pool.shutdown, wait=True)
+        kept_deck = restarted.test_client().get('/api/materials/'+deck['id'], headers=ALICE).get_json()
+        self.assertEqual(kept_deck['outputs']['flashcards']['cards'], expected)
+        with restarted.app_context():
+            conn = db.get_db()
+            self.assertIsNone(conn.execute('SELECT 1 FROM flashcard_progress WHERE card_id=?', (removed['id'],)).fetchone())
+            self.assertEqual(tuple(conn.execute('SELECT * FROM flashcard_progress WHERE card_id=?', (kept['id'],)).fetchone()), before)
+            self.assertEqual(conn.execute('PRAGMA foreign_key_check').fetchall(), [])
+
+    def test_delete_card_is_owner_and_deck_scoped_and_can_empty_a_deck(self):
+        pdf = self.material()
+        deck = self.generated(pdf)
+        card = deck['outputs']['flashcards']['cards'][0]
+        other = self.generated(self.material(name='other.pdf'))
+        url = '/api/materials/'+deck['id']+'/cards/'+card['id']
+        self.assertEqual(self.client.delete(url, headers=BOB).status_code, 404)
+        self.assertEqual(self.client.delete('/api/materials/'+pdf['id']+'/cards/'+card['id'], headers=ALICE).status_code, 400)
+        self.assertEqual(self.client.delete('/api/materials/'+other['id']+'/cards/'+card['id'], headers=ALICE).status_code, 200)
+        self.assertEqual(self.client.get('/api/materials/'+deck['id'], headers=ALICE).get_json()['outputs']['flashcards']['cards'], [card])
+        response = self.client.delete(url, headers=ALICE)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['outputs']['flashcards']['cards'], [])
+        self.assertEqual(self.session(deck=deck['id'])['cards'], [])
+        self.assertEqual(self.client.get('/api/materials/'+pdf['id'], headers=ALICE).status_code, 200)
+        self.assertEqual(self.client.get('/api/materials/'+other['id'], headers=ALICE).get_json(), other)
 
     def test_invalid_card_update_rolls_back_progress_reset(self):
         deck = self.generated(self.material(), [CARD, {'question':'Two?', 'answer':'Two.'}])

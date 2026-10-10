@@ -39,7 +39,7 @@
           </article>
         }
       </div>
-      @if(card();as card){<article class="flashcard-stage" aria-label="Selected flashcard"><div class="flashcard-stage-top"><span class="eyebrow">QUESTION</span>@if(card.demo){<span class="demo-badge">Demo card</span>}</div><h2>{{card.question}}</h2>@if(revealed()){<div class="flashcard-answer"><span class="eyebrow">ANSWER</span><p>{{card.answer}}</p></div>}@else{<button class="button primary" (click)="revealed.set(true)">Reveal answer</button>}<p class="field-hint">Click outside this card, press Escape, or click Back to PDF above to return to your source.</p></article>}
+      @if(card();as card){<article class="flashcard-stage" aria-label="Selected flashcard"><div class="flashcard-stage-top"><span class="eyebrow">QUESTION</span>@if(card.demo){<span class="demo-badge">Demo card</span>}</div><h2>{{card.question}}</h2><app-card-source [card]="card" />@if(revealed()){<div class="flashcard-answer"><span class="eyebrow">ANSWER</span><p>{{card.answer}}</p></div>}@else{<button class="button primary" (click)="revealed.set(true)">Reveal answer</button>}<p class="field-hint">Click outside this card, press Escape, or click Back to PDF above to return to your source.</p></article>}
       @if(mcqSession();as session){
         @if(session.status==='completed'&&!mcqFeedback()&&mcqReviewIndex()===null){
           <article class="mcq-complete" aria-label="Practice complete"><span>{{session.score}} / {{session.total}}</span><h2>Practice complete</h2><p>You answered {{session.score}} of {{session.total}} questions correctly.</p><button class="button secondary" (click)="returnToFile()">Back to PDF</button></article>
@@ -59,10 +59,12 @@
         @if(allowsMcq()){<button type="button" role="tab" [attr.aria-selected]="tool()==='mcq'" [class.active]="tool()==='mcq'" (click)="chooseTool('mcq')">MC questions</button>}
         @if(allowsChat()){<button type="button" role="tab" [attr.aria-selected]="tool()==='chat'" [class.active]="tool()==='chat'" (click)="chooseTool('chat')">Q&amp;A chat</button>}
       </div>
-      @if(tool()==='chat'&&allowsChat()){
-        <div role="tabpanel"><app-document-chat [documentId]="fileId()" [page]="pageContext().page" [totalPages]="pageContext().total" /></div>
-      }@else if(tool()==='flashcards'){
+      @if(allowsChat()){
+        <div role="tabpanel" [hidden]="tool()!=='chat'"><app-document-chat [documentId]="fileId()" [page]="pageContext().page" [totalPages]="pageContext().total" /></div>
+      }
+      @if(tool()==='flashcards'&&allowsCards()){
       <div class="tool-heading"><div><span class="eyebrow">ACTIVE RECALL</span><h3>Flashcards <span class="card-count">{{cards().length}}</span></h3></div><app-icon name="book" /></div>
+      @if(linkedDeck();as deck){<button class="button primary" [disabled]="!cards().length" (click)="startLearning.emit(deck.id)">Start learning</button>}
       @if(kind()==='pdf'){
         <div class="generation-settings">
           <app-learning-mode label="Mode" [mode]="selectedMode()" [disabled]="generating()" (modeChange)="selectedMode.set($event)" />
@@ -74,10 +76,15 @@
         <button class="button primary generate-cards" [disabled]="generating()||!validCount()||cardsReady()" (click)="generate()">@if(generating()){<app-loading-dots [label]="summaryRunning()?'Preparing summary':'Generating flashcards'" />}@else{ {{cardsReady()?'Flashcards ready':file.processing?.status==='error'&&file.processing.task!=='summary'?'Retry flashcards':'Generate flashcards'}} }</button>
         <p class="field-hint" aria-live="polite">@if(summaryRunning()){Your summary is being prepared. Generate cards when it is ready.}@else if(generating()){<app-loading-dots [label]="selectedMode()==='deep'?'Reading text and visuals':'Reading extracted text'" />}@else{Flashcards are generated only when you press the button.}</p>
       }
-      <div class="flashcard-list">@for(card of cards();track card.id){<button class="flashcard-choice" [class.selected]="selectedCard()===card.id" [attr.aria-pressed]="selectedCard()===card.id" (click)="selectCard(card.id!)"><span class="flashcard-number">{{ $index+1 }}</span><span><strong>{{card.question}}</strong><small>{{card.generated?'Generated from PDF':card.demo?'Demo card':'Your card'}} · Click to review</small></span><app-icon name="right" /></button>}@empty{<div class="empty-state">@if(generating()&&!summaryRunning()){<app-loading-dots label="Preparing your flashcards" />}@else{No flashcards yet.}</div>}</div>
+      <div class="flashcard-list">@for(card of cards();track card.id){
+        <div class="flashcard-row">
+          <button class="flashcard-choice" [class.selected]="selectedCard()===card.id" [attr.aria-pressed]="selectedCard()===card.id" (click)="selectCard(card.id!)"><span class="flashcard-number">{{ $index+1 }}</span><span><strong>{{card.question}}</strong></span><app-icon name="right" /></button>
+          <button type="button" class="icon-button small delete-material delete-flashcard" [attr.aria-label]="'Delete flashcard: '+card.question" title="Delete flashcard" [disabled]="!!deletingCard()||!linkedDeck()||!card.id" [attr.aria-busy]="deletingCard()===card.id" (click)="$event.stopPropagation();removeCard(card.id!)"><app-icon name="minus" /></button>
+        </div>
+      }@empty{<div class="empty-state">@if(generating()&&!summaryRunning()){<app-loading-dots label="Preparing your flashcards" />}@else{No flashcards yet.}</div>}</div>
       @if(kind()==='pdf'){<button class="text-button" (click)="addingCard.set(!addingCard())"><app-icon name="plus" /> Add a flashcard</button>}
       @if(addingCard()){<form class="add-card-form" novalidate [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><button class="button secondary" type="submit">Save flashcard</button></form>}
-      }@else{
+      }@else if(tool()==='mcq'&&allowsMcq()){
         <div class="tool-heading"><div><span class="eyebrow">PRACTICE</span><h3>MC questions</h3></div><app-icon name="book" /></div>
         <app-learning-mode label="Mode" [mode]="selectedMode()" [disabled]="mcqBusy()" (modeChange)="selectedMode.set($event)" />
         <div class="viewer-card-count-field"><label class="viewer-card-count">Questions (optional)<input type="number" min="1" max="60" step="1" placeholder="Model decides" [ngModel]="requestedMcqCount()" (ngModelChange)="requestedMcqCount.set($event===''?null:$event)" [disabled]="mcqBusy()" [attr.aria-invalid]="!validMcqCount()" aria-describedby="mcq-count-hint"></label><p id="mcq-count-hint" class="field-hint" [class.form-error]="!validMcqCount()">{{validMcqCount()?'Leave empty to let the model decide, or choose 1–60.':'Enter a whole number from 1 to 60.'}}</p></div>

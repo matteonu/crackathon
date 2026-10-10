@@ -276,6 +276,9 @@ def update(material_id):
             try:
                 conn.execute(f"UPDATE materials SET {', '.join(sets)} WHERE id = ? AND user_id = ?",
                              values + [material_id, user["id"]])
+                if existing["kind"] == "pdf" and "name" in body:
+                    conn.execute("UPDATE flashcards SET source_pdf_name=? WHERE source_pdf_id=?",
+                                 (body["name"], material_id))
             except sqlite3.IntegrityError:
                 raise RequestError(409, "That material name or relationship is already in use.") from None
     return jsonify(to_json(row(material_id)))
@@ -298,6 +301,20 @@ def append_cards(material_id):
         decks.replace_cards(conn, deck_id, decks.deck_cards(conn, deck_id) +
                             [{**c, "id": str(uuid.uuid4()), "generated": False, "demo": False} for c in cards])
     return jsonify(to_json(row(deck_id))), 201
+
+
+@bp.delete("/<uuid:material_id>/cards/<card_id>")
+def delete_card(material_id, card_id):
+    conn = db.get_db()
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        deck = row(str(material_id))
+        if deck["kind"] != "deck":
+            raise RequestError(400, "Delete cards from their deck.")
+        # Delete only this card, preserving concurrent additions and other progress.
+        # An already-removed card is a successful retry; return the current deck.
+        conn.execute("DELETE FROM flashcards WHERE deck_id = ? AND id = ?", (deck["id"], card_id))
+    return jsonify(to_json(row(deck["id"])))
 
 
 @bp.delete("/<uuid:material_id>")

@@ -1,11 +1,13 @@
 import { Component, ElementRef, OnDestroy, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
+import { IconComponent } from '../shared/icon.component';
+import { CardSourceComponent } from '../shared/card-source.component';
 import { FolderCard, descendants, materialKind } from '../models/material';
 import { MaterialStore } from '../services/material-store';
 import { PracticeCard, PracticeScope, Rating, RecallAnalytics, SchedulerError, SchedulerService } from '../services/scheduler.service';
 
-@Component({selector:'app-folder-flashcards',standalone:true,imports:[FormsModule,DatePipe],templateUrl:'./folder-flashcards.component.html',host:{'(document:keydown)':'onKeydown($event)'}})
+@Component({selector:'app-folder-flashcards',standalone:true,imports:[FormsModule,DatePipe,IconComponent,CardSourceComponent],templateUrl:'./folder-flashcards.component.html',host:{'(document:keydown)':'onKeydown($event)'}})
 export class FolderFlashcardsComponent implements OnDestroy {
   readonly cards=input.required<FolderCard[]>();readonly name=input.required<string>();readonly subjectId=input.required<string>();
   readonly folderId=input<string|null>(null);readonly deckId=input<string|null>(null);readonly openFile=output<string>();
@@ -14,6 +16,8 @@ export class FolderFlashcardsComponent implements OnDestroy {
   private readonly materials=inject(MaterialStore);
   private readonly element=inject<ElementRef<HTMLElement>>(ElementRef);
   readonly queue=signal<PracticeCard[]>([]);readonly reviewed=signal(0);readonly revealed=signal(false);
+  readonly sessionTotal=computed(()=>this.reviewed()+this.queue().length);
+  readonly sessionProgress=computed(()=>this.sessionTotal()?this.reviewed()/this.sessionTotal()*100:0);
   readonly current=computed(()=>this.queue()[0]);readonly busy=signal(false);readonly error=signal('');
   readonly summary=signal<RecallAnalytics|null>(null);
   readonly limit=signal(20);readonly newLimit=signal(5);readonly validLimits=computed(()=>Number.isInteger(this.limit())&&this.limit()>0&&Number.isInteger(this.newLimit())&&this.newLimit()>=0);
@@ -23,6 +27,7 @@ export class FolderFlashcardsComponent implements OnDestroy {
   readonly ratings:Rating[]=['again','hard','good','easy'];readonly ratingLabels:Record<Rating,string>={again:'Again',hard:'Hard',good:'Good',easy:'Easy'};
   readonly ratingShortcuts:Record<Rating,string>={again:'1',hard:'2',good:'3 Space',easy:'4'};
   readonly preferenceError=signal('');readonly savingPreference=signal(false);
+  readonly deletingCard=signal<string|null>(null);readonly deletionError=signal('');
   readonly preferenceFolders=computed(()=>{
     const files=this.materials.files().filter(f=>f.subjectId===this.subjectId());
     if(this.deckId()){
@@ -45,6 +50,12 @@ export class FolderFlashcardsComponent implements OnDestroy {
     });
   }
   ngOnDestroy():void{this.destroyed=true;clearInterval(this.timer);}
+  async removeCard(card:FolderCard):Promise<void>{
+    if(this.learning()||this.deletingCard()||!card.deckId||!card.id)return;
+    this.deletingCard.set(card.key);this.deletionError.set('');
+    try{if(!await this.materials.removeCard(card.deckId,card.id))this.deletionError.set(this.materials.error());}
+    finally{this.deletingCard.set(null);}
+  }
   onKeydown(event:KeyboardEvent):void{
     if(!this.learning()||!this.current()||event.defaultPrevented||event.isComposing||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
     const dialog=this.element.nativeElement.closest('dialog');if(dialog&&!dialog.open)return;

@@ -31,7 +31,9 @@ export class MaterialStore {
   private async load():Promise<void>{
     try{
       this.files.set((await this.request<Material[]>('/api/materials')).map(normalizeMaterial));
-      for(const file of this.files())if(materialKind(file)==='pdf'&&file.processing)void this.process(file.id,true);
+      // Completed results already live in the deck. Replaying cached JSON would
+      // restore cards that the user deleted since generation finished.
+      for(const file of this.files())if(materialKind(file)==='pdf'&&['queued','running'].includes(file.processing?.status??''))void this.process(file.id,true);
       this.error.set('');
     }
     catch(e){this.error.set(e instanceof Error?e.message:'Could not load your files.');}finally{this.loading.set(false);}
@@ -62,6 +64,12 @@ export class MaterialStore {
   private store(file:Material):Material{
     const saved=normalizeMaterial(file);
     this.files.update(values=>values.some(f=>f.id===saved.id)?values.map(f=>f.id===saved.id?saved:f):[...values,saved]);
+    if(materialKind(saved)==='pdf')this.files.update(values=>values.map(item=>{
+      const cards=item.outputs?.flashcards?.cards;
+      if(!cards?.some(card=>card.source?.pdfId===saved.id&&card.source.pdfName!==saved.name))return item;
+      return {...item,outputs:{...item.outputs,flashcards:{...item.outputs?.flashcards,cards:cards.map(card=>
+        card.source?.pdfId===saved.id?{...card,source:{...card.source,pdfName:saved.name}}:card)}}};
+    }));
     return saved;
   }
   async create(subjectId:string,parentId:string|null,kind:Exclude<MaterialKind,'pdf'|'deck'>,name:string):Promise<Material>{
@@ -147,5 +155,14 @@ export class MaterialStore {
     const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)==='folder')return false;
     try{this.store(await this.request<Material>(`/api/materials/${id}/cards`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cards})}));return true;}
     catch(e){if(e instanceof MaterialRequestError&&e.status===404)this.forget(id);this.error.set(e instanceof Error?e.message:'Could not save flashcards. Please retry.');return false;}
+  });}
+  removeCard(deckId:string,cardId:string):Promise<boolean>{return this.queue(async()=>{
+    try{
+      this.store(await this.request<Material>(`/api/materials/${encodeURIComponent(deckId)}/cards/${encodeURIComponent(cardId)}`,{method:'DELETE'}));
+      this.error.set('');return true;
+    }catch(e){
+      if(e instanceof MaterialRequestError&&e.status===404){this.forget(deckId);this.error.set('');return true;}
+      this.error.set(e instanceof Error?e.message:'Could not delete this flashcard. Please retry.');return false;
+    }
   });}
 }

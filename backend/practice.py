@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 
 from auth import current_user
 import db
+import decks
 from errors import RequestError
 from learning.scheduler import Flashcard, FlashcardScheduler
 
@@ -116,8 +117,9 @@ def session():
             due = preview.review(index, rating, now=now)
             predictions[rating] = {'due': due.isoformat(), 'seconds': (due-now).total_seconds()}
         cards.append({'id': r['id'], 'deckId': r['deck_id'], 'version': r['version'],
-                      'question': r['question'], 'answer': r['answer'], 'demo': bool(r['demo']),
+                      'question': r['question'], 'answer': r['answer'], 'demo': bool(r['demo']), 'generated': bool(r['generated']),
                       'fileId': deck['source_pdf_id'] or deck['id'], 'fileName': deck['name'],
+                      **({'source': source} if (source := decks.card_source(r, materials.get(r['source_pdf_id']))) else {}),
                       'predictions': predictions})
     future = [c.due for c in scheduler.cards.values() if c.due > now]
     return jsonify(cards=cards, serverNow=now.isoformat(),

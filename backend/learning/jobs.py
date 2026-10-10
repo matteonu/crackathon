@@ -209,7 +209,8 @@ class StudyJobs:
                 if count_changed or regenerate:
                     raise RequestError(409, "Wait for the current generation to finish before starting another.")
                 return data
-            if data and data.get("status") == "complete" and not count_changed and not regenerate:
+            if data and data.get("status") == "complete" and not count_changed and not regenerate and (task == "summary" or
+                    pdf_study.has_card_sources((data.get("documents") or [{}])[0].get("questions"))):
                 return data
             if not pdf_study.API_KEY.strip():
                 raise RequestError(503, "The model API key is missing. Set OPENAI_API_KEY in .env and restart the server, then retry.")
@@ -248,6 +249,7 @@ class StudyJobs:
             data.update(status="running", error="", model=model)
             pdf_study.write_json(output, data)
             args = argparse.Namespace(pdfs=[str(source)], output=str(output),
+                                      source_pdf_name=data["file"], source_pdf_id=document_id,
                                       sentences=data["requested_sentences"], questions=data["requested_questions"],
                                       language="same language as the PDF", model=model,
                                       reasoning_effort=reasoning_for(task),
@@ -259,6 +261,8 @@ class StudyJobs:
             data = self.read(output)
             if not data["documents"] or not data["documents"][0].get("complete"):
                 raise pdf_study.WorkflowError("Processing did not finish. Retry to resume saved work.")
+            if task == "flashcards" and not pdf_study.has_card_sources(data["documents"][0].get("questions")):
+                raise pdf_study.WorkflowError("Flashcards are missing their source pages or evidence. Retry generation.")
             data.update(status="complete", error="")
             if self.on_complete:
                 self.on_complete(document_id, data)

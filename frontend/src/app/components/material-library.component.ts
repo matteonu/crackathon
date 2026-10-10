@@ -1,7 +1,7 @@
 import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MaterialStore } from '../services/material-store';
-import { MATERIAL_MARKERS, Material, MaterialKind, MaterialMarker, MaterialCategory, UPLOAD_CATEGORIES, materialKind, materialTypeLabel, folderCards, treeRows } from '../models/material';
+import { MATERIAL_MARKERS, Material, MaterialKind, MaterialMarker, MaterialCategory, UPLOAD_CATEGORIES, materialKind, materialTypeLabel, materialCards, folderCards, treeRows } from '../models/material';
 import { IconComponent } from '../shared/icon.component';
 import { FileViewerComponent } from './file-viewer.component';
 import { FolderFlashcardsComponent } from './folder-flashcards.component';
@@ -65,5 +65,14 @@ export class MaterialLibraryComponent {
     this.learningFolder.set(folderId);this.learningDeck.set(deckId);this.learningOpen.set(true);this.learningDialog()?.nativeElement.showModal();
   }
   openSource(id:string):void{this.collectionDialog()?.nativeElement.close();this.open(id);}
-  async exportFolder(id:string|null):Promise<void>{if(this.exporting())return;const name=this.subjectFiles().find(f=>f.id===id)?.name??'Materials';const cards=folderCards(this.subjectFiles(),id);this.exporting.set(true);this.localError.set('');try{await this.exporter.export(cards,name,`${this.subjectId()}:${id??'root'}`);this.status.set(`${cards.length} flashcards exported as ${name}.apkg.`);}catch(e){this.localError.set(e instanceof Error?e.message:'Export failed. Please retry.');}finally{this.exporting.set(false);}}
+  async exportCards(id:string|null):Promise<void>{
+    if(this.exporting())return;
+    const files=this.subjectFiles(),item=files.find(f=>f.id===id),name=item?.name??'Materials';
+    // Export the whole collection, regardless of visible rows, markers, or session limits.
+    const cards=item&&materialKind(item)==='deck'?materialCards(item):folderCards(files,id);
+    this.exporting.set(true);this.localError.set('');
+    try{await this.exporter.export(cards,name,`${this.subjectId()}:${id??'root'}`);this.status.set(`${cards.length} flashcards exported as ${name}.apkg.`);}
+    catch(e){this.localError.set(e instanceof Error?e.message:'Export failed. Please retry.');}
+    finally{this.exporting.set(false);}
+  }
 }

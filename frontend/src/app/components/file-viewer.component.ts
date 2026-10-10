@@ -10,13 +10,15 @@ import { LearningModeComponent } from '../shared/learning-mode.component';
 import { FolderFlashcardsComponent } from './folder-flashcards.component';
 import { McqService } from '../services/mcq.service';
 import { McqAnswerResult, McqSession, McqSessionAnswer, McqSet } from '../models/mcq';
+import { CardSourceComponent } from '../shared/card-source.component';
 
-@Component({selector:'app-file-viewer',standalone:true,imports:[FormsModule,ReactiveFormsModule,PdfPreviewComponent,IconComponent,LoadingDotsComponent,LearningModeComponent,FolderFlashcardsComponent,DocumentChatComponent],templateUrl:'./file-viewer.component.html'})
+@Component({selector:'app-file-viewer',standalone:true,imports:[FormsModule,ReactiveFormsModule,PdfPreviewComponent,IconComponent,LoadingDotsComponent,LearningModeComponent,FolderFlashcardsComponent,DocumentChatComponent,CardSourceComponent],templateUrl:'./file-viewer.component.html'})
 export class FileViewerComponent {
   readonly fileId=input.required<string>();readonly materials=inject(MaterialStore);
   readonly openFile=output<string>();
   readonly startLearning=output<string>();
-  readonly mcq=inject(McqService);readonly tool=signal<'flashcards'|'mcq'|'chat'>('flashcards');
+  readonly mcq=inject(McqService);readonly toolChoice=signal<'flashcards'|'mcq'|'chat'|null>(null);
+  readonly tool=computed(()=>!this.allowsChat()?'flashcards':!this.allowsCards()?'chat':this.toolChoice()??(this.cards().length?'flashcards':'chat'));
   readonly mcqSets=signal<McqSet[]>([]);readonly mcqLoading=signal(false);readonly mcqBusy=signal(false);
   readonly mcqSessions=signal<Record<string,McqSession[]>>({});
   readonly requestedMcqCount=signal<number|null>(null);
@@ -34,10 +36,10 @@ export class FileViewerComponent {
   readonly allowsMcq=computed(()=>this.kind()==='pdf'&&['Slides','Scripts'].includes(this.file()?.category??''));
   readonly currentMcq=computed(()=>{const s=this.mcqSession();return s?.questions?.[s.position]??null;});
   readonly displayedMcq=computed(()=>{const s=this.mcqSession();if(!s?.questions)return null;const review=this.mcqReviewIndex();return s.questions[review??(this.mcqFeedback()?Math.max(0,s.position-1):s.position)]??null;});
-  readonly reviewedAnswer=computed<McqSessionAnswer|null>(()=>{const session=this.mcqSession(),question=this.displayedMcq();return session?.answers?.find(answer=>answer.questionId===question?.id)??null;});
+  readonly reviewedAnswer=computed<McqSessionAnswer|null>(()=>{if(this.mcqReviewIndex()===null)return null;const session=this.mcqSession(),question=this.displayedMcq();return session?.answers?.find(answer=>answer.questionId===question?.id)??null;});
   readonly summaryExpanded=signal(true);
   readonly summaryRunning=computed(()=>this.generating()&&this.file()?.processing?.task==='summary');
-  readonly cardsReady=computed(()=>this.file()?.processing?.task!=='summary'&&this.file()?.processing?.status==='complete'&&this.selectedMode()===(this.file()?.processing?.mode??'shallow')&&this.requestedCount()===(this.file()?.processing?.requestedQuestions??60));
+  readonly cardsReady=computed(()=>this.file()?.processing?.task!=='summary'&&this.file()?.processing?.status==='complete'&&this.selectedMode()===(this.file()?.processing?.mode??'shallow')&&this.requestedCount()===(this.file()?.processing?.requestedQuestions??60)&&!this.cards().some(card=>card.generated&&!card.source));
   readonly stage=viewChild<ElementRef<HTMLElement>>('stage');
   readonly file=computed(()=>this.materials.files().find(f=>f.id===this.fileId()));readonly kind=computed(()=>this.file()?materialKind(this.file()!):'pdf');
   readonly linkedDeck=computed(()=>this.materials.files().find(f=>f.kind==='deck'&&f.sourcePdfId===this.fileId()));
@@ -46,19 +48,30 @@ export class FileViewerComponent {
   readonly deckCards=computed(()=>this.cards().map(c=>({...c,key:c.id!,fileId:this.file()?.sourcePdfId??this.fileId(),fileName:this.file()?.name??'',deckId:this.fileId()})));
   readonly revealed=signal(false);readonly generating=computed(()=>['queued','running'].includes(this.file()?.processing?.status??''));readonly saving=signal(false);readonly editing=signal(false);readonly addingCard=signal(false);
   readonly error=signal('');readonly notice=signal('');readonly fileUrl=computed(()=>materialFileUrl(this.fileId()));
+  readonly deletingCard=signal<string|null>(null);
   readonly details=new FormGroup({name:new FormControl('',{nonNullable:true}),description:new FormControl('',{nonNullable:true})});
   readonly content=new FormControl('',{nonNullable:true});readonly cardForm=new FormGroup({question:new FormControl('',{nonNullable:true}),answer:new FormControl('',{nonNullable:true})});
   readonly lines=computed(()=>(this.file()?.content??'').split('\n'));
   constructor(){
-    effect(()=>{this.fileId();this.tool.set('flashcards');this.summaryExpanded.set(true);this.pageContext.set({page:0,total:0});this.returnToFile();});
+    effect(()=>{this.fileId();this.toolChoice.set(null);this.summaryExpanded.set(true);this.pageContext.set({page:0,total:0});this.returnToFile();});
     effect(()=>{const id=this.fileId();const f=this.materials.files().find(f=>f.id===id);if(f&&!this.loaded.has(id)){this.loaded.add(id);this.selectedMode.set(f.processing?.task==='summary'?'shallow':f.processing?.mode??'shallow');this.requestedCount.set(f.processing?.requestedQuestions||60);this.details.reset({name:f.name,description:f.description??''});this.content.setValue(f.content??'');if(f.kind==='pdf'&&['Slides','Scripts'].includes(f.category))void this.loadMcq();}});
   }
   private readonly loaded=new Set<string>();
-  chooseTool(tool:'flashcards'|'mcq'|'chat'):void{this.tool.set(tool);this.returnToFile();}
+  chooseTool(tool:'flashcards'|'mcq'|'chat'):void{this.toolChoice.set(tool);this.returnToFile();}
   selectCard(id:string):void{this.selectedCard.set(id);this.revealed.set(false);requestAnimationFrame(()=>this.stage()?.nativeElement.scrollIntoView({block:'nearest'}));}
   returnToFile():void{this.selectedCard.set(null);this.mcqSession.set(null);this.mcqFeedback.set(null);this.mcqReviewIndex.set(null);this.selectedOptions.set(new Set());this.revealed.set(false);}
   surfaceClick(event:MouseEvent):void{const target=event.target;if(target instanceof Element&&!target.closest('.flashcard-stage, .flashcard-choice, .mcq-stage, .mcq-complete, .flashcard-panel'))this.returnToFile();}
   escape(event:Event):void{if(this.selectedCard()||this.mcqSession()){event.preventDefault();event.stopPropagation();this.returnToFile();}}
+  async removeCard(id:string):Promise<void>{
+    const deck=this.linkedDeck();if(!deck||this.deletingCard())return;
+    this.deletingCard.set(id);this.error.set('');
+    try{
+      if(await this.materials.removeCard(deck.id,id)){
+        if(this.selectedCard()===id)this.returnToFile();
+        this.toolChoice.set('flashcards');
+      }else this.error.set(this.materials.error());
+    }finally{this.deletingCard.set(null);}
+  }
   async saveDetails():Promise<void>{const value=this.details.getRawValue();if(this.kind()==='pdf'&&value.name===this.file()?.name)return;this.saving.set(true);this.error.set('');const ok=await this.materials.update(this.fileId(),this.kind()==='pdf'?{name:value.name}:value);this.saving.set(false);if(ok){this.details.controls.name.setValue(this.file()!.name);this.notice.set('File details saved.');}else this.error.set(this.materials.error());}
   async generate():Promise<void>{if(!this.validCount()||!this.allowsCards()||this.generating())return;this.error.set('');this.returnToFile();await this.materials.process(this.fileId(),false,this.selectedMode(),this.requestedCount()!,'flashcards');}
   async summarize():Promise<void>{if(this.generating())return;this.summaryExpanded.set(true);this.error.set('');await this.materials.process(this.fileId(),false,'deep',undefined,'summary',!!this.file()?.outputs?.summary?.text);}
@@ -78,7 +91,7 @@ export class FileViewerComponent {
   private pollMcq():void{setTimeout(async()=>{await this.loadMcq();if(this.mcqSets().some(s=>s.status==='queued'||s.status==='running'))this.pollMcq();},1500);}
   async startMcq(set:McqSet):Promise<void>{if(this.mcqBusy())return;this.mcqBusy.set(true);const session=await this.mcq.start(set.id);this.mcqBusy.set(false);if(session){await this.loadSessions(set.id);this.openMcqSession(session);}}
   async resumeMcq(session:McqSession):Promise<void>{if(this.mcqBusy())return;this.mcqBusy.set(true);const detail=await this.mcq.session(session.id);this.mcqBusy.set(false);if(detail)this.openMcqSession(detail);}
-  private openMcqSession(session:McqSession):void{this.tool.set('mcq');this.mcqSession.set(session);this.mcqFeedback.set(null);this.mcqReviewIndex.set(session.status==='completed'?0:null);this.selectedOptions.set(new Set());requestAnimationFrame(()=>this.stage()?.nativeElement.scrollIntoView({block:'nearest'}));}
+  private openMcqSession(session:McqSession):void{this.toolChoice.set('mcq');this.selectedCard.set(null);this.mcqSession.set(session);this.mcqFeedback.set(null);this.mcqReviewIndex.set(session.status==='completed'?0:null);this.selectedOptions.set(new Set());requestAnimationFrame(()=>this.stage()?.nativeElement.scrollIntoView({block:'nearest'}));}
   formatSessionDate(value:string):string{const date=new Date(value.replace(' ','T')+'Z');return Number.isNaN(date.valueOf())?value:new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(date);}
   toggleOption(id:string,checked:boolean):void{const question=this.currentMcq();if(!question||this.mcqFeedback())return;const next=new Set(question.selectionMode==='single'?[]:this.selectedOptions());if(checked)next.add(id);else next.delete(id);this.selectedOptions.set(next);}
   async checkMcq():Promise<void>{const session=this.mcqSession(),question=this.currentMcq();if(!session||!question||!this.selectedOptions().size)return;const result=await this.mcq.answer(session.id,question.id,[...this.selectedOptions()]);if(result){this.mcqFeedback.set(result);this.mcqSession.set(result.session);}}

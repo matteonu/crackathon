@@ -4,7 +4,7 @@ export interface StudyDocument {
   abstract?: string;
   sentence_count?: number;
   requested_sentences?: number;
-  questions?: { question: string; answer: string }[];
+  questions?: { question: string; answer: string; source_pdf?:string; source_pdf_id?:string; source_pages?:number[]; evidence?:string }[];
   complete?: boolean;
 }
 
@@ -33,7 +33,9 @@ export function parseStudyResult(value: unknown, id: string, mode: LearningMode 
         || (document.abstract !== undefined && (typeof document.abstract !== 'string' || !document.abstract.trim()))
         || (document.questions !== undefined && (!Array.isArray(document.questions)
           || document.questions.some(card => !card || typeof card.question !== 'string' || !card.question.trim()
-            || typeof card.answer !== 'string' || !card.answer.trim())))) {
+            || typeof card.answer !== 'string' || !card.answer.trim()
+            || (card.source_pages !== undefined && (!Array.isArray(card.source_pages) || !card.source_pages.length
+              || card.source_pages.some(page=>!Number.isInteger(page)||page<1) || typeof card.evidence!=='string'||!card.evidence.trim())))))) {
       throw new Error('The saved summary or flashcards are invalid. Retry processing.');
     }
   }
@@ -53,6 +55,7 @@ export function learningPatch(file: Material, result: StudyResult) {
   const manual = (file.outputs?.flashcards?.cards ?? []).filter(card => !card.demo && !card.generated);
   const generated: Flashcard[] = (document?.questions ?? []).map((card, index) => ({
     ...card, id: `pipeline:${file.id}:${index}`, demo: false, generated: true,
+    ...(card.source_pages?.length&&card.evidence?{source:{pdfId:file.id,pdfName:file.name,pages:card.source_pages,evidence:card.evidence}}:{}),
   }));
   return {
     processing: { status: result.status, error: result.error ?? '', mode: result.mode ?? 'shallow', task,

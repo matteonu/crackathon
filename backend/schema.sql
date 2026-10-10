@@ -352,6 +352,10 @@ CREATE TABLE IF NOT EXISTS flashcards (
     position INTEGER NOT NULL,
     demo INTEGER NOT NULL DEFAULT 0,
     generated INTEGER NOT NULL DEFAULT 0,
+    source_pdf_id TEXT REFERENCES materials(id) ON DELETE SET NULL,
+    source_pdf_name TEXT,
+    source_pages TEXT,
+    source_evidence TEXT,
     UNIQUE (id, deck_id)
 );
 CREATE INDEX IF NOT EXISTS flashcards_deck ON flashcards(deck_id, position);

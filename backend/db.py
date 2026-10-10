@@ -62,6 +62,8 @@ def close_db(_exc=None):
 # table as it is, so init_db() adds these with ALTER TABLE (the courses columns the VVZ sync
 # adds are handled by vvz.sync.upgrade_schema()).
 ADDED_COLUMNS = {
+    "flashcards": (("source_pdf_id", "TEXT REFERENCES materials(id) ON DELETE SET NULL"),
+                   ("source_pdf_name", "TEXT"), ("source_pages", "TEXT"), ("source_evidence", "TEXT")),
     "users": (("selected_semkez", "TEXT"),),
     "semester_courses": (
         ("target_hours", "REAL NOT NULL DEFAULT 0"), ("exam_date", "TEXT"),

@@ -213,10 +213,10 @@ def allocate_counts(chunks: list[list[dict]], total: int) -> list[int]:
 def card_schema(include_answers: bool = True) -> dict:
     properties = {
         "category": {"type": "string", "enum": list(CATEGORIES)},
-        "question": {"type": "string"},
-        "answer": {"type": "string"},
         "source_pages": {"type": "array", "items": {"type": "integer"}},
         "evidence": {"type": "string"},
+        "question": {"type": "string"},
+        "answer": {"type": "string"},
     }
     if not include_answers:
         del properties["answer"]
@@ -410,7 +410,10 @@ For preview_and_abstract, return BOTH an abstract and exactly four example cards
 For preview, return four example cards. For questions, return requested_count cards.
 Every card must include a specific, self-contained question, a concise complete answer,
 and the metadata in the schema. Test one learning objective per card. Answers must be
-grounded in the source. Meet category_counts exactly and avoid existing questions.
+grounded in the source. First locate the supporting passage or visual and record its
+source_pages and evidence, then write the question and answer supported by that reference.
+Do not produce a card without a specific reference supporting its entire answer.
+Meet category_counts exactly and avoid existing questions.
 The five categories mean:
 Definition: meaning of a term.
 High level concept: a broad idea, purpose, relationship, or organizing principle.
@@ -420,6 +423,8 @@ Extrapolation/conclusion from concept: a defensible inference from source premis
 start its answer with 'Inference:' and state assumptions and reasoning.
 Use physical PDF page numbers from valid_source_pages for source_pages metadata.
 Evidence must briefly paraphrase the source supporting the answer.
+For visual evidence, identify the relevant diagram, table, or figure and what it shows.
+Page numbers are one-based PDF viewer pages, not printed slide labels or section numbers.
 Apply feedback_history to questions and answers; it takes precedence over examples.
 Cover important material across the supplied content, beyond the preview topics.
 If the source cannot support the requested count, return fewer items; validation will
@@ -570,6 +575,14 @@ def question_plans(source: dict, count: int, deep_mode: bool = False) -> list[tu
             for start in range(0, count, BATCH_SIZE)]
 
 
+def has_card_sources(cards) -> bool:
+    return isinstance(cards, list) and bool(cards) and all(
+        isinstance(card, dict) and isinstance(card.get("source_pages"), list) and card["source_pages"]
+        and all(type(page) is int and page > 0 for page in card["source_pages"])
+        and isinstance(card.get("evidence"), str) and card["evidence"].strip()
+        for card in cards)
+
+
 def process_document(client, pdf: Path, source: dict, args: argparse.Namespace,
                      record: dict, output: Path, data: dict) -> None:
     identity = {"pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest(), "questions": args.questions,
@@ -634,6 +647,10 @@ def process_document(client, pdf: Path, source: dict, args: argparse.Namespace,
     if len(state["batches"]) > len(plans):
         raise WorkflowError("Saved question batches do not match this run.")
     cards = []
+    def saved_cards():
+        return [{**card, "source_pdf": getattr(args, "source_pdf_name", pdf.name),
+                 **({"source_pdf_id": args.source_pdf_id} if getattr(args, "source_pdf_id", None) else {})}
+                for card in cards]
     print(f"Generating {args.questions} questions with answers ({len(plans)} request(s) before corrections).", flush=True)
     for index, (_, pages, categories) in enumerate(plans):
         if index < len(state["batches"]):
@@ -644,11 +661,11 @@ def process_document(client, pdf: Path, source: dict, args: argparse.Namespace,
             state["batches"].append(batch)
             save()
         cards.extend(batch)
-        record.update(questions=[{"question": card["question"], "answer": card["answer"]} for card in cards],
+        record.update(questions=saved_cards(),
                       requested_questions=args.questions)
         save()
         print(f"  Saved {len(cards)}/{args.questions} questions.", flush=True)
-    record.update(questions=[{"question": card["question"], "answer": card["answer"]} for card in cards],
+    record.update(questions=saved_cards(),
                   requested_questions=args.questions, complete=True)
     save()
 
@@ -678,7 +695,7 @@ def _run(args: argparse.Namespace) -> Path:
     pending = []
     for pdf in files:
         record = records.get((pdf, args.deep_mode))
-        if record and record.get("complete") and record.get("abstract") and (summary_only or record.get("questions")):
+        if record and record.get("complete") and record.get("abstract") and (summary_only or has_card_sources(record.get("questions"))):
             print(f"Skipping {pdf.name}: summary and questions already exist for this mode.", flush=True)
         else:
             pending.append((pdf, record))

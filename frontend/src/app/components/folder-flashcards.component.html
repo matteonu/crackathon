@@ -6,13 +6,19 @@
       @if(preferenceError()){<p class="form-error" role="alert">{{preferenceError()}}</p>}
     </details>
   }
-  <div class="folder-card-list">@for(card of cards();track card.key){<details class="folder-card-item"><summary><span><strong>{{card.question}}</strong><small>{{card.fileName}} @if(card.demo){ · Demo card}</small></span></summary><p>{{card.answer}}</p><button class="text-button" (click)="openFile.emit(card.fileId)">Open source or deck →</button></details>}@empty{<div class="empty-state">No flashcards yet. Generate or add cards to a deck.</div>}</div>
+  @if(deletionError()){<p class="form-error" role="alert">{{deletionError()}}</p>}
+  <div class="folder-card-list">@for(card of cards();track card.key){
+    <div class="folder-card-row">
+      <details class="folder-card-item"><summary><span><strong>{{card.question}}</strong><small>{{card.fileName}} @if(card.demo){ · Demo card}</small></span></summary><app-card-source [card]="card" /><p>{{card.answer}}</p><button class="text-button" (click)="openFile.emit(card.fileId)">Open source or deck →</button></details>
+      <button type="button" class="icon-button small delete-material delete-flashcard" [attr.aria-label]="'Delete flashcard: '+card.question" title="Delete flashcard" [disabled]="!!deletingCard()||!card.deckId||!card.id" [attr.aria-busy]="deletingCard()===card.key" (click)="removeCard(card)"><app-icon name="minus" /></button>
+    </div>
+  }@empty{<div class="empty-state">No flashcards yet. Generate or add cards to a deck.</div>}</div>
 }@else{
   <section class="learning-workspace" [attr.aria-busy]="busy()">
     <header class="learning-header"><h2>{{name()}}</h2><div class="learning-stats" aria-label="Collection statistics"><span><strong>{{summary()?.due_cards??'—'}}</strong> Due</span><span><strong>{{summary()?.states?.new??'—'}}</strong> New</span><span><strong>{{summary()?(summary()!.states.learning+summary()!.states.relearning):'—'}}</strong> Learning</span><span><strong>{{summary()?.mature_cards??'—'}}</strong> Mature</span></div></header>
     @if(error()){<p class="form-error" role="alert">{{error()}}</p>}
     @if(current();as card){
-      <article class="learning-card" aria-label="Learning flashcard">@if(card.demo){<span class="demo-badge">Demo card</span>}<h3>{{card.question}}</h3>
+      <article class="learning-card" aria-label="Learning flashcard">@if(card.demo){<span class="demo-badge">Demo card</span>}<h3>{{card.question}}</h3><app-card-source [card]="card" />
         @if(revealed()){<p class="learning-answer">{{card.answer}}</p><div class="learning-actions">@for(rating of ratings;track rating){<button [class]="'button rating-button rating-'+rating" [attr.aria-keyshortcuts]="ratingShortcuts[rating]" [title]="'Shortcut: '+ratingShortcuts[rating]" [disabled]="busy()" (click)="rate(rating)">{{ratingLabels[rating]}}<small>{{delay(card.predictions[rating].seconds)}}</small></button>}</div>}
         @else{<button class="button primary reveal-answer" aria-keyshortcuts="Space" title="Shortcut: Space" [disabled]="busy()" (click)="revealed.set(true)">Reveal answer</button>}
       </article>
@@ -27,7 +33,14 @@
         <button class="button primary" [disabled]="!ready()||!validLimits()" (click)="start()">Start next session</button>
       </div>
     }
-    <footer class="practice-settings"><label>Cards this session <input aria-label="Cards this session" title="Applies to the next batch" type="number" min="1" step="1" [ngModel]="limit()" (ngModelChange)="limit.set($event)"> <small aria-live="polite">{{reviewed()}} reviewed · {{queue().length}} remaining</small></label><label>New cards <input aria-label="New cards" title="Applies to the next batch" type="number" min="0" step="1" [ngModel]="newLimit()" (ngModelChange)="newLimit.set($event)"></label></footer>
+    <footer class="practice-settings">
+      <label>Cards this session <input aria-label="Cards this session" title="Applies to the next batch" type="number" min="1" step="1" [ngModel]="limit()" (ngModelChange)="limit.set($event)"></label>
+      <div class="practice-progress" role="progressbar" aria-label="Session progress" aria-valuemin="0" [attr.aria-valuemax]="sessionTotal()||1" [attr.aria-valuenow]="reviewed()" [attr.aria-valuetext]="reviewed()+' out of '+sessionTotal()+' cards reviewed'">
+        <span class="practice-progress-fill" [style.width.%]="sessionProgress()"></span>
+        <span class="practice-progress-count">{{reviewed()}}/{{sessionTotal()}}</span>
+      </div>
+      <label>New cards <input aria-label="New cards" title="Applies to the next batch" type="number" min="0" step="1" [ngModel]="newLimit()" (ngModelChange)="newLimit.set($event)"></label>
+    </footer>
     @if(!validLimits()){<p class="form-error">Use a positive whole number of cards and a non-negative whole number of new cards.</p>}
   </section>
 }

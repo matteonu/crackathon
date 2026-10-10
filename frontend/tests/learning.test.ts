@@ -23,6 +23,16 @@ test('polling and retries preserve manual cards without duplicating generated ca
   assert.deepEqual(second.outputs.flashcards.cards,first.outputs.flashcards.cards);
 });
 
+test('generated references retain the actual uploaded PDF identity, pages and evidence',()=>{
+  const referenced={...result,documents:[{...result.documents[0],questions:[{
+    question:'What is active recall?',answer:'Retrieving information.',source_pdf:'wrong-name.pdf',source_pdf_id:'wrong-id',
+    source_pages:[2,4],evidence:'The definition and illustration.'}]}]};
+  const card=learningPatch(file,parseStudyResult(referenced,file.id)).outputs.flashcards.cards[0];
+  assert.deepEqual(card.source,{pdfId:file.id,pdfName:file.name,pages:[2,4],evidence:'The definition and illustration.'});
+  for(const source_pages of [[],[0],[1.5],['2']])assert.throws(()=>parseStudyResult({...referenced,documents:[{
+    ...referenced.documents[0],questions:[{...referenced.documents[0].questions[0],source_pages}]}]},file.id));
+});
+
 test('a partial summary appears while questions are still being generated',()=>{
   const partial:StudyResult={id:file.id,status:'running',documents:[{abstract:'One sentence.',sentence_count:1}]};
   const patch=learningPatch(file,parseStudyResult(partial,file.id));
