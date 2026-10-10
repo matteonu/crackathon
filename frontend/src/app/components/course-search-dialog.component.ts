@@ -2,21 +2,17 @@ import { Component, ElementRef, inject, signal, viewChild } from '@angular/core'
 import { StudyStore } from '../services/study-store';
 import { CourseHit } from '../models/semester';
 import { IconComponent } from '../shared/icon.component';
-import { LoadingDotsComponent } from '../shared/loading-dots.component';
 
 /** The + in the sidebar: search the VVZ courses offered this semester and add them. */
-@Component({selector:'app-course-search-dialog',standalone:true,imports:[IconComponent,LoadingDotsComponent],template:`
+@Component({selector:'app-course-search-dialog',standalone:true,imports:[IconComponent],template:`
   <dialog #dialog class="edit-dialog course-search-dialog" aria-labelledby="course-search-title" (close)="clear()">
-    <div class="dialog-top"><span class="eyebrow">FROM THE ETH COURSE CATALOGUE</span><button type="button" class="icon-button" aria-label="Close" (click)="dialog.close()"><app-icon name="close" /></button></div>
-    <h2 id="course-search-title">Add a course to {{store.data().semester}}</h2>
-    <label class="sr-only" for="course-search">Search by title or course number</label>
-    <input #input id="course-search" type="search" autocomplete="off" maxlength="100" placeholder="Search by title or number, e.g. Analysis or 252-0026"
+    <div class="dialog-top"><h2 id="course-search-title">Add a course</h2><button type="button" class="icon-button" aria-label="Close" (click)="dialog.close()"><app-icon name="close" /></button></div>
+    <label class="sr-only" for="course-search">Search courses in {{store.data().semester}} by title or number</label>
+    <input #input id="course-search" type="search" autocomplete="off" maxlength="100" placeholder="Search courses"
       [value]="query()" (input)="typed($any($event.target).value)">
     <div class="course-results" aria-live="polite">
       @if(error()){<p class="form-error" role="alert">{{error()}}</p>}
-      @if(query().trim().length < 2){<p class="field-hint">Type at least 2 characters. Only courses offered in {{store.data().semester}} are shown.</p>}
-      @else if(searching()){<p class="field-hint"><app-loading-dots label="Searching" /></p>}
-      @else if(!hits().length && !error()){<p class="field-hint">No courses match “{{query().trim()}}” in {{store.data().semester}}.</p>}
+      @if(query().trim().length >= 2 && !searching() && !hits().length && !error()){<p class="course-empty">No courses match “{{query().trim()}}”</p>}
       <ul>@for(hit of hits();track hit.id){
         <li class="course-hit"><div><strong>{{hit.title}}</strong><span>{{hit.code}}@if(hit.ects!==null){ · {{hit.ects}} ECTS}@if(hit.professor){ · {{hit.professor}}}</span></div>
           <button type="button" class="button secondary" [disabled]="hit.added || adding()===hit.id" (click)="add(hit)">
