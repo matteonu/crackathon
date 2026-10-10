@@ -188,7 +188,9 @@ def main():
 
     mine = {s["id"] for s in SEMESTERS}
     semesters = [s for s in load("04_semesters.json") if s["id"] not in mine]
-    semesters += [{"id": s["id"], "user_id": ALICE, "label": s["label"], "study_hours_per_week": s["hours_per_week"]} for s in SEMESTERS]
+    # No weekly budget: the scheduler then plans every free hour, which is the app's default.
+    # (hours_per_week above used to be written here; nothing else reads it.)
+    semesters += [{"id": s["id"], "user_id": ALICE, "label": s["label"], "study_hours_per_week": None} for s in SEMESTERS]
     save("04_semesters.json", sorted(semesters, key=lambda s: s["id"]))
 
     semester_courses = [r for r in load("05_semester_courses.json") if r["semester_id"] not in mine]
