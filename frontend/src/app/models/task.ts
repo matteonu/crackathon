@@ -64,17 +64,26 @@ export function topPosition(tasks: readonly Task[], subjectId: string): number {
   return (positions.length ? Math.min(...positions) : 0) - 1;
 }
 
-/** The position that puts a task just before or after its neighbour in the open list. A task
- *  only moves among tasks of its own priority, so it stops at the edge of its group. */
-export function movedPosition(open: readonly Task[], id: string, direction: -1 | 1): number | null {
-  const priority = open.find(t => t.id === id)?.priority;
-  const group = open.filter(t => t.priority === priority);
-  const index = group.findIndex(t => t.id === id);
-  const target = index + direction;
-  if (index < 0 || target < 0 || target >= group.length) return null;
-  const neighbour = group[target].position;
-  const beyond = group[target + direction]?.position;
-  return beyond === undefined ? neighbour + direction : (neighbour + beyond) / 2;
+/** Where a dragged open task lands when dropped at `index` of the open list (the index it has
+ *  after the drop). It keeps its priority if that still sorts between its new neighbours, and
+ *  otherwise takes the priority of the task above it (or below, at the very top), so dragging
+ *  into another group re-prioritises it. Null when nothing changes. */
+export function droppedPlacement(open: readonly Task[], id: string, index: number): {priority: Priority; position: number} | null {
+  const from = open.findIndex(t => t.id === id);
+  if (from < 0) return null;
+  const task = open[from];
+  const rest = open.filter(t => t.id !== id);
+  const to = Math.max(0, Math.min(index, rest.length));
+  if (to === from) return null;
+  const before = rest[to - 1], after = rest[to];
+  const rank = priorityRank(task.priority);
+  const fits = (!before || priorityRank(before.priority) <= rank) && (!after || rank <= priorityRank(after.priority));
+  const priority = fits ? task.priority : (before ?? after)!.priority;
+  const low = before?.priority === priority ? before.position : undefined;
+  const high = after?.priority === priority ? after.position : undefined;
+  const position = low !== undefined && high !== undefined ? (low + high) / 2
+    : low !== undefined ? low + 1 : high !== undefined ? high - 1 : task.position;
+  return {priority, position};
 }
 
 export type DueState = 'overdue' | 'today' | 'tomorrow' | 'upcoming';

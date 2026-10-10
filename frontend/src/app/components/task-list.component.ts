@@ -1,13 +1,16 @@
 import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { TaskStore } from '../services/task-store';
-import { PRIORITIES, Priority, Task, MAX_TASK_NOTES, MAX_TASK_TITLE, doneTasks, dueLabel, dueState, movedPosition, openTasks } from '../models/task';
+import { PRIORITIES, Priority, Task, MAX_TASK_NOTES, MAX_TASK_TITLE, doneTasks, dueLabel, dueState, openTasks } from '../models/task';
 import { IconComponent } from '../shared/icon.component';
 
-/** The subject's to-do list: add on Enter, tick off, click a row to edit, reorder within a priority, clear completed. */
-@Component({selector:'app-task-list',standalone:true,imports:[FormsModule,IconComponent],template:`
+/** The subject's to-do list: add on Enter, tick off, click a row to edit, drag to reorder,
+ *  clear completed. Dragging a task into another priority's group gives it
+ *  that priority. */
+@Component({selector:'app-task-list',standalone:true,imports:[FormsModule,IconComponent,CdkDropList,CdkDrag],template:`
   <section class="panel task-panel">
-    <div class="panel-heading"><div><span class="eyebrow">TASKS</span><h2>To-do</h2><p>{{open().length}} open @if(done().length){· {{done().length}} done}</p></div><app-icon name="check" /></div>
+    <div class="panel-heading"><div><h2>To-do</h2><p>{{open().length}} open @if(done().length){· {{done().length}} done}</p></div></div>
     <form class="task-add" (ngSubmit)="add()">
       <label class="sr-only" for="task-title">New to-do</label>
       <input id="task-title" name="title" [(ngModel)]="draft" [maxlength]="maxTitle" placeholder="Add a to-do and press Enter" autocomplete="off" [disabled]="store.loading()">
@@ -17,9 +20,9 @@ import { IconComponent } from '../shared/icon.component';
     </form>
     @if(store.error()){<p class="form-error" role="alert">{{store.error()}}</p>}
     @if(store.loading()){<p class="muted task-empty">Loading your to-dos…</p>}
-    <ul class="task-list" aria-label="Open to-dos">
+    <ul class="task-list" aria-label="Open to-dos" cdkDropList cdkDropListLockAxis="y" (cdkDropListDropped)="drop($event)">
       @for(t of open();track t.id){
-        <li class="task" [class.task-editing]="editingId()===t.id" (click)="rowClick($event,t)">
+        <li class="task" [class.task-editing]="editingId()===t.id" (click)="rowClick($event,t)" cdkDrag [cdkDragData]="t" [cdkDragDisabled]="editingId()===t.id" (cdkDragStarted)="dragged=true">
           <input type="checkbox" class="task-check" [checked]="t.done" (change)="store.toggle(t.id)" [attr.aria-label]="'Mark '+t.title+' as done'">
           @if(editingId()===t.id){
             <form class="task-edit task-fade" (ngSubmit)="saveEdit($event,t)">
@@ -36,13 +39,10 @@ import { IconComponent } from '../shared/icon.component';
           } @else {
             <div class="task-body task-fade">
               <span class="task-title">{{t.title}}</span>
-              @if(t.notes){<p class="task-notes">{{t.notes}}</p>}
               <div class="task-meta"><span [class]="'task-priority '+t.priority"><app-icon name="flag" />{{priorityLabel(t.priority)}}<span class="sr-only"> priority</span></span>
               @if(t.due){<span class="task-due" [class]="'task-due '+dueState(t.due,today())"><app-icon name="calendar" />{{dueLabel(t.due,today())}}</span>}</div>
             </div>
             <div class="task-tools">
-              <button type="button" class="task-tool" [disabled]="!canMove(t,-1)" (click)="store.move(t.id,-1)" [attr.aria-label]="'Move '+t.title+' up'"><app-icon name="left" /></button>
-              <button type="button" class="task-tool" [disabled]="!canMove(t,1)" (click)="store.move(t.id,1)" [attr.aria-label]="'Move '+t.title+' down'"><app-icon name="right" /></button>
               <button type="button" class="task-tool task-tool-danger" (click)="store.remove(t.id)" [attr.aria-label]="'Delete '+t.title"><app-icon name="trash" /></button>
             </div>
           }
@@ -57,7 +57,7 @@ import { IconComponent } from '../shared/icon.component';
             @for(t of done();track t.id){
               <li class="task task-done">
                 <input type="checkbox" class="task-check" checked (change)="store.toggle(t.id)" [attr.aria-label]="'Mark '+t.title+' as not done'" [tabindex]="showDone()?0:-1">
-                <div class="task-body"><span class="task-title">{{t.title}}</span>@if(t.notes){<p class="task-notes">{{t.notes}}</p>}</div>
+                <div class="task-body"><span class="task-title">{{t.title}}</span></div>
                 <div class="task-tools"><button type="button" class="task-tool task-tool-danger" (click)="store.remove(t.id)" [attr.aria-label]="'Delete '+t.title" [tabindex]="showDone()?0:-1"><app-icon name="trash" /></button></div>
               </li>
             }
@@ -81,16 +81,20 @@ export class TaskListComponent {
     effect(()=>{this.subjectId();this.editingId.set(null);this.draft='';this.draftPriority='medium';this.store.error.set('');});
     effect(()=>{const field=this.titleField();if(field&&this.editingId())field.nativeElement.focus();});
   }
+  /** Set while a drag is under way and just after, so the click that ends a drag does not open the editor. */
+  dragged=false;
+  drop(event:CdkDragDrop<unknown,unknown,Task>):void {
+    setTimeout(()=>this.dragged=false);
+    void this.store.place(event.item.data.id,event.currentIndex);
+  }
   async add():Promise<void>{
     const title=this.draft,priority=this.draftPriority;this.draft='';this.draftPriority='medium';this.today.set(localToday());
     if(!(await this.store.add(this.subjectId(),title,null,priority))){this.draft=title;this.draftPriority=priority;}
   }
   priorityLabel(priority:Priority):string {return PRIORITIES.find(p=>p.value===priority)?.label??priority;}
-  /** Up and down only move a task among the open tasks of its own priority. */
-  canMove(t:Task,direction:-1|1):boolean {return movedPosition(this.open(),t.id,direction)!==null;}
   /** Clicking anywhere on a row opens it, except on its own controls (checkbox, tools, the editor). */
   rowClick(event:Event,t:Task):void {
-    if(this.editingId()===t.id||(event.target as HTMLElement).closest('input, button, textarea, label, form'))return;
+    if(this.dragged||this.editingId()===t.id||(event.target as HTMLElement).closest('input, button, textarea, label, form'))return;
     this.animateRow(event.currentTarget as HTMLElement,()=>{this.editingId.set(t.id);this.editTitle=t.title;this.editNotes=t.notes;this.editDue=t.due??'';this.editPriority=t.priority;});
   }
   cancelEdit(event:Event):void {this.animateRow(rowOf(event),()=>this.editingId.set(null));}

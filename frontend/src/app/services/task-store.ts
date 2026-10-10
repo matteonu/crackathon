@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import { Priority, Task, cleanTitle, movedPosition, openTasks, topPosition, validTask } from '../models/task';
+import { Priority, Task, cleanTitle, droppedPlacement, openTasks, topPosition, validTask } from '../models/task';
 
 type TaskPatch=Partial<Pick<Task,'title'|'notes'|'due'|'priority'|'done'|'position'>>;
 
@@ -44,11 +44,14 @@ export class TaskStore {
     catch(e){this.error.set(e instanceof Error?e.message:'Could not save the task. Please retry.');return false;}
   });}
   toggle(id:string):Promise<boolean>{const task=this.tasks().find(t=>t.id===id);return task?this.update(id,{done:!task.done}):Promise.resolve(false);}
-  /** Moves an open task one step up or down among the subject's tasks of the same priority. */
-  move(id:string,direction:-1|1):Promise<boolean>{
+  /** Puts a dragged open task where it was dropped in its subject's open list. The new place
+   *  shows at once, so the row does not jump back while saving; a failed save puts it back. */
+  place(id:string,index:number):Promise<boolean>{
     const task=this.tasks().find(t=>t.id===id);if(!task||task.done)return Promise.resolve(false);
-    const position=movedPosition(openTasks(this.tasks(),task.subjectId),id,direction);
-    return position===null?Promise.resolve(false):this.update(id,{position});
+    const placement=droppedPlacement(openTasks(this.tasks(),task.subjectId),id,index);
+    if(!placement)return Promise.resolve(false);
+    this.store({...task,...placement});
+    return this.update(id,placement).then(saved=>{if(!saved)this.tasks.update(values=>values.map(t=>t.id===id?task:t));return saved;});
   }
   remove(id:string):Promise<boolean>{return this.queue(async()=>{
     if(!this.tasks().some(t=>t.id===id))return false;
