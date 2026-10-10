@@ -649,8 +649,10 @@ html:has(.file-viewer-dialog[open]) { overflow:hidden; }
 .task-list { list-style: none; margin: 0; padding: 0; display: grid; }
 /* Rows reach 10px past the text on both sides so the hover wash has room for its corners. The
    hairline between rows is the row's top border; it fades out next to a highlighted row. */
-.task { position: relative; display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 10px; align-items: start; margin: 0 -10px; padding: 9px 10px; border-radius: 10px; border-top: 1px solid var(--line); cursor: pointer; transition: background-color .22s ease, border-color .22s ease; }
+.task { position: relative; display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 10px; align-items: start; margin: 0 -10px; padding: 9px 10px; border-radius: 0; border-top: 1px solid var(--line); cursor: pointer; transition: background-color .22s ease, border-color .22s ease, border-radius .22s ease; }
 .task:first-child, .task:hover, .task:focus-within, .task:hover + .task, .task:focus-within + .task, .task-editing + .task { border-top-color: transparent; }
+/* Straight hairlines at rest; the corners only round while the row carries the wash. */
+.task:hover, .task:focus-within, .task-editing { border-radius: 10px; }
 .task:hover, .task:focus-within { background: var(--sage); }
 .task-editing, .task-editing:hover { background: var(--sage); cursor: default; }
 .task-done { cursor: default; }
