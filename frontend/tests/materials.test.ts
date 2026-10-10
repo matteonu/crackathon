@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canGenerateFlashcards, UPLOAD_CATEGORIES, descendants, folderCards, materialName, normalizeMaterial, treeRows, validParent } from '../src/app/models/material.ts';
+import { canGenerateFlashcards, CATEGORY_DOCUMENT_TYPES, UPLOAD_CATEGORIES, descendants, folderCards, materialName, normalizeMaterial, treeRows, validParent } from '../src/app/models/material.ts';
 import type { Material } from '../src/app/models/material.ts';
 import { buildApkg } from '../src/app/models/apkg.ts';
 import initSqlJs from 'sql.js';
@@ -14,8 +14,21 @@ test('legacy PDFs remain in Materials with stable card IDs',()=>{
   old.outputs={flashcards:{cards:[{question:'Q',answer:'A'}]}};
   const migrated=normalizeMaterial(old);
   assert.equal(migrated.kind,'pdf');assert.equal(migrated.parentId,null);
+  assert.equal(migrated.type,'slides');
   assert.equal(migrated.outputs?.flashcards?.cards?.[0].id,'legacy-0');
   assert.equal(migrated.outputs?.flashcards?.cards?.[0].demo,true);
+});
+
+test('upload types match the backend codes and stored types control card eligibility',()=>{
+  assert.deepEqual(UPLOAD_CATEGORIES.map(category=>CATEGORY_DOCUMENT_TYPES[category]),
+    ['slides','exercise','exercise_solution','mock_exam','script']);
+  assert.equal(normalizeMaterial({...file('old',null),category:'Books'}).type,null);
+  assert.equal(normalizeMaterial(file('folder',null,'folder')).type,null);
+  const pdf={...file('typed',null),type:'mock_exam' as const};
+  assert.equal(normalizeMaterial(pdf).type,'mock_exam');
+  assert.equal(canGenerateFlashcards(pdf),false);
+  assert.equal(canGenerateFlashcards({...pdf,type:'script',category:'Notes'}),true);
+  assert.equal(canGenerateFlashcards({...pdf,type:null}),false);
 });
 
 test('collapsed trees and filtered descendants retain their ancestors',()=>{

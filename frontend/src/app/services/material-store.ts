@@ -1,9 +1,9 @@
 import { DestroyRef, Injectable, inject, signal } from '@angular/core';
-import { Material, MaterialCategory, MaterialKind, Flashcard, LearningMode, LearningTask, descendants, canGenerateFlashcards, normalizeMaterial, materialKind, materialName, validParent } from '../models/material';
+import { Material, MaterialCategory, MaterialKind, Flashcard, LearningMode, LearningTask, CATEGORY_DOCUMENT_TYPES, descendants, canGenerateFlashcards, normalizeMaterial, materialKind, materialName, validParent } from '../models/material';
 import { learningPatch } from '../models/learning';
 import { LearningPipelineService } from './learning-pipeline.service';
 
-type MaterialPatch=Partial<Pick<Material,'category'|'marker'|'outputs'|'name'|'description'|'parentId'|'content'|'processing'>>;
+type MaterialPatch=Partial<Pick<Material,'category'|'type'|'marker'|'outputs'|'name'|'description'|'parentId'|'content'|'processing'>>;
 class MaterialRequestError extends Error {
   constructor(readonly status:number,message:string){super(message);}
 }
@@ -88,7 +88,7 @@ export class MaterialStore {
         // The row comes first so the id exists; then the bytes are uploaded once, and
         // processing reads them from the server instead of sending them again.
         const created=await this.request<Material>('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({id:crypto.randomUUID(),subjectId,parentId,kind:'pdf',name,category,size:file.size,processing:{status:'queued',mode:'deep',task:'summary',requestedQuestions:60}})});
+          body:JSON.stringify({id:crypto.randomUUID(),subjectId,parentId,kind:'pdf',name,category,type:CATEGORY_DOCUMENT_TYPES[category]??null,size:file.size,processing:{status:'queued',mode:'deep',task:'summary',requestedQuestions:60}})});
         try{saved.push(this.store(await this.request<Material>(`/api/materials/${created.id}/file`,{method:'PUT',headers:{'Content-Type':'application/pdf'},body:file})));}
         catch(e){await this.request(`/api/materials/${created.id}`,{method:'DELETE'}).catch(()=>undefined);throw e;}
       }

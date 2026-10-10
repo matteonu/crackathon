@@ -57,7 +57,16 @@ class StudyJobs:
     def read(path: Path) -> dict:
         if not path.exists():
             raise RequestError(404, "No result exists for this file yet.")
-        data = json.loads(path.read_text(encoding="utf-8"))
+        # On Windows, a polling reader can briefly lose access while the worker
+        # atomically replaces this file. Retry that sharing violation.
+        for attempt in range(5):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(.05 * (attempt + 1))
         documents = data.get("documents", [])
         data.setdefault("mode", "deep" if documents and documents[0].get("deep_mode") else "shallow")
         data.setdefault("task", "flashcards")
@@ -232,11 +241,13 @@ class StudyJobs:
             if self.is_deleted(document_id):
                 return
             data = self.read(output)
-            data.update(status="running", error="")
+            model = pdf_study.SUMMARY_MODEL if task == "summary" else pdf_study.MODEL
+            data.update(status="running", error="", model=model)
             pdf_study.write_json(output, data)
             args = argparse.Namespace(pdfs=[str(source)], output=str(output),
                                       sentences=data["requested_sentences"], questions=data["requested_questions"],
-                                      language="same language as the PDF", model=pdf_study.MODEL,
+                                      language="same language as the PDF", model=model,
+                                      reasoning_effort=pdf_study.SUMMARY_REASONING_EFFORT if task == "summary" else None,
                                       timeout=600, allow_empty_pages=False, feedback="", deep_mode=mode == "deep",
                                       cancelled=lambda: self.is_deleted(document_id), task=task)
             self.runner(args)

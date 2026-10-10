@@ -513,6 +513,8 @@ textarea { resize: vertical; line-height: 1.7; }
 .explorer-name:hover strong { color:var(--green); }
 .root-row .explorer-name strong { font-weight:600; }
 .tree-file-label { display:grid; min-width:0; }
+.tree-file-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 8px; min-width:0; }
+.tree-document-type { color:#8a918c; font-size:11px; font-weight:400; }
 .tree-file-label small { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:10px; margin-top:3px; }
 .tree-meta { font-size:10px; color:var(--muted); white-space:nowrap; }
 .tree-chevron { border:0; background:none; padding:0; display:flex; align-items:center; width:16px; flex:0 0 16px; color:#87947c; }

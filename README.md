@@ -157,6 +157,11 @@ subject (`backend/materials.py`, `/api/materials`). The metadata is in SQLite; a
 are written once to `data/learning/<id>/source.pdf`, which is also where the pipeline reads
 them, so nothing is stored twice and `POST /api/learning/documents/<id>` needs no body.
 
+Each document also has a validated `type` flag (`slides`, `mock_exam`, `exercise`,
+`exercise_solution`, or `script`) separate from its file format. Existing libraries are
+migrated in place from their categories at startup. See the [learning pipeline documentation](backend/learning/README.md)
+for compatibility rules and the independent fast-summary model configuration.
+
 `outputs` (summary and flashcards) and `processing` (the last run's state) are stored as the
 JSON the frontend sends. The server never reads inside them, so the card shape can change
 without a migration. Everything else -- names, parents, categories, uniqueness within a

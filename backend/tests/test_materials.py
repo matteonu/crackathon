@@ -7,6 +7,8 @@ from unittest.mock import patch
 import uuid
 
 from learning.jobs import StudyJobs
+import db
+from material_types import CATEGORY_TYPES
 from tests.support import build_app
 
 FIXTURE = Path(__file__).resolve().parents[2] / 'frontend/tests/fixtures/study-demo.pdf'
@@ -37,9 +39,54 @@ class MaterialTests(unittest.TestCase):
     def test_a_created_file_comes_back_in_the_listing(self):
         created = self.create(name='week1', kind='folder', category='Notes')
         self.assertEqual(created['kind'], 'folder')
+        self.assertIsNone(created['type'])
         listed = self.client.get('/api/materials', headers=ALICE).get_json()
         self.assertEqual([f['id'] for f in listed], [created['id']])
         self.assertEqual(self.client.get('/api/materials?subject=other', headers=ALICE).get_json(), [])
+
+    def test_every_upload_category_persists_its_document_type(self):
+        ids = {}
+        for category, document_type in CATEGORY_TYPES.items():
+            created = self.create(name=category + '.pdf', category=category, type=document_type)
+            self.assertEqual(created['type'], document_type)
+            ids[created['id']] = document_type
+        with self.app.app_context():
+            stored = dict(db.get_db().execute('SELECT id, type FROM materials'))
+        self.assertEqual(stored, ids)
+        restarted = build_app(self.temp.name)
+        self.addCleanup(restarted.extensions['learning_jobs'].pool.shutdown, wait=True)
+        listed = restarted.test_client().get('/api/materials', headers=ALICE).get_json()
+        self.assertEqual({item['id']: item['type'] for item in listed}, ids)
+
+    def test_types_and_legacy_categories_stay_in_sync(self):
+        # Existing callers can still send just a category.
+        created = self.create(category='Slides')
+        self.assertEqual(created['type'], 'slides')
+        url = f"/api/materials/{created['id']}"
+        for change, expected in (({'type': 'exercise'}, ('Exercises', 'exercise')),
+                                 ({'category': 'Solutions'}, ('Solutions', 'exercise_solution')),
+                                 ({'category': 'Notes'}, ('Notes', None))):
+            result = self.client.patch(url, json=change, headers=ALICE)
+            self.assertEqual(result.status_code, 200, result.get_json())
+            self.assertEqual((result.get_json()['category'], result.get_json()['type']), expected)
+        typed = body(name='typed.pdf', type='script')
+        del typed['category']
+        result = self.client.post('/api/materials', json=typed, headers=ALICE)
+        self.assertEqual(result.status_code, 201, result.get_json())
+        self.assertEqual((result.get_json()['category'], result.get_json()['type']), ('Scripts', 'script'))
+
+    def test_invalid_or_conflicting_document_types_are_rejected(self):
+        created = self.create()
+        for change in ({'type': 'unknown'}, {'type': []}, {'type': None},
+                       {'type': 'slides', 'category': 'Exams'}):
+            with self.subTest(change=change):
+                response = self.client.post('/api/materials', json=body(name='invalid.pdf', **change), headers=ALICE)
+                self.assertEqual(response.status_code, 400)
+                response = self.client.patch(f"/api/materials/{created['id']}", json=change, headers=ALICE)
+                self.assertEqual(response.status_code, 400)
+        response = self.client.post('/api/materials', json=body(kind='folder', name='folder', type='slides'), headers=ALICE)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.client.get('/api/materials', headers=ALICE).get_json(), [created])
 
     def test_files_are_private_to_their_owner(self):
         created = self.create()
