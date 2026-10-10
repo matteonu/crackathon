@@ -3,18 +3,24 @@
     "id": 1,
     "user_id": 1,
     "label": "HS25",
-    "study_hours_per_week": 20
+    "study_hours_per_week": null
   },
   {
     "id": 2,
     "user_id": 1,
     "label": "FS26",
-    "study_hours_per_week": 25
+    "study_hours_per_week": null
   },
   {
     "id": 3,
     "user_id": 2,
     "label": "HS25",
-    "study_hours_per_week": 15
+    "study_hours_per_week": null
+  },
+  {
+    "id": 4,
+    "user_id": 1,
+    "label": "HS26",
+    "study_hours_per_week": null
   }
 ]

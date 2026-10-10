@@ -65,9 +65,36 @@ ADDED_COLUMNS = {
     "semester_courses": (
         ("target_hours", "REAL NOT NULL DEFAULT 0"), ("exam_date", "TEXT"),
         ("completed", "INTEGER NOT NULL DEFAULT 0"), ("next_action", "TEXT NOT NULL DEFAULT ''"),
-        ("color", "TEXT"),
+        ("color", "TEXT"), ("priority", "INTEGER NOT NULL DEFAULT 3"), ("difficulty", "INTEGER"),
+        ("max_study_hours", "REAL"), ("lecture_per_week", "REAL"),
     ),
+    "semesters": (
+        ("day_start", "TEXT NOT NULL DEFAULT '08:00'"), ("day_end", "TEXT NOT NULL DEFAULT '20:00'"),
+        ("lunch_start", "TEXT NOT NULL DEFAULT '12:00'"), ("lunch_end", "TEXT NOT NULL DEFAULT '13:00'"),
+        ("dinner_start", "TEXT NOT NULL DEFAULT '18:00'"), ("dinner_end", "TEXT NOT NULL DEFAULT '19:00'"),
+        ("study_block_size", "INTEGER NOT NULL DEFAULT 60"), ("alpha", "REAL NOT NULL DEFAULT 0.3"),
+        ("beta", "REAL NOT NULL DEFAULT 5"), ("study_weekdays", "TEXT NOT NULL DEFAULT '0123456'"),
+    ),
+    "plan_blocks": (("source", "TEXT NOT NULL DEFAULT 'generated'"),),
 }
+
+
+def migrate_sessions_to_slots(conn):
+    """Hand-planned study_sessions become the user's own calendar slots (plan_blocks with
+    source 'manual'), so the calendar and the analytics read one thing. Covers sessions from
+    before the calendar had slots, and the demo seed, which still writes study_sessions.
+    Generated slots under a moved-in session give way, as they do when one is drawn."""
+    rows = conn.execute("SELECT semester_id, id, course_id, date, start, hours FROM study_sessions").fetchall()
+    for r in rows:
+        begin = int(r["start"][:2]) * 60 + int(r["start"][3:])
+        finish = min(begin + round(r["hours"] * 60), 24 * 60 - 1)
+        end = f"{finish // 60:02d}:{finish % 60:02d}"
+        conn.execute("""DELETE FROM plan_blocks WHERE semester_id = ? AND date = ? AND source = 'generated'
+                        AND start_time < ? AND end_time > ?""", (r["semester_id"], r["date"], end, r["start"]))
+        conn.execute("""INSERT INTO plan_blocks (semester_id, course_id, date, start_time, end_time, type, label, source)
+                        VALUES (?, ?, ?, ?, ?, 'active_learning', NULL, 'manual')""",
+                     (r["semester_id"], r["course_id"], r["date"], r["start"], end))
+    conn.execute("DELETE FROM study_sessions")
 
 
 def init_db():
@@ -104,6 +131,7 @@ def init_db():
             migrate_material_types(db)
             from decks import migrate_embedded_cards
             migrate_embedded_cards(db)
+            migrate_sessions_to_slots(db)
             violation = db.execute('PRAGMA foreign_key_check').fetchone()
             if violation:
                 raise sqlite3.IntegrityError(
@@ -149,6 +177,7 @@ def reset_db():
         migrate_material_types(db)
         from decks import migrate_embedded_cards
         migrate_embedded_cards(db)
+        migrate_sessions_to_slots(db)
 
 
 def dump_seed():

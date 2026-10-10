@@ -2,22 +2,82 @@
   {
     "semester_id": 1,
     "course_id": 1,
-    "desired_grade": 5.0
+    "desired_grade": 4.5,
+    "target_hours": 60,
+    "exam_date": "2026-01-27",
+    "completed": 1,
+    "color": "#2598A2",
+    "next_action": ""
   },
   {
     "semester_id": 1,
     "course_id": 2,
-    "desired_grade": 4.5
+    "desired_grade": 4.0,
+    "target_hours": 90,
+    "exam_date": "2026-02-03",
+    "completed": 1,
+    "color": "#E4AC17",
+    "next_action": ""
   },
   {
-    "semester_id": 2,
+    "semester_id": 1,
+    "course_id": 3,
+    "desired_grade": 4.5,
+    "target_hours": 70,
+    "exam_date": "2026-01-30",
+    "completed": 1,
+    "color": "#D56568",
+    "next_action": ""
+  },
+  {
+    "semester_id": 1,
     "course_id": 4,
-    "desired_grade": 5.5
+    "desired_grade": 4.0,
+    "target_hours": 70,
+    "exam_date": "2026-02-10",
+    "completed": 1,
+    "color": "#5586CA",
+    "next_action": ""
   },
   {
     "semester_id": 2,
     "course_id": 5,
-    "desired_grade": null
+    "desired_grade": 5.0,
+    "target_hours": 110,
+    "exam_date": "2026-08-11",
+    "completed": 1,
+    "color": "#2598A2",
+    "next_action": ""
+  },
+  {
+    "semester_id": 2,
+    "course_id": 6,
+    "desired_grade": 5.5,
+    "target_hours": 60,
+    "exam_date": "2026-08-18",
+    "completed": 1,
+    "color": "#E4AC17",
+    "next_action": ""
+  },
+  {
+    "semester_id": 2,
+    "course_id": 7,
+    "desired_grade": 5.0,
+    "target_hours": 75,
+    "exam_date": "2026-08-21",
+    "completed": 1,
+    "color": "#D56568",
+    "next_action": ""
+  },
+  {
+    "semester_id": 2,
+    "course_id": 8,
+    "desired_grade": 5.0,
+    "target_hours": 50,
+    "exam_date": "2026-08-26",
+    "completed": 1,
+    "color": "#5586CA",
+    "next_action": ""
   },
   {
     "semester_id": 3,
@@ -28,5 +88,45 @@
     "semester_id": 3,
     "course_id": 3,
     "desired_grade": 4.5
+  },
+  {
+    "semester_id": 4,
+    "course_id": 9,
+    "desired_grade": 5.0,
+    "target_hours": 90,
+    "exam_date": "2027-01-28",
+    "completed": 0,
+    "color": "#2598A2",
+    "next_action": "Pumping lemma and reductions, exercises 7-9"
+  },
+  {
+    "semester_id": 4,
+    "course_id": 10,
+    "desired_grade": 4.5,
+    "target_hours": 70,
+    "exam_date": "2027-02-02",
+    "completed": 0,
+    "color": "#E4AC17",
+    "next_action": "Caches and virtual memory, redo the lab"
+  },
+  {
+    "semester_id": 4,
+    "course_id": 11,
+    "desired_grade": 5.0,
+    "target_hours": 70,
+    "exam_date": "2027-01-25",
+    "completed": 0,
+    "color": "#D56568",
+    "next_action": "Least squares and QR, old exam 2025"
+  },
+  {
+    "semester_id": 4,
+    "course_id": 12,
+    "desired_grade": 4.5,
+    "target_hours": 55,
+    "exam_date": "2027-02-09",
+    "completed": 0,
+    "color": "#5586CA",
+    "next_action": "Multivariable integrals, sheet 10"
   }
 ]

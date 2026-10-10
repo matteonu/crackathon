@@ -80,7 +80,7 @@ class AuthTests(unittest.TestCase):
             client = build_app(temp, seed=True).test_client()
             data = client.get('/api/dashboard', headers={'X-User-Id': 'alice@ethz.ch'}).get_json()
             self.assertEqual(data['user']['email'], 'alice@ethz.ch')
-            self.assertEqual([s['label'] for s in data['semesters']], ['HS25', 'FS26'])
+            self.assertEqual([s['label'] for s in data['semesters']], ['HS25', 'FS26', 'HS26'])   # HS26 is the demo study phase (seed_demo/generate_plan.py)
             # A visitor the seed does not know gets an account, not someone else's data.
             fresh = client.get('/api/dashboard', headers={'X-User-Id': 'guest@ethz.ch'}).get_json()
             self.assertEqual(fresh['semesters'], [])

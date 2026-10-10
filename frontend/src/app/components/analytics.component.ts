@@ -4,8 +4,9 @@ import { StudyStore } from '../services/study-store';
 import { IconComponent } from '../shared/icon.component';
 import { ScrollButtonsComponent } from '../shared/scroll-buttons.component';
 import { RecallAnalyticsComponent } from './recall-analytics.component';
+import { ScheduleStatsComponent } from './schedule-stats.component';
 
-@Component({selector:'app-analytics',standalone:true,imports:[RouterLink,IconComponent,ScrollButtonsComponent,RecallAnalyticsComponent],template:`
+@Component({selector:'app-analytics',standalone:true,imports:[RouterLink,IconComponent,ScrollButtonsComponent,RecallAnalyticsComponent,ScheduleStatsComponent],template:`
   <section class="panel analytics-panel" aria-labelledby="analytics-title"><div class="panel-heading"><div><h2 id="analytics-title">Analytics</h2><p>A little perspective on your progress.</p></div>@if(!detailed()){<a routerLink="/analytics" class="text-button" aria-label="More analytics"><span class="optional-text">More statistics</span><app-icon name="arrow" /></a>}</div>
     <div #analyticsViewport class="horizontal-scroll analytics-scroll" tabindex="0" role="region" aria-label="Analytics cards, scroll horizontally"><div class="metric-row">
       <article class="metric-card total-metric"><span class="eyebrow">RECORDED / TARGET</span><div class="hero-metric">{{store.totalHours()}}<span>h</span><small>/ {{store.targetHours()}} h</small></div><div class="progress-track" role="meter" aria-label="Overall study goal" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="cappedPercent()"><span [style.width.%]="cappedPercent()"></span></div><p>{{percent()}}% of target <span class="muted">· {{differenceLabel()}}</span></p></article>
@@ -16,6 +17,7 @@ import { RecallAnalyticsComponent } from './recall-analytics.component';
     <div class="panel-foot"><span>Across the complete study phase</span><app-scroll-buttons [target]="analyticsViewport" label="analytics" /></div>
   </section>
   @if(detailed()){
+    <app-schedule-stats />
     <app-recall-analytics />
   }
 `})
