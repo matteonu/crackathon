@@ -114,7 +114,11 @@ def _busy(value, subjects):
         subject = entry.get("subject")
         if subject is not None and subject not in subjects:
             raise ValueError(f"busy mentions {subject!r}, which is not a subject here.")
+        kind = entry.get("type", "active_learning" if subject is not None else "meal")
+        if kind not in (*BLOCK_TYPES, "meal"):
+            raise ValueError("A busy entry's type must be active_learning, recall or meal.")
         entries.append({"date": iso_date(entry.get("date")), "subject": subject,
+                        "type": kind,
                         "start": int(start[:2]) * 60 + int(start[3:]), "end": int(end[:2]) * 60 + int(end[3:])})
     return entries
 
@@ -131,6 +135,9 @@ def validated(data):
     days_off = data.get("days_off", [])
     if not isinstance(days_off, (list, tuple)):
         raise ValueError("days_off must be a list of dates or date ranges.")
+    exam_days_off = data.get("exam_days_off", True)
+    if not isinstance(exam_days_off, bool):
+        raise ValueError("exam_days_off must be true or false.")
 
     option = lambda field: data.get(field, DEFAULTS[field])
     day_start, day_end = _time(option("day_start"), "day_start"), _time(option("day_end"), "day_end")
@@ -154,6 +161,7 @@ def validated(data):
         "study_hours_per_week": budget,
         "exam_session": DayRange.from_value(data["exam_session"]),
         "days_off": [DayRange.from_value(value) for value in days_off],
+        "exam_days_off": exam_days_off,
         "study_block_size": _whole(option("study_block_size"), "study_block_size"),
         "day_start": day_start, "day_end": day_end,
         "lunch_time": _interval(option("lunch_time"), "lunch_time"),
@@ -170,7 +178,7 @@ def generate_schedule(data: dict) -> dict:
     planner = Schedule(
         {"subjects": options["subjects"], "days_off": options["days_off"],
          "exam_session": options["exam_session"], "study_block_size": options["study_block_size"],
-         "history": options["history"], "busy": options["busy"]},
+         "history": options["history"], "busy": options["busy"], "exam_days_off": options["exam_days_off"]},
         options["day_start"], options["day_end"], options["lunch_time"], options["dinner_time"],
         alpha=options["alpha"], beta=options["beta"],
         weeks_in_semester=options["weeks_in_semester"],

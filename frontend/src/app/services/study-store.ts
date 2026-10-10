@@ -1,16 +1,16 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { StudyData, Subject, PlannedSession, validSession, sessionsOverlap, addDays, dailyTotal, mondayOf, round, sumHours, validateData, weekDays } from '../models/study';
+import { StudyData, Subject, PlannedSession, validSession, sessionsOverlap, addDays, dailyTotal, dayLabel, mondayOf, round, sumHours, validateData, weekDays } from '../models/study';
 import { CourseHit, GeneratedPlan, Plan, PlanBlock, PlanSubject, Preferences, SemesterOption, Semesters,
-  courseIdOf, emptyData, planToData, studyHours } from '../models/semester';
+  courseIdOf, dayFulfilled, emptyData, planToData, studyHours } from '../models/semester';
 
 /** The habits of a semester nobody has configured, mirroring the server's defaults. */
 const DEFAULT_PREFERENCES: Preferences = {dayStart:'08:00', dayEnd:'20:00', lunch:['12:00','13:00'],
   dinner:['18:00','19:00'], studyBlockSize:60, studyHoursPerWeek:null, alpha:.3, beta:5, daysOff:[],
-  studyDays:[0,1,2,3,4,5,6]};
+  studyDays:[0,1,2,3,4,5,6], examDaysOff:true};
 
 /** The scheduler fields of one course that the setup form may change. */
 export type CoursePlanPatch = Partial<{priority:number; difficulty:number|null; maxStudyHours:number|null;
-  lecturePerWeek:number|null; examDate:string; targetHours:number}>;
+  lecturePerWeek:number|null; examDate:string; examStart:string|null; examEnd:string|null; targetHours:number}>;
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -37,9 +37,22 @@ export class StudyStore {
   readonly targetHours = computed(() => round(this.subjects().reduce((s, subject) => s + subject.targetHours, 0)));
   readonly recordedDays = computed(() => this.dates().filter(date => this.subjects().some(s => s.hours[date] != null)).length);
   readonly exams = computed(() => [...this.subjects()].sort((a,b) => a.examDate.localeCompare(b.examDate)));
+  /** Shared exam colours for calendar and hours columns; same-day exams get equal stripes. */
+  readonly examDays = computed(() => {
+    const days=new Map<string,Subject[]>();
+    for(const subject of this.subjects())days.set(subject.examDate,[...(days.get(subject.examDate)??[]),subject]);
+    return new Map([...days].map(([date,subjects])=>[date,{
+      label:subjects.map(subject=>`${subject.shortName} exam${subject.examStart&&subject.examEnd?' · '+subject.examStart+'–'+subject.examEnd:''}`).join(' · '),
+      background:`linear-gradient(90deg, ${subjects.flatMap((subject,index)=>{
+        const color=`color-mix(in srgb, ${subject.color} var(--exam-tint,40%), #fff)`;
+        return [`${color} ${index/subjects.length*100}%`,`${color} ${(index+1)/subjects.length*100}%`];
+      }).join(', ')})`
+    }] as const));
+  });
   readonly weekStart = signal(mondayOf(this.data().referenceDate));
   readonly week = computed(() => weekDays(this.weekStart()));
   readonly weekHours = computed(() => round(this.subjects().reduce((s,subject) => s + sumHours(subject,this.week()), 0)));
+  readonly hasWeekRecordedHours = computed(() => this.subjects().some(s => this.week().some(date => s.hours[date] != null)));
   readonly firstWeek = computed(() => mondayOf(this.dates()[0]));
   readonly lastWeek = computed(() => mondayOf(this.dates().at(-1)!));
   readonly canGoBack = computed(() => this.weekStart() > this.firstWeek());
@@ -52,6 +65,9 @@ export class StudyStore {
   readonly generatedPlan = signal<GeneratedPlan | null>(null);
   readonly planError = signal('');
   readonly generating = signal(false);
+  readonly fulfillingDay = signal<string|null>(null);
+  readonly clearingHours = signal(false);
+  readonly savingHours = computed(() => this.clearingHours() || this.fulfillingDay() !== null);
   readonly planHours = computed(() => studyHours(this.generatedPlan()?.blocks ?? []));
   readonly notice = signal('');
   private noticeTimer?: ReturnType<typeof setTimeout>;
@@ -95,18 +111,18 @@ export class StudyStore {
   }
 
   /** Sends a change after the ones before it. On failure the server's version is reloaded. */
-  private write(url:string, init:RequestInit):Promise<void> {
+  private write<T=unknown>(url:string, init:RequestInit, saved?:(result:T)=>void):Promise<boolean> {
     const run = this.writes.then(async () => {
-      try { await this.request(url, init); }
+      try { const result=await this.request<T>(url, init); saved?.(result); return true; }
       catch (e) {
         const message = e instanceof Error ? e.message : 'Could not save that change.';
         this.announce(`Not saved: ${message}`);
         await this.load();
-        throw e;
+        return false;
       }
     });
     this.writes = run.catch(() => undefined);
-    return run.catch(() => undefined);
+    return run;
   }
   private courseUrl(subjectId:string):string {
     const courseId = courseIdOf(subjectId);
@@ -128,10 +144,12 @@ export class StudyStore {
     if(week >= this.firstWeek() && week <= this.lastWeek()) this.weekStart.set(week);
   }
   openEditor(subjectId=this.subjects()[0]?.id,date=this.week().find(d=>this.dates().includes(d))??this.examSession().start):void {
+    if(this.savingHours())return;
     if(!subjectId){this.announce('Add a course first, with + next to Your subjects.');return;}
     this.editor.set({subjectId,date});
   }
   setHours(subjectId:string,date:string,hours:number|null):void {
+    if(this.savingHours())throw new Error('Wait for the current hours save to finish.');
     if(date < this.examSession().start || date > this.examSession().end) throw new Error('Choose a date within this exam session.');
     if(!this.dates().includes(date) || !this.subjects().some(s=>s.id===subjectId)) throw new Error('Choose a subject and date in this study phase.');
     if(hours !== null && (!Number.isFinite(hours) || hours < 0 || hours > 24)) throw new Error('Enter a number between 0 and 24 hours.');
@@ -148,13 +166,33 @@ export class StudyStore {
     this.announce(hours===null ? 'Recorded hours cleared.' : 'Study hours saved. Your analytics are up to date.');
     void this.write(url,this.json('PUT',{hours:value}));
   }
+  /** Clear this week's entries after earlier hour edits land; keep every other week. */
+  async clearWeekHours():Promise<boolean> {
+    if(!this.loaded() || !this.hasWeekRecordedHours() || this.savingHours())return false;
+    const semester=this.semkez(), weekStart=this.weekStart(), dates=new Set(this.week());
+    this.clearingHours.set(true);
+    this.editor.set(null);
+    try {
+      const saved=await this.write(`/api/semesters/${semester}/hours/weeks/${weekStart}`,{method:'DELETE'},()=>{
+        if(this.semkez()!==semester)return;
+        const clearHours=<T>(hours:Record<string,T>):Record<string,T>=>Object.fromEntries(Object.entries(hours).filter(([date])=>!dates.has(date)));
+        this.state.update(data=>({...data,subjects:data.subjects.map(subject=>({...subject,hours:clearHours(subject.hours)}))}));
+        this.planSubjects.update(subjects=>subjects.map(subject=>({...subject,hours:clearHours(subject.hours)})));
+      });
+      if(saved)this.announce(`Recorded study hours for ${dayLabel(weekStart)} – ${dayLabel(addDays(weekStart,6))} cleared.`);
+      return saved;
+    } finally { this.clearingHours.set(false); }
+  }
   /** ECTS, lecture ID and homepage come from the VVZ and are not the user's to change. */
-  updateSubject(id:string,patch:Partial<Pick<Subject,'targetHours'|'examDate'|'nextAction'|'completed'>>):void {
+  updateSubject(id:string,patch:Partial<Pick<Subject,'targetHours'|'examDate'|'examStart'|'examEnd'|'nextAction'|'completed'>>):void {
     const data={...this.data(),subjects:this.subjects().map(s=>s.id===id?{...s,...patch}:s)};
-    if(!validateData(data)) throw new Error('Check the target hours, exam date, and next action.');
+    if(!validateData(data)) throw new Error('Check the target hours, exam date and time range, and next action.');
     const url=this.courseUrl(id);
+    const semester=this.semkez();
     this.state.set(data); this.announce('Subject changes saved.');
-    void this.write(url,this.json('PATCH',patch));
+    void this.write<PlanSubject>(url,this.json('PATCH',patch),subject=>{
+      if(this.semkez()===semester)this.planSubjects.update(subjects=>subjects.map(s=>s.id===id?subject:s));
+    });
   }
   /** The slots the calendar shows on one day, earliest first, lunch and dinner included. */
   planOn(date:string):PlanBlock[] {
@@ -177,9 +215,9 @@ export class StudyStore {
     if(plan)this.generatedPlan.set({...plan,blocks:plan.blocks.filter(b=>b.date!==date)});
     return this.slotRequest(`/api/semesters/${this.semkez()}/plan/days/${date}`, {method:'DELETE'});
   }
-  /** Plan one day, around whatever the user already placed on it. */
-  async planDay(date:string):Promise<boolean> {
-    const plan=await this.generate({fromDate:date,toDate:date});
+  /** Compute the open week with all its custom slots, then save only this day. */
+  async planDay(date:string,week:{fromDate:string;toDate:string}):Promise<boolean> {
+    const plan=await this.generate({...week,onlyDate:date});
     if(!plan){this.announce(this.planError());return false;}
     await this.load();
     return true;
@@ -206,6 +244,28 @@ export class StudyStore {
   plannedDaily(date:string):number {
     return studyHours((this.generatedPlan()?.blocks ?? []).filter(block => block.date === date));
   }
+  dayFulfilled(date:string):boolean {
+    return dayFulfilled(this.subjects(),this.generatedPlan()?.blocks??[],date);
+  }
+  /** Record all planned subjects on a day in one save, using the server's current slots. */
+  async fulfillDay(date:string):Promise<boolean> {
+    if(this.savingHours())return false;
+    const semester=this.semkez();
+    this.fulfillingDay.set(date);
+    try {
+      const saved=await this.write<{date:string;hours:{subjectId:string;hours:number}[]}>(
+        `/api/semesters/${semester}/plan/days/${date}/fulfill`,this.json('PUT',{}),result=>{
+          if(this.semkez()!==semester)return;
+          const hours=new Map(result.hours.map(entry=>[entry.subjectId,entry.hours]));
+          this.state.update(data=>({...data,subjects:data.subjects.map(subject=>hours.has(subject.id)
+            ? {...subject,hours:{...subject.hours,[result.date]:hours.get(subject.id)!}}:subject)}));
+          this.planSubjects.update(subjects=>subjects.map(subject=>hours.has(subject.id)
+            ? {...subject,hours:{...subject.hours,[result.date]:hours.get(subject.id)!}}:subject));
+        });
+      if(saved)this.announce(`${dayLabel(date)} fulfilled. Planned study hours recorded.`);
+      return saved;
+    } finally { this.fulfillingDay.set(null); }
+  }
   /** Hours of study the plan holds for a subject, over the given dates or all of them. */
   planHoursFor(subjectId:string, dates?:readonly string[]):number {
     return studyHours((this.generatedPlan()?.blocks ?? []).filter(block =>
@@ -213,13 +273,13 @@ export class StudyStore {
   }
 
   /** Ask the server for a schedule. `dryRun` previews it without storing anything. */
-  async generate(options:{fromDate?:string; toDate?:string; dryRun?:boolean} = {}):Promise<GeneratedPlan | null> {
+  async generate(options:{fromDate?:string; toDate?:string; onlyDate?:string; dryRun?:boolean} = {}):Promise<GeneratedPlan | null> {
     await this.writes;        // Let a queued change to a course land before planning around it.
     this.generating.set(true); this.planError.set('');
     try {
       const plan = await this.request<GeneratedPlan>(
         `/api/semesters/${this.semkez()}/plan/generate`, this.json('POST', options));
-      if (!options.dryRun) { this.generatedPlan.set(plan); this.announce('Your schedule proposal is saved.'); }
+      if (!options.dryRun) { this.generatedPlan.set(plan); this.announce('Study schedule saved.'); }
       return plan;
     } catch (e) {
       this.planError.set(e instanceof Error ? e.message : 'Could not generate a schedule.');
@@ -250,7 +310,8 @@ export class StudyStore {
       this.planSubjects.update(list => list.map(s => s.courseId === courseId ? subject : s));
       // Keep the copy the pages read in step with what came back.
       this.state.update(d => ({...d, subjects: d.subjects.map(s => s.courseId === courseId
-        ? {...s, examDate:subject.examDate, targetHours:subject.targetHours, completed:subject.completed} : s)}));
+        ? {...s, examDate:subject.examDate, examStart:subject.examStart, examEnd:subject.examEnd,
+          targetHours:subject.targetHours, completed:subject.completed} : s)}));
       return true;
     } catch (e) {
       this.planError.set(e instanceof Error ? e.message : 'Could not save that course.');
