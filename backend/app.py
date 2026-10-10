@@ -25,7 +25,6 @@ load_env_file()
 
 import shutil  # noqa: E402
 import sys  # noqa: E402
-from urllib.parse import quote  # noqa: E402
 
 import click  # noqa: E402
 from flask import Flask, jsonify, send_from_directory  # noqa: E402
@@ -45,14 +44,6 @@ from learning.document_chat import DocumentChat, bp as document_chat_bp  # noqa:
 from learning.mcq import MCQJobs  # noqa: E402
 
 
-PUBLIC_URL = "https://13.hackathon.ethz.ch/"
-PROXY_SIGN_OUT = "https://auth.hackathon.ethz.ch/oauth2/sign_out?rd=" + quote(PUBLIC_URL, safe="")
-DEFAULT_SIGN_OUT_URL = (
-    "https://auth.vseth.ethz.ch/auth/realms/VSETH/protocol/openid-connect/logout"
-    "?client_id=vis_vc2_prod_portal_oidc&post_logout_redirect_uri=" + quote(PROXY_SIGN_OUT, safe="")
-)
-
-
 def config_from_env():
     data_dir = os.environ.get("DATA_DIR", os.path.join(BACKEND_DIR, "data"))
     return {
@@ -70,11 +61,6 @@ def config_from_env():
         # Stands in for the proxy's X-User-Id when there is no proxy. Never set on the VM.
         "DEV_USER": os.environ.get("DEV_USER", ""),
         "DEV_USER_NAME": os.environ.get("DEV_USER_NAME", ""),
-        # Signing out is the login provider's job. This ends the VSETH session at Keycloak
-        # and then the proxy's, which hands the browser back to us with no session at all.
-        # oauth2-proxy only redirects to *.hackathon.ethz.ch, which is why Keycloak comes
-        # first. Set SIGN_OUT_URL to override, or to "" to hide the button.
-        "SIGN_OUT_URL": os.environ.get("SIGN_OUT_URL", DEFAULT_SIGN_OUT_URL),
         "LEARNING_DIR": os.environ.get("LEARNING_DIR", os.path.join(data_dir, "learning")),
         "STATIC_DIR": os.environ.get("STATIC_DIR", os.path.join(BACKEND_DIR, "..", "frontend", "dist")),
         # The course catalogue (courses, course_offerings, ...) is filled from the ETH VVZ by a
@@ -142,11 +128,7 @@ def create_app(overrides=None):
     @app.get("/api/me")
     def me():
         user = current_user()
-        body = {"email": user["email"], "name": user["display_name"]}
-        # Only offer it when there is a proxy session to end: locally there is none.
-        if auth.via_proxy() and app.config["SIGN_OUT_URL"]:
-            body["signOutUrl"] = app.config["SIGN_OUT_URL"]
-        return jsonify(body)
+        return jsonify(email=user["email"], name=user["display_name"])
 
     @app.get("/api/dashboard")
     def dashboard():

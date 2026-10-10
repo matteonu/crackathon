@@ -229,29 +229,11 @@ Locally there is no proxy. `python backend/app.py` stands in as `alice@ethz.ch`;
 `DEV_USER=bob@ethz.ch` in `.env` to be someone else. A real header always wins over it, and
 on the VM `DEV_USER` is unset, so a request that bypasses the proxy gets 401.
 
-### Signing out only goes two layers deep
+### Signing out
 
-There are three sessions between a visitor and this app:
-
-| Session | Who owns it | Can we end it? |
-|---|---|---|
-| `_oauth2_proxy` cookie | the hackathon proxy | yes, `/oauth2/sign_out` |
-| VSETH Keycloak SSO | `auth.vseth.ethz.ch` | yes, its logout endpoint |
-| SWITCH AAI / Shibboleth + the ETH IdP | the university | **no** |
-
-`SIGN_OUT_URL` chains the first two: Keycloak's logout (with
-`post_logout_redirect_uri`) into the proxy's `/oauth2/sign_out?rd=`, then back here. Keycloak
-has to come first, because oauth2-proxy only redirects to `*.hackathon.ethz.ch`.
-
-**You will be signed straight back in**, because the Shibboleth session is still live and the
-whole domain is auth-gated, so there is nowhere to land that does not re-authenticate. That is
-not a bug we can fix: `auth.vseth.ethz.ch/Shibboleth.sso/Logout` refuses a `return=` with an
-`opensaml::SecurityPolicyException`, and a university SSO session is not ours to end anyway.
-
-So: to use the app as somebody else, **open it in a private window**. If a real sign-out
-matters for a demo, ask the organizers whether the proxy can send `prompt=login` instead of
-`approval_prompt=force` -- that is their config, and it would force a fresh login for every
-team's app. Set `SIGN_OUT_URL` empty in `.env` to hide the button entirely.
+There is no sign-out button: the proxy's login sits on top of the university's single
+sign-on, which we cannot end, so a sign-out would only sign you straight back in. To use the
+app as somebody else, **open it in a private window**.
 
 ## Course catalogue (VVZ)
 

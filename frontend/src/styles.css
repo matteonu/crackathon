@@ -122,7 +122,6 @@ app-schedule, app-next, app-analytics, app-root { display: block; min-width: 0; 
 .profile-menu [role=menuitem] app-icon { width: 15px; height: 15px; }
 .profile-menu [role=menuitem]:hover, .profile-menu [role=menuitem]:focus-visible { background: #f2f6ed; }
 .avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; color: var(--green); background: #dce5d5; font-weight: 600; }
-.profile .sign-out { margin-left: auto; flex: none; }
 .mobile-settings { display: none !important; }
 main { min-width: 0; width: 100%; max-width: 1900px; margin: 0 auto; padding: 30px 32px 20px; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 111px; padding-bottom: 30px; }
