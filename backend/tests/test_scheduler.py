@@ -286,6 +286,63 @@ class PersistedScheduler(unittest.TestCase):
             self.assertEqual((row['n_times_seen'], row['status'], row['version']), (1, 'review', 1))
 
 
+    def test_startup_reconciles_embedded_cards_with_existing_progress(self):
+        pdf = self.material()
+        second = {'question': 'Second?', 'answer': 'Two.'}
+        deck = self.generated(pdf, [CARD, second, CARD])
+        first = self.session()['cards'][0]
+        self.assertEqual(self.rate(first, 'easy').status_code, 200)
+        added = self.client.post('/api/materials/'+pdf['id']+'/cards', headers=ALICE,
+                                 json={'cards': [{'question': 'Manual?', 'answer': 'Mine.'}]}).get_json()
+        saved = added['outputs']['flashcards']['cards']
+        reordered = [saved[1], saved[0], saved[2]]
+        embedded = [{**card, 'id': f'pipeline:{pdf["id"]}:{i}'} for i, card in enumerate(reordered)]
+        with self.app.app_context():
+            conn = db.get_db()
+            progress = [tuple(row) for row in conn.execute('SELECT * FROM flashcard_progress ORDER BY card_id')]
+            history = [tuple(row) for row in conn.execute('SELECT * FROM flashcard_reviews')]
+            with conn:
+                conn.execute('UPDATE materials SET outputs=? WHERE id=?',
+                             (json.dumps({'summary': {'text': 'Keep summary.'}, 'flashcards': {'cards': embedded}}), pdf['id']))
+        for _ in range(2):
+            restarted = build_app(self.temp.name)
+            self.addCleanup(restarted.extensions['learning_jobs'].pool.shutdown, wait=True)
+            client = restarted.test_client()
+            kept = client.get('/api/materials/'+deck['id'], headers=ALICE).get_json()
+            self.assertEqual(kept['outputs']['flashcards']['cards'], reordered + [saved[3]])
+            self.assertEqual(client.get('/api/materials/'+pdf['id'], headers=ALICE).get_json()['outputs'],
+                             {'summary': {'text': 'Keep summary.'}})
+            with restarted.app_context():
+                conn = db.get_db()
+                self.assertEqual([tuple(row) for row in conn.execute('SELECT * FROM flashcard_progress ORDER BY card_id')], progress)
+                self.assertEqual([tuple(row) for row in conn.execute('SELECT * FROM flashcard_reviews')], history)
+                self.assertEqual(conn.execute('PRAGMA foreign_key_check').fetchall(), [])
+
+    def test_startup_resets_changed_cards_and_removes_only_their_replaced_progress(self):
+        pdf = self.material()
+        deck = self.generated(pdf, [CARD, {'question': 'Old?', 'answer': 'Old.'}])
+        first = self.session()['cards'][0]
+        self.assertEqual(self.rate(first, 'easy').status_code, 200)
+        saved = deck['outputs']['flashcards']['cards']
+        embedded = [{**saved[0], 'answer': 'Changed.'}, {'question': 'New?', 'answer': 'New.', 'generated': True}]
+        with self.app.app_context():
+            conn = db.get_db()
+            with conn:
+                conn.execute('UPDATE materials SET outputs=? WHERE id=?',
+                             (json.dumps({'flashcards': {'cards': embedded}}), pdf['id']))
+        restarted = build_app(self.temp.name)
+        self.addCleanup(restarted.extensions['learning_jobs'].pool.shutdown, wait=True)
+        with restarted.app_context():
+            conn = db.get_db()
+            changed = conn.execute('SELECT * FROM flashcard_progress WHERE card_id=?', (saved[0]['id'],)).fetchone()
+            self.assertEqual((changed['n_times_seen'], changed['status'], changed['version']), (0, 'new', first['version']+2))
+            self.assertIsNone(conn.execute('SELECT * FROM flashcard_progress WHERE card_id=?', (saved[1]['id'],)).fetchone())
+            self.assertEqual(conn.execute('SELECT count(*) FROM flashcard_progress').fetchone()[0], 2)
+            self.assertEqual(conn.execute('SELECT count(*) FROM flashcard_reviews').fetchone()[0], 1)
+            self.assertEqual(conn.execute('PRAGMA foreign_key_check').fetchall(), [])
+        self.assertEqual(self.rate(first).status_code, 409)
+
+
 class LegacyMigration(unittest.TestCase):
     def test_failed_migration_leaves_original_schema_and_content_intact(self):
         with tempfile.TemporaryDirectory() as temp:

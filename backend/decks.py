@@ -86,6 +86,9 @@ def replace_cards(conn, deck_id, cards):
             VALUES(?,?,?,?)""", (deck["user_id"], deck_id, card_id, utc_now()))
         seen.add(card_id)
     for card_id in existing.keys() - seen:
+        # Startup rebuilds materials with foreign keys disabled inside its transaction.
+        # Perform this cascade explicitly too, so removed cards cannot orphan progress.
+        conn.execute("DELETE FROM flashcard_progress WHERE card_id=? AND deck_id=?", (card_id, deck_id))
         conn.execute("DELETE FROM flashcards WHERE id=? AND deck_id=?", (card_id, deck_id))
 
 
@@ -116,12 +119,27 @@ def migrate_embedded_cards(conn):
             continue
         cards = outputs["flashcards"].get("cards", [])
         if cards:
+            validate_cards(cards)
             mode = (json.loads(source["processing"] or "{}")).get("mode", "shallow")
             deck_id = ensure_deck(conn, source, mode if source["kind"] == "pdf" else None)
             if source["kind"] != "pdf":
                 conn.execute("UPDATE materials SET source_pdf_id=NULL WHERE id=?", (deck_id,))
-            # Legacy IDs might be reused by different PDFs; fresh UUIDs are stable thereafter.
-            replace_cards(conn, deck_id, [{**c, "id": str(uuid.uuid4())} for c in cards])
+            # An older app can write embedded cards after this PDF already has a deck.
+            # Reuse its identities and progress; consume matches once for duplicate Q/A.
+            available = deck_cards(conn, deck_id)
+            migrated = []
+            for card in cards:
+                match = next((c for c in available if c["id"] == card.get("id")), None)
+                if match is None:
+                    match = next((c for c in available if (c["question"], c["answer"]) ==
+                                  (card["question"], card["answer"])), None)
+                if match:
+                    available.remove(match)
+                # Unknown legacy IDs may belong to other decks; allocate fresh ones.
+                migrated.append({**(match or {}), **card,
+                                 "id": match["id"] if match else str(uuid.uuid4())})
+            migrated.extend(c for c in available if not c["generated"] and not c["demo"])
+            replace_cards(conn, deck_id, migrated)
         del outputs["flashcards"]
         conn.execute("UPDATE materials SET outputs=? WHERE id=?", (json.dumps(outputs), source["id"]))
 

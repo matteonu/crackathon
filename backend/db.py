@@ -104,8 +104,12 @@ def init_db():
             migrate_material_types(db)
             from decks import migrate_embedded_cards
             migrate_embedded_cards(db)
-            if db.execute('PRAGMA foreign_key_check').fetchone():
-                raise sqlite3.IntegrityError('Foreign key check failed during deck migration')
+            violation = db.execute('PRAGMA foreign_key_check').fetchone()
+            if violation:
+                raise sqlite3.IntegrityError(
+                    'Foreign key check failed during deck migration: '
+                    f'table={violation["table"]}, rowid={violation["rowid"]}, '
+                    f'parent={violation["parent"]}, foreign_key={violation["fkid"]}')
             db.commit()
         except Exception:
             db.rollback()
