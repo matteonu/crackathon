@@ -11,7 +11,9 @@ npm ci
 npm start
 ```
 
-Open http://127.0.0.1:4300. The Flask backend runs on port 8080; this development server proxies `/api` to it. See [LEARNING_VIEW.md](../LEARNING_VIEW.md) for backend startup and API-key setup.
+Open http://127.0.0.1:4300. The development server proxies `/api` to Flask on port 8080; see
+the root [README](../README.md) for full-stack setup and the learning
+[module README](../backend/learning/README.md) for pipeline behavior.
 
 ```bash
 npm test       # data, dates, totals, and import validation
@@ -19,7 +21,8 @@ npm run check # TypeScript check
 npm run build # production Angular build, including strict template checking
 ```
 
-The production files are written directly to `dist/` and served by the Python learning server. Hash-based routes keep navigation and refresh working without server rewrite rules.
+The production files are written directly to `dist/` and served by Flask. Hash-based routes
+keep navigation and refresh working without server rewrite rules.
 
 ## What works
 

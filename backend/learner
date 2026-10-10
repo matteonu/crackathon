@@ -1,0 +1,128 @@
+# Learning Backend Roadmap
+
+## Summary
+
+Refactor `backend/learning` into a document-type-aware backend that independently generates summaries, card decks, MCQs, enhanced exercises, and assisted-review sessions.
+
+Current audit:
+
+- Existing PDF summary/card pipeline is working; all 34 backend tests pass.
+- It supports PDF shallow/deep processing, Q/A generation, checkpoints, retries, authorization, and deletion.
+- Summary and cards are coupled into one job.
+- Results live in filesystem JSON and frontend-owned `materials.outputs`.
+- Jobs are held in an in-memory thread pool.
+- Markdown/text processing, MCQs, exercise discovery, enhancement, and assisted review are absent.
+
+Frontend integration, `.apkg` export, Anki synchronization, and the custom card viewer are outside this plan.
+
+## Shared Foundation
+
+1. Reset and replace the material schema.
+
+   - Replace `subject_id` with `course_id INTEGER REFERENCES courses(id)`.
+   - Keep `kind` as the storage format: `folder`, `pdf`, `md`, `txt`, or `json`.
+   - Add `type`: `slides`, `mock_exam`, `exercise`, `exercise_solution`, `script`, `summary`, `cards`, or `mcq`.
+   - Add `generated BOOLEAN NOT NULL DEFAULT false`.
+   - Add nullable `source_material_id` self-reference with `ON DELETE SET NULL`.
+   - Generated artifacts use `kind=json`; enhanced exercises use `type=exercise` and `generated=true`.
+   - Retire `outputs`, `processing`, and the old category model.
+   - Require callers to assign one of the five source types.
+   - Reset existing data and discard legacy generated outputs.
+
+2. Add durable generation jobs.
+
+   - Store job ID, owner, source material, feature, processing mode, caller-supplied output name, options, idempotency key, status, attempts, error, result material ID, and timestamps.
+   - Enforce idempotency per user.
+   - Retry transient failures twice with backoff; terminal failure requires a new request.
+   - Requeue interrupted jobs after restart.
+   - Jobs cannot be cancelled after acceptance.
+   - Create the generated material only after validated output succeeds.
+   - Each rerun creates a new generated row.
+   - Generated rows link to one primary source; linked solutions and course resources are supporting context.
+
+3. Separate ingestion from generation.
+
+   - Create reusable loaders for PDF, Markdown, and plain text.
+   - Preserve caller-selected `shallow` or `deep` PDF processing.
+   - Reject deep mode for non-PDF sources.
+   - Retain prompt-injection protections, page/source references, ownership checks, file limits, and sanitized errors.
+   - Configure feature models independently, falling back to `OPENAI_MODEL`.
+
+4. Introduce the generic API.
+
+   - `POST /api/learning/jobs` accepts `sourceMaterialId`, `feature`, `outputName`, `mode`, feature options, and an idempotency key.
+   - `GET /api/learning/jobs/<id>` returns status, attempts, error, and the completed material ID.
+   - Reject feature/document-type combinations outside the capability matrix.
+   - The existing materials API remains the source for retrieving completed generated rows.
+
+## Feature Delivery Steps
+
+### 1. Quick summaries
+
+- Support all five source types with type-specific prompts.
+- Let the model choose exactly two or three concise sentences.
+- Store validated JSON containing the text, sentence count, source references, and generation metadata.
+- Remove summary generation from the old combined flashcard workflow.
+
+### 2. Card decks
+
+- Support `slides` and `script`.
+- Reuse and modularize the existing grounded Q/A card generator.
+- Let the model determine the useful number of cards, capped at 60.
+- Store one `type=cards`, `kind=json` material containing the generated deck.
+- Preserve existing validation, batching, source coverage, duplicate detection, and resumable checkpoints.
+- Do not implement `.apkg` export or Anki synchronization.
+
+### 3. MCQ sets
+
+- Support `slides` and `script`.
+- Allow the model to select single-answer or multiple-answer format per question.
+- Use a discriminated JSON schema containing prompt, options, correct option IDs, explanation, source references, and selection mode.
+- Let the model determine set size, capped at 60.
+- Validate option uniqueness, correct-answer references, grounding, and nonempty explanations.
+
+### 4. Exercise discovery and enhancement
+
+- Support `exercise`, `exercise_solution`, and `mock_exam`.
+- Accept a bounded caller-selected count and a tuning prompt.
+- Restrict discovery to URLs that are both under a globally allowed domain and present in `course_resources` for the material's course.
+- Fetch HTML and PDF resources, following same-domain links to depth one with a maximum of 20 pages per configured resource.
+- Apply SSRF protection, HTTPS validation, response-size/time limits, content-type checks, and fetch caching.
+- When a suitable exercise is found, store the full original problem and full solution with title, URL, retrieval time, and supporting excerpts.
+- When no suitable exercise is found, generate a new problem and worked solution from the primary material and tuning prompt, marking it as AI-only.
+- Store each result as a generated `type=exercise`, `kind=json` material linked to the primary source.
+
+### 5. Assisted review
+
+- Add a dedicated `review_sessions` table rather than material rows.
+- Store owner, source material, mode, status, full transcript JSON, structured progress JSON, source references, and timestamps.
+- One row is updated throughout a session; completion creates no additional material.
+- Provide synchronous APIs to create, retrieve, send a learner message, and complete or abandon a session.
+- Implement adapters in this order:
+  1. Slides and scripts: Socratic concept review.
+  2. Exercises: progressive, stepwise hints.
+  3. Exercise solutions: guided walkthrough and understanding checks.
+- Treat linked solutions as hidden references for validation and hints rather than revealing them automatically.
+- Build the shared adapter interface for mock exams, but defer its implementation until hint and submission behavior is specified.
+
+## Capability Matrix
+
+| Feature | Supported source types |
+|---|---|
+| Summary | All five |
+| Cards | Slides, scripts |
+| MCQ | Slides, scripts |
+| Exercise enhancement | Exercises, exercise solutions, mock exams |
+| Assisted review | Slides, scripts, exercises, exercise solutions |
+| Mock-exam review | Deferred |
+
+## Test and Acceptance Plan
+
+- Schema tests: course ownership, valid kinds/types, generated provenance, `SET NULL` deletion, JSON validation, and reset behavior.
+- Job tests: idempotency, restart recovery, two transient retries, terminal failures, authorization, independent feature jobs, and atomic artifact creation.
+- Ingestion tests: PDF shallow/deep, Markdown, text, encrypted/malformed files, empty pages, and unsupported mode combinations.
+- Feature tests: type-specific prompts, capability rejection, two-to-three-sentence summaries, card/MCQ caps, schema validation, grounding, and regeneration as new rows.
+- Scraper tests: global/course allowlists, same-domain crawl boundaries, HTML/PDF extraction, SSRF blocking, caching, attribution, matching exercise storage, and AI fallback.
+- Review tests: transcript persistence, session resumption, ownership, hidden-solution behavior, adapter-specific progress, and synchronous turn atomicity.
+- Keep all model calls mocked at the provider boundary; add separate opt-in live smoke tests.
+- Keep `backend/learning/README.md` aligned with the backend contract and remove duplicated setup instructions and obsolete frontend/server descriptions.
