@@ -19,6 +19,7 @@ import time
 from errors import RequestError
 
 from . import pdf_study
+from .config import model_for, reasoning_for
 
 SUMMARY_SENTENCES = 1
 DEFAULT_QUESTIONS = 60
@@ -242,13 +243,13 @@ class StudyJobs:
             if self.is_deleted(document_id):
                 return
             data = self.read(output)
-            model = pdf_study.SUMMARY_MODEL if task == "summary" else pdf_study.MODEL
+            model = model_for(task)
             data.update(status="running", error="", model=model)
             pdf_study.write_json(output, data)
             args = argparse.Namespace(pdfs=[str(source)], output=str(output),
                                       sentences=data["requested_sentences"], questions=data["requested_questions"],
                                       language="same language as the PDF", model=model,
-                                      reasoning_effort=pdf_study.SUMMARY_REASONING_EFFORT if task == "summary" else None,
+                                      reasoning_effort=reasoning_for(task),
                                       timeout=600, allow_empty_pages=False, feedback="", deep_mode=mode == "deep",
                                       cancelled=lambda: self.is_deleted(document_id), task=task)
             self.runner(args)

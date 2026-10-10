@@ -397,3 +397,79 @@ CREATE TABLE IF NOT EXISTS flashcard_reviews (
     FOREIGN KEY (deck_id, user_id) REFERENCES materials(id, user_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS flashcard_reviews_deck ON flashcard_reviews(user_id, deck_id, reviewed_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS materials_id_owner ON materials (id, user_id);
+
+-- Versioned multiple-choice question sets. A series is an independent question bank;
+-- regeneration adds a version to that series and only supersedes its predecessor after
+-- the new version completes successfully.
+CREATE TABLE IF NOT EXISTS mcq_sets (
+    id TEXT PRIMARY KEY,
+    material_id TEXT NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    mode TEXT NOT NULL CHECK (mode IN ('shallow', 'deep')),
+    series_id TEXT NOT NULL,
+    version INTEGER NOT NULL CHECK (version >= 1),
+    status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'complete', 'error')),
+    requested_count INTEGER CHECK (requested_count BETWEEN 1 AND 60),
+    replaces_id TEXT REFERENCES mcq_sets(id) ON DELETE SET NULL,
+    superseded_by_id TEXT REFERENCES mcq_sets(id) ON DELETE SET NULL,
+    idempotency_key TEXT NOT NULL,
+    checkpoint TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    completed_at TEXT,
+    FOREIGN KEY (material_id, user_id) REFERENCES materials(id, user_id) ON DELETE CASCADE,
+    UNIQUE (series_id, version),
+    UNIQUE (user_id, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS mcq_sets_material ON mcq_sets (material_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS mcq_sets_id_owner ON mcq_sets (id, user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS mcq_sets_one_active_generation
+    ON mcq_sets (material_id) WHERE status IN ('queued', 'running');
+
+CREATE TABLE IF NOT EXISTS mcq_questions (
+    id TEXT PRIMARY KEY,
+    set_id TEXT NOT NULL REFERENCES mcq_sets(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL CHECK (position >= 0),
+    prompt TEXT NOT NULL,
+    selection_mode TEXT NOT NULL CHECK (selection_mode IN ('single', 'multiple')),
+    explanation TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    UNIQUE (set_id, position),
+    UNIQUE (set_id, fingerprint)
+);
+CREATE TABLE IF NOT EXISTS mcq_options (
+    id TEXT PRIMARY KEY,
+    question_id TEXT NOT NULL REFERENCES mcq_questions(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL CHECK (position >= 0),
+    text TEXT NOT NULL,
+    is_correct INTEGER NOT NULL CHECK (is_correct IN (0, 1)),
+    UNIQUE (question_id, position)
+);
+CREATE TABLE IF NOT EXISTS mcq_question_pages (
+    question_id TEXT NOT NULL REFERENCES mcq_questions(id) ON DELETE CASCADE,
+    page INTEGER NOT NULL CHECK (page >= 1),
+    PRIMARY KEY (question_id, page)
+);
+CREATE TABLE IF NOT EXISTS mcq_sessions (
+    id TEXT PRIMARY KEY,
+    set_id TEXT NOT NULL REFERENCES mcq_sets(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK (status IN ('active', 'completed')),
+    position INTEGER NOT NULL DEFAULT 0 CHECK (position >= 0),
+    score INTEGER NOT NULL DEFAULT 0 CHECK (score >= 0),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    completed_at TEXT,
+    FOREIGN KEY (set_id, user_id) REFERENCES mcq_sets(id, user_id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS mcq_sessions_one_active
+    ON mcq_sessions (user_id, set_id) WHERE status = 'active';
+CREATE TABLE IF NOT EXISTS mcq_session_answers (
+    session_id TEXT NOT NULL REFERENCES mcq_sessions(id) ON DELETE CASCADE,
+    question_id TEXT NOT NULL REFERENCES mcq_questions(id) ON DELETE CASCADE,
+    selected_option_ids TEXT NOT NULL,
+    is_correct INTEGER NOT NULL CHECK (is_correct IN (0, 1)),
+    answered_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (session_id, question_id)
+);

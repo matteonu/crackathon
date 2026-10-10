@@ -1,0 +1,8 @@
+{
+  "features": {
+    "summary": { "model": "gpt-6-astra", "reasoningEffort": "none" },
+    "flashcards": { "model": "gpt-6-astra", "reasoningEffort": null },
+    "mcq": { "model": "gpt-6-luna", "reasoningEffort": "low" },
+    "chat": { "model": "gpt-6-astra", "reasoningEffort": "high" }
+  }
+}
