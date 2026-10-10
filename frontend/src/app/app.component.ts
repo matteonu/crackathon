@@ -9,8 +9,9 @@ import { HoursEditorComponent } from './shared/hours-editor.component';
 import { CourseSearchDialogComponent } from './components/course-search-dialog.component';
 import { Subject } from './models/study';
 import { semesterName } from './models/semester';
+import { ThemeWheelComponent } from './shared/theme-wheel.component';
 
-@Component({selector:'app-root',standalone:true,imports:[RouterLink,RouterLinkActive,RouterOutlet,IconComponent,HoursEditorComponent,CourseSearchDialogComponent],templateUrl:'./app.component.html'})
+@Component({selector:'app-root',standalone:true,imports:[RouterLink,RouterLinkActive,RouterOutlet,IconComponent,HoursEditorComponent,CourseSearchDialogComponent,ThemeWheelComponent],templateUrl:'./app.component.html'})
 export class AppComponent {
   readonly store=inject(StudyStore);readonly users=inject(UserStore);private readonly router=inject(Router);
   readonly main=viewChild<ElementRef<HTMLElement>>('main');

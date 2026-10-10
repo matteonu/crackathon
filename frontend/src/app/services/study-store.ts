@@ -44,7 +44,7 @@ export class StudyStore {
     return new Map([...days].map(([date,subjects])=>[date,{
       label:subjects.map(subject=>`${subject.shortName} exam${subject.examStart&&subject.examEnd?' · '+subject.examStart+'–'+subject.examEnd:''}`).join(' · '),
       background:`linear-gradient(90deg, ${subjects.flatMap((subject,index)=>{
-        const color=`color-mix(in srgb, ${subject.color} var(--exam-tint,40%), #fff)`;
+        const color=`color-mix(in srgb, ${subject.color} var(--exam-tint,40%), var(--surface))`;
         return [`${color} ${index/subjects.length*100}%`,`${color} ${(index+1)/subjects.length*100}%`];
       }).join(', ')})`
     }] as const));
