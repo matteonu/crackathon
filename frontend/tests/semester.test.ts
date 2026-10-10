@@ -19,7 +19,7 @@ const plan: Plan = {
   }],
   sessions: [{id: 's1', subjectId: 'course-3204', date: '2027-01-05', start: '09:00', hours: 2}],
   preferences: {dayStart: '08:00', dayEnd: '20:00', lunch: ['12:00', '13:00'], dinner: ['18:00', '19:00'],
-    studyBlockSize: 60, studyHoursPerWeek: null, alpha: .3, beta: 5, daysOff: []},
+    studyBlockSize: 60, studyHoursPerWeek: null, alpha: .3, beta: 5, daysOff: [], studyDays: [0, 1, 2, 3, 4, 5, 6]},
   plan: null,
 };
 

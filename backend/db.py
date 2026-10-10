@@ -73,7 +73,7 @@ ADDED_COLUMNS = {
         ("lunch_start", "TEXT NOT NULL DEFAULT '12:00'"), ("lunch_end", "TEXT NOT NULL DEFAULT '13:00'"),
         ("dinner_start", "TEXT NOT NULL DEFAULT '18:00'"), ("dinner_end", "TEXT NOT NULL DEFAULT '19:00'"),
         ("study_block_size", "INTEGER NOT NULL DEFAULT 60"), ("alpha", "REAL NOT NULL DEFAULT 0.3"),
-        ("beta", "REAL NOT NULL DEFAULT 5"),
+        ("beta", "REAL NOT NULL DEFAULT 5"), ("study_weekdays", "TEXT NOT NULL DEFAULT '0123456'"),
     ),
     "plan_blocks": (("source", "TEXT NOT NULL DEFAULT 'generated'"),),
 }

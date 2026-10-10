@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS semesters (
     study_block_size INTEGER NOT NULL DEFAULT 60,   -- minutes
     alpha REAL NOT NULL DEFAULT 0.3,  -- weight of difficulty against priority
     beta REAL NOT NULL DEFAULT 5,     -- how hard a near exam pulls hours forward
+    study_weekdays TEXT NOT NULL DEFAULT '0123456',  -- days studied, 0 = Monday ... 6 = Sunday
     UNIQUE (user_id, label),
     UNIQUE (id, user_id)              -- target for the statistics foreign key
 );
@@ -237,6 +238,14 @@ CREATE TABLE IF NOT EXISTS plan_blocks (
     FOREIGN KEY (semester_id, course_id) REFERENCES semester_courses(semester_id, course_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS plan_blocks_semester_date ON plan_blocks (semester_id, date);
+
+-- Lunch or dinner the user removed from a day, so generating that day again leaves it out.
+CREATE TABLE IF NOT EXISTS plan_meal_skips (
+    semester_id INTEGER NOT NULL REFERENCES semesters(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,               -- 'YYYY-MM-DD'
+    label TEXT NOT NULL,              -- 'Lunch' or 'Dinner'
+    PRIMARY KEY (semester_id, date, label)
+);
 
 -- Statistics per user and semester
 CREATE TABLE IF NOT EXISTS statistics (

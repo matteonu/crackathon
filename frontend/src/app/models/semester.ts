@@ -40,6 +40,8 @@ export interface Preferences {
   alpha: number;
   beta: number;
   daysOff: DayOff[];
+  /** Weekdays studied on, 0 = Monday ... 6 = Sunday. The others count as days off. */
+  studyDays: number[];
 }
 
 export type BlockType = 'active_learning' | 'recall' | 'meal';
@@ -58,10 +60,9 @@ export interface PlanBlock {
   source: 'generated' | 'manual';
 }
 
-/** Lunch and dinner the scheduler placed from the habits: shown, but changed in the setup,
- *  not by dragging, since the next generation would put them back where the habits say. */
-export function lockedBlock(block: PlanBlock): boolean {
-  return block.type === 'meal' && block.source === 'generated';
+/** Lunch or dinner, as opposed to a break the user drew. */
+export function mealBlock(block: PlanBlock): boolean {
+  return block.type === 'meal' && (block.label === 'Lunch' || block.label === 'Dinner');
 }
 
 export interface PlanTotals {

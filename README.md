@@ -308,8 +308,13 @@ algorithm.
   that course's share and cap. Drawing over a generated slot replaces it; overlapping one of
   your own is refused. Back-to-back blocks of one course are stored as one session, so a
   morning of study is one slot to drag, not three. Lunch and dinner are slots too, placed
-  from the habits and locked: change them in Study setup. Drawing over one replaces it, and the
-  next generation leaves it out of that day.
+  from the habits, and move or delete like any other; one you moved, deleted (remembered in
+  `plan_meal_skips`) or drew over is left out of that day when it is generated again.
+- **Per day:** the + over a day plans just that day around what is on it (generate with
+  `fromDate = toDate`), and the bin empties it, your own slots and meals included
+  (`DELETE /api/semesters/<semkez>/plan/days/<date>`), so generating it again starts over.
+- **Study days** (`semesters.study_weekdays`, Mon-Sun in the setup) apply to every week: a
+  week's proposal treats the other weekdays as days off. The + on a single day plans it anyway.
 - **The hours overview** colours each cell by its hours: recorded hours in the course colour,
   deeper the more there are, and hours only planned as a light wash with the number shown.
 - **Generating sets each course's `target_hours`** to what the plan asks of it, over every

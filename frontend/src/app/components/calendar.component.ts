@@ -2,7 +2,7 @@ import { Component, ElementRef, HostListener, computed, inject, signal, viewChil
 import { Router } from '@angular/router';
 import { StudyStore } from '../services/study-store';
 import { dayLabel } from '../models/study';
-import { PlanBlock, blockLabel, lockedBlock, minutesOf, studyHours, timeOf } from '../models/semester';
+import { PlanBlock, blockLabel, mealBlock, minutesOf, studyHours, timeOf } from '../models/semester';
 import { IconComponent } from '../shared/icon.component';
 import { ScheduleSetupComponent } from './schedule-setup.component';
 
@@ -35,7 +35,7 @@ export class CalendarComponent {
   readonly draftTotals=computed(()=>this.store.subjects().map(subject=>({subject,
     hours:studyHours(this.draft().filter(b=>b.subjectId===subject.id))})).filter(entry=>entry.hours>0));
   readonly dayLabel=dayLabel;readonly weekday=(date:string)=>dayLabel(date,{weekday:'short'});
-  readonly blockLabel=blockLabel;readonly timeOf=timeOf;readonly minutesOf=minutesOf;readonly locked=lockedBlock;
+  readonly blockLabel=blockLabel;readonly timeOf=timeOf;readonly minutesOf=minutesOf;readonly meal=mealBlock;
   /** The open week, cut to the study phase: what a proposal covers. */
   readonly planWeek=computed(()=>{const days=this.store.week().filter(d=>this.allowed(d));return days.length?{fromDate:days[0],toDate:days.at(-1)!}:null;});
 
@@ -76,7 +76,6 @@ export class CalendarComponent {
   startMove(event:PointerEvent,block:PlanBlock,mode:'move'|'start'|'end'):void{
     if(event.button!==0||block.id===null)return;
     event.stopPropagation();event.preventDefault();
-    if(lockedBlock(block))return;
     const start=minutesOf(block.start),end=minutesOf(block.end);
     this.drag.set({mode,id:block.id,date:block.date,start,end,originY:event.clientY,originDate:block.date,
       grab:this.minutesAt(event.clientY,block.date)-start,moved:false});
@@ -113,6 +112,19 @@ export class CalendarComponent {
   }
   @HostListener('window:keydown.escape') cancelDrag():void{this.drag.set(null);}
   remove(block:PlanBlock):void{if(block.id!==null)void this.store.deleteSlot(block.id);}
+  /** The day being planned by its + button, so that button can show it is busy. */
+  readonly planningDay=signal<string|null>(null);
+  hasSlots(date:string):boolean{return this.store.planOn(date).length>0;}
+  async planDay(date:string):Promise<void>{
+    if(!this.store.subjects().length){this.store.announce('Add a course first, with + next to Your subjects.');return;}
+    this.planningDay.set(date);
+    try{if(await this.store.planDay(date))this.store.announce(`${dayLabel(date,{weekday:'long',day:'numeric',month:'short'})} is planned.`);}
+    finally{this.planningDay.set(null);}
+  }
+  clearDay(date:string):void{
+    if(!confirm(`Clear ${dayLabel(date,{weekday:'long',day:'numeric',month:'long'})}? Every slot on it goes, the ones you placed yourself and lunch and dinner too.`))return;
+    void this.store.clearDay(date);
+  }
   open(block:PlanBlock):void{if(block.subjectId)void this.router.navigate(['/subject-tab',block.subjectId]);}
   async choose(kind:'course'|'break',courseId?:number):Promise<void>{
     const p=this.pending();if(!p)return;this.chooser()?.nativeElement.close();this.pending.set(null);

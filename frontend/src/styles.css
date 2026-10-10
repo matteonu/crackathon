@@ -183,7 +183,9 @@ main { min-width: 0; width: 100%; max-width: 1900px; margin: 0 auto; padding: 30
 .schedule-table thead .weekend { background-color: #50594d; }
 .schedule-table tfoot { background: #e9efe3; font-weight: 600; color: #3c6648; }
 .schedule-table tfoot td, .schedule-table tfoot th { height: 34px; }
-.schedule-table tfoot .subject-col { font-size: 10px; font-weight: 500; border-bottom-left-radius: 6px; }
+.schedule-table tfoot .subject-col { font-size: 10px; font-weight: 500; }
+/* Only the table's very last row is rounded, whichever footer row that is. */
+.schedule-table tfoot tr:last-child .subject-col { border-bottom-left-radius: 6px; }
 .schedule-table tfoot .subject-col span { color: #a5b2a0; font-size: 9px; font-weight: 400; margin-left: 8px; }
 .week-toolbar { display: flex; align-items: center; gap: 18px; justify-content: space-between; padding: 17px 0; border-top: 1px solid var(--line); margin: -2px 0 10px; }
 .week-navigation { display: flex; gap: 12px; align-items: center; font-size: 12px; }
@@ -528,8 +530,14 @@ textarea { resize: vertical; line-height: 1.7; }
 .hour-cell.planned { box-shadow:inset 2px 0 0 color-mix(in srgb, var(--subject-color) 45%, transparent); }
 .planned-row > th > span { font-weight:400; color:var(--muted); }
 .planned-row td { color:var(--muted); }
-.calendar-slot.is-locked { cursor:default; }
-.calendar-slot.is-locked:hover { filter:none; }
+.day-actions { display:flex; gap:4px; margin-top:6px; }
+.day-action { width:24px; height:24px; display:grid; place-items:center; padding:0; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--muted); cursor:pointer; transition:background .15s ease, color .15s ease; }
+.day-action svg, .day-action app-icon { width:12px; height:12px; }
+.day-action:hover:not(:disabled) { background:var(--sage); color:var(--green); }
+.day-action:disabled { opacity:.4; cursor:default; }
+.day-spinner { width:10px; height:10px; border:2px solid var(--line); border-top-color:var(--green); border-radius:50%; animation:day-spin .7s linear infinite; }
+@keyframes day-spin { to { transform:rotate(360deg); } }
+.calendar-hint app-icon, .calendar-hint svg { width:11px; height:11px; vertical-align:-1px; }
 .slot-chooser { width:min(440px,calc(100vw - 32px)); }
 .slot-choices { display:grid; gap:8px; margin-top:16px; }
 .slot-choices button { display:flex; align-items:center; gap:10px; padding:11px 12px; border:1px solid var(--line); border-radius:8px; background:var(--surface); font-size:12px; text-align:left; cursor:pointer; transition:background .15s ease, border-color .15s ease; }
@@ -540,6 +548,11 @@ textarea { resize: vertical; line-height: 1.7; }
 .proposal-totals strong { font-weight:600; color:var(--ink); }
 
 /* The study setup form. */
+.weekday-picker { display:flex; flex-wrap:wrap; gap:6px; }
+.weekday-picker button { min-width:52px; padding:8px 10px; border:1px solid var(--line); border-radius:999px; background:var(--surface); color:var(--muted); font-size:12px; font-weight:500; cursor:pointer; transition:background .15s ease, color .15s ease, border-color .15s ease; }
+.weekday-picker button.on { background:var(--green); border-color:var(--green); color:#fff; }
+.weekday-picker button:not(.on):hover { background:var(--sage); }
+.weekday-picker button:disabled { cursor:not-allowed; opacity:.85; }
 .setup-exams { display:grid; gap:8px; }
 .setup-exam { display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:14px; padding:9px 12px; border:1px solid var(--line); border-radius:8px; font-size:12px; }
 .setup-exam > span { display:flex; align-items:center; gap:8px; min-width:0; }

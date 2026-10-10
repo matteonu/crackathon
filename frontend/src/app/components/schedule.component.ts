@@ -1,5 +1,5 @@
-import { Component, ElementRef, HostListener, afterNextRender, computed, inject, input, viewChild } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Component, ElementRef, afterNextRender, computed, inject, input, viewChild } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { StudyStore } from '../services/study-store';
 import { dayLabel } from '../models/study';
 import { IconComponent } from '../shared/icon.component';
@@ -7,7 +7,7 @@ import { ScrollButtonsComponent } from '../shared/scroll-buttons.component';
 
 @Component({selector:'app-schedule',standalone:true,imports:[RouterLink,IconComponent,ScrollButtonsComponent],templateUrl:'./schedule.component.html'})
 export class ScheduleComponent {
-  readonly store=inject(StudyStore);private readonly router=inject(Router);
+  readonly store=inject(StudyStore);
   readonly expanded=input(false);
   readonly viewport=viewChild<ElementRef<HTMLDivElement>>('scheduleViewport');
   readonly visibleDates=computed(()=>this.expanded()?this.store.week():this.store.dates());
@@ -36,5 +36,4 @@ export class ScheduleComponent {
     const index=this.store.dates().indexOf(this.store.week().find(d=>this.store.dates().includes(d))!);
     this.viewport()?.nativeElement.scrollTo({left:Math.max(0,index)*66});
   }});}
-  @HostListener('document:keydown.escape') escape():void {if(this.expanded()&&!this.store.editor())void this.router.navigate(['/']);}
 }

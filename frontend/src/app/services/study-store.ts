@@ -5,7 +5,8 @@ import { CourseHit, GeneratedPlan, Plan, PlanBlock, PlanSubject, Preferences, Se
 
 /** The habits of a semester nobody has configured, mirroring the server's defaults. */
 const DEFAULT_PREFERENCES: Preferences = {dayStart:'08:00', dayEnd:'20:00', lunch:['12:00','13:00'],
-  dinner:['18:00','19:00'], studyBlockSize:60, studyHoursPerWeek:null, alpha:.3, beta:5, daysOff:[]};
+  dinner:['18:00','19:00'], studyBlockSize:60, studyHoursPerWeek:null, alpha:.3, beta:5, daysOff:[],
+  studyDays:[0,1,2,3,4,5,6]};
 
 /** The scheduler fields of one course that the setup form may change. */
 export type CoursePlanPatch = Partial<{priority:number; difficulty:number|null; maxStudyHours:number|null;
@@ -175,6 +176,19 @@ export class StudyStore {
     const plan=this.generatedPlan();
     if(plan)this.generatedPlan.set({...plan,blocks:plan.blocks.map(b=>b.id===id?{...b,...patch,source:'manual' as const}:b)});
     return this.slotRequest(`/api/semesters/${this.semkez()}/plan/blocks/${id}`, this.json('PATCH', patch));
+  }
+  /** Empty a day: every slot, the user's own and lunch and dinner too. */
+  clearDay(date:string):Promise<boolean> {
+    const plan=this.generatedPlan();
+    if(plan)this.generatedPlan.set({...plan,blocks:plan.blocks.filter(b=>b.date!==date)});
+    return this.slotRequest(`/api/semesters/${this.semkez()}/plan/days/${date}`, {method:'DELETE'});
+  }
+  /** Plan one day, around whatever the user already placed on it. */
+  async planDay(date:string):Promise<boolean> {
+    const plan=await this.generate({fromDate:date,toDate:date});
+    if(!plan){this.announce(this.planError());return false;}
+    await this.load();
+    return true;
   }
   deleteSlot(id:number):Promise<boolean> {
     const plan=this.generatedPlan();

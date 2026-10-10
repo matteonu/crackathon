@@ -1,8 +1,7 @@
 <section class="panel schedule-panel" [class.expanded]="expanded()" aria-labelledby="schedule-title">
   <div class="panel-heading">
     <div><div class="section-label"><span class="tiny-square"></span> YOUR STUDY PHASE</div><h2 id="schedule-title">{{expanded() ? 'Hours overview' : 'Full schedule'}}</h2><p>{{expanded() ? weekLabel() : phaseLabel()}}</p></div>
-    @if(expanded()) {<a class="button secondary" routerLink="/" aria-label="Close hours overview"><app-icon name="close" /> Close</a>}
-    @else {<a class="button primary" routerLink="/schedule">Full detail <app-icon name="expand" /></a>}
+    @if(!expanded()) {<a class="button primary" routerLink="/schedule">Full detail <app-icon name="expand" /></a>}
   </div>
   @if(expanded()) {
     <div class="week-toolbar">

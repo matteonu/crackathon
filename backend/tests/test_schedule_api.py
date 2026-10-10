@@ -140,7 +140,8 @@ class PreferenceTests(ScheduleApiCase):
         self.assertEqual(self.plan()["preferences"],
                          {"dayStart": "08:00", "dayEnd": "20:00", "lunch": ["12:00", "13:00"],
                           "dinner": ["18:00", "19:00"], "studyBlockSize": 60,
-                          "studyHoursPerWeek": None, "alpha": .3, "beta": 5, "daysOff": []})
+                          "studyHoursPerWeek": None, "alpha": .3, "beta": 5, "daysOff": [],
+                          "studyDays": [0, 1, 2, 3, 4, 5, 6]})
         self.add(1)      # adding a course creates the row; the defaults must survive it
         self.assertEqual(self.plan()["preferences"]["dayStart"], "08:00")
 
@@ -502,3 +503,78 @@ class MealTests(ScheduleApiCase):
         lunch = [b for b in self.blocks() if b["date"] == "2027-02-02" and b["label"] == "Lunch"]
         self.assertEqual(lunch, [])
         self.assertTrue(any(b["label"] == "Lunch" for b in self.blocks() if b["date"] == "2027-02-03"))
+
+
+
+class DayTests(ScheduleApiCase):
+    """Study weekdays, one day at a time, clearing a day, and meals that stay removed."""
+
+    def slots_on(self, date):
+        return [b for b in self.blocks() if b["date"] == date]
+
+    def remove(self, block_id):
+        return self.client.delete(f"/api/semesters/2026W/plan/blocks/{block_id}", headers=ALICE)
+
+    def clear(self, date, user=ALICE):
+        return self.client.delete(f"/api/semesters/2026W/plan/days/{date}", headers=user)
+
+    def test_only_the_chosen_weekdays_are_planned(self):
+        self.add(1)
+        self.assertEqual(self.prefs({"studyDays": [0, 1, 2, 3, 4]}).get_json()["studyDays"], [0, 1, 2, 3, 4])
+        self.generate()                                   # Mon 1 Feb to Sun 7 Feb
+        self.assertEqual(sorted({b["date"] for b in self.blocks()}), [f"2027-02-0{d}" for d in range(1, 6)])
+
+    def test_bad_study_days_are_refused(self):
+        for bad in ([], [7], [1, 1], "weekdays", [True]):
+            self.assertEqual(self.prefs({"studyDays": bad}).status_code, 400, bad)
+
+    def test_planning_one_day(self):
+        self.add(1)
+        self.generate()
+        week = [b for b in self.blocks() if b["date"] != "2027-02-03"]
+        self.generate(fromDate="2027-02-03", toDate="2027-02-03")
+        self.assertEqual([b for b in self.blocks() if b["date"] != "2027-02-03"], week)   # the rest untouched
+        self.assertTrue(self.slots_on("2027-02-03"))
+
+    def test_one_day_is_planned_even_off_the_chosen_weekdays(self):
+        self.add(1)
+        self.prefs({"studyDays": [0, 1, 2, 3, 4]})
+        self.generate(fromDate="2027-02-06", toDate="2027-02-06")      # a Saturday, asked for
+        self.assertTrue(any(b["type"] != "meal" for b in self.slots_on("2027-02-06")))
+
+    def test_a_removed_lunch_stays_removed(self):
+        self.add(1)
+        self.generate()
+        lunch = next(b for b in self.slots_on("2027-02-02") if b["label"] == "Lunch")
+        self.assertEqual(self.remove(lunch["id"]).status_code, 200)
+        self.generate()
+        self.assertFalse(any(b["label"] == "Lunch" for b in self.slots_on("2027-02-02")))
+        self.assertTrue(any(b["label"] == "Lunch" for b in self.slots_on("2027-02-03")))
+
+    def test_a_moved_dinner_is_not_doubled(self):
+        self.add(1)
+        self.generate()
+        dinner = next(b for b in self.slots_on("2027-02-02") if b["label"] == "Dinner")
+        self.client.patch(f"/api/semesters/2026W/plan/blocks/{dinner['id']}", json={"start": "19:00", "end": "20:00"},
+                          headers=ALICE)
+        self.generate()
+        dinners = [(b["start"], b["source"]) for b in self.slots_on("2027-02-02") if b["label"] == "Dinner"]
+        self.assertEqual(dinners, [("19:00", "manual")])
+
+    def test_clearing_a_day_empties_it_and_starts_it_over(self):
+        self.add(1)
+        self.generate()
+        self.client.post("/api/semesters/2026W/plan/blocks", headers=ALICE,
+                         json={"date": "2027-02-02", "start": "21:00", "end": "22:00", "kind": "break"})
+        lunch = next(b for b in self.slots_on("2027-02-02") if b["label"] == "Lunch")
+        self.remove(lunch["id"])
+        self.assertEqual(self.clear("2027-02-02").status_code, 200)
+        self.assertEqual(self.slots_on("2027-02-02"), [])            # yours and generated alike
+        self.assertTrue(self.slots_on("2027-02-03"))
+        self.generate(fromDate="2027-02-02", toDate="2027-02-02")
+        self.assertTrue(any(b["label"] == "Lunch" for b in self.slots_on("2027-02-02")))   # meals come back
+
+    def test_clearing_needs_a_day_in_the_phase(self):
+        self.add(1)
+        self.assertEqual(self.clear("2026-01-01").status_code, 400)
+        self.assertEqual(self.clear("2027-02-02", user=BOB).status_code, 404)

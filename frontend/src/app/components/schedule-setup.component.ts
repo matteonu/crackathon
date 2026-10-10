@@ -24,6 +24,13 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
         <input type="date" [min]="store.examSession().start" [max]="store.examSession().end" [value]="course.examDate" (change)="edit(course.courseId,{examDate:$any($event.target).value})"></label>
     }</div>
 
+    <h3 class="setup-heading">Days you study</h3>
+    <div class="weekday-picker" role="group" aria-label="Days of the week you study on">@for(day of weekdays;track day.value){
+      <button type="button" [class.on]="habits().studyDays.includes(day.value)" [attr.aria-pressed]="habits().studyDays.includes(day.value)"
+        [disabled]="habits().studyDays.length===1&&habits().studyDays.includes(day.value)" [title]="day.name" (click)="toggleDay(day.value)">{{day.short}}</button>
+    }</div>
+    <p class="field-hint">A proposal for the week leaves the other days free. The + on a day in the calendar plans it anyway.</p>
+
     <h3 class="setup-heading">Your day</h3>
     <div class="form-grid setup-day">
       <label>Day starts<input type="time" [value]="habits().dayStart" (change)="setHabit({dayStart:$any($event.target).value})"></label>
@@ -79,6 +86,8 @@ export class ScheduleSetupComponent {
   readonly store=inject(StudyStore);
   readonly dialog=viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
   readonly priorities=PRIORITIES;readonly difficulties=DIFFICULTIES;
+  readonly weekdays=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((name,value)=>({value,name,short:name.slice(0,3)}));
+  toggleDay(day:number):void{this.habits.update(h=>({...h,studyDays:h.studyDays.includes(day)?h.studyDays.filter(d=>d!==day):[...h.studyDays,day].sort()}));}
   readonly habits=signal<Preferences>(this.store.preferences());
   readonly courses=signal<CourseDraft[]>([]);
   readonly saving=signal(false);readonly error=signal('');readonly advanced=signal(false);

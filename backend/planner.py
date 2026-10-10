@@ -17,6 +17,7 @@
     POST   /api/semesters/<semkez>/plan/blocks         draw a slot (a course, or a break)
     PATCH  /api/semesters/<semkez>/plan/blocks/<id>    move or resize one; it becomes yours
     DELETE /api/semesters/<semkez>/plan/blocks/<id>    remove one
+    DELETE /api/semesters/<semkez>/plan/days/<date>    clear a day
 
 In the app each course is a subject with id 'course-<courseId>'. A semester's study phase -- the
 days hours can be recorded and sessions planned for -- is its Lernphase before the exams.
@@ -53,7 +54,8 @@ DEFAULT_DIFFICULTY = 3
 # studyHoursPerWeek None means every free slot between day start and end, meals excluded.
 DEFAULT_PREFERENCES = {"dayStart": "08:00", "dayEnd": "20:00", "lunch": ["12:00", "13:00"],
                        "dinner": ["18:00", "19:00"], "studyBlockSize": 60,
-                       "studyHoursPerWeek": None, "alpha": .3, "beta": 5, "daysOff": []}
+                       "studyHoursPerWeek": None, "alpha": .3, "beta": 5, "daysOff": [],
+                       "studyDays": [0, 1, 2, 3, 4, 5, 6]}
 # A slot the user draws: a course, or a break that keeps the scheduler away.
 SLOT_KINDS = ("course", "break")
 # A generated plan covers one week, the one open in the calendar, unless asked for more.
@@ -486,6 +488,7 @@ def preferences(sid):
             "studyBlockSize": row["study_block_size"],
             "studyHoursPerWeek": row["study_hours_per_week"],
             "alpha": row["alpha"], "beta": row["beta"],
+            "studyDays": [int(day) for day in row["study_weekdays"]],
             "daysOff": [{"startDate": r["start_date"], "rangeLength": r["range_length"]}
                         for r in db.get_db().execute(
                             """SELECT start_date, range_length FROM semester_days_off
@@ -538,14 +541,21 @@ def scheduler_request(sid, semkez, from_date, to_date):
                 """SELECT course_id, date, start_time, end_time, type FROM plan_blocks
                    WHERE semester_id = ? AND date BETWEEN ? AND ? AND source = 'manual' ORDER BY date, start_time""",
                 (sid, from_date, to_date))]
-    length = (dt.date.fromisoformat(to_date) - dt.date.fromisoformat(from_date)).days + 1
+    first, length = dt.date.fromisoformat(from_date), (dt.date.fromisoformat(to_date) - dt.date.fromisoformat(from_date)).days + 1
+    days_off = [{"start_date": day["startDate"], "range_length": day["rangeLength"]}
+                for day in preferences(sid)["daysOff"]]
+    # Weekdays the user does not study are days off. Asking for one day plans it regardless:
+    # the per-day button is an explicit request.
+    if length > 1:
+        days_off += [{"start_date": day.isoformat(), "range_length": 1}
+                     for day in (first + dt.timedelta(days=i) for i in range(length))
+                     if str(day.weekday()) not in row["study_weekdays"]]
     return {
         "subjects": subjects_input,
         "history": history,
         "busy": busy,
         "exam_session": {"start_date": from_date, "range_length": length},
-        "days_off": [{"start_date": day["startDate"], "range_length": day["rangeLength"]}
-                     for day in preferences(sid)["daysOff"]],
+        "days_off": days_off,
         "day_start": row["day_start"], "day_end": row["day_end"],
         "lunch_time": [row["lunch_start"], row["lunch_end"]],
         "dinner_time": [row["dinner_start"], row["dinner_end"]],
@@ -601,15 +611,24 @@ def store_plan(sid, from_date, to_date, payload, result):
     """Replace the generated slots from `from_date` to `to_date`. Every other week stays as it
     is, and the user's own slots stay everywhere: the run planned around them."""
     conn = db.get_db()
-    mine = {}
-    for r in conn.execute("""SELECT date, start_time, end_time FROM plan_blocks
+    mine, skip = {}, set()
+    for r in conn.execute("""SELECT date, start_time, end_time, type, label FROM plan_blocks
                              WHERE semester_id = ? AND date BETWEEN ? AND ? AND source = 'manual'""",
                           (sid, from_date, to_date)):
         mine.setdefault(r["date"], []).append((r["start_time"], r["end_time"]))
-    # Lunch and dinner come from the habits every time; one the user has drawn over gives way.
+        if r["type"] == "meal":
+            skip.add((r["date"], r["label"]))           # a meal the user moved is already there
+    skip |= {(r["date"], r["label"]) for r in conn.execute(
+        "SELECT date, label FROM plan_meal_skips WHERE semester_id = ? AND date BETWEEN ? AND ?",
+        (sid, from_date, to_date))}
+    # Lunch and dinner come from the habits every time. One the user moved, removed or drew
+    # over is left out of that day.
+    def keep(block):
+        if block["type"] == "meal" and (block["date"], block["label"]) in skip:
+            return False
+        return not any(block["start"] < end and block["end"] > start for start, end in mine.get(block["date"], []))
     rows = [(sid, block["courseId"], block["date"], block["start"], block["end"],
-             block["type"], block["label"]) for block in result["blocks"]
-            if not any(block["start"] < end and block["end"] > start for start, end in mine.get(block["date"], []))]
+             block["type"], block["label"]) for block in result["blocks"] if keep(block)]
     with conn:
         conn.execute("""DELETE FROM plan_blocks WHERE semester_id = ? AND date BETWEEN ? AND ?
                         AND source = 'generated'""", (sid, from_date, to_date))
@@ -691,6 +710,12 @@ def save_preferences(semkez):
             fields[columns[0]], fields[columns[1]] = value
     if fields.get("day_start", row["day_start"]) >= fields.get("day_end", row["day_end"]):
         raise RequestError(400, "The day has to end after it starts.")
+    if "studyDays" in body:
+        days = body["studyDays"]
+        if (not isinstance(days, list) or not days or len(set(days)) != len(days)
+                or not all(isinstance(d, int) and not isinstance(d, bool) and 0 <= d <= 6 for d in days)):
+            raise RequestError(400, "Choose at least one day of the week to study on.")
+        fields["study_weekdays"] = "".join(str(d) for d in sorted(days))
     if "studyBlockSize" in body:
         size = body["studyBlockSize"]
         if not isinstance(size, int) or isinstance(size, bool) or not 15 <= size <= 240:
@@ -873,9 +898,31 @@ def delete_block(semkez, block_id):
     to keep it free."""
     semkez = checked(semkez)
     sid = semester_id(current_user()["id"], semkez)
-    own_block(sid, block_id)
+    row = own_block(sid, block_id)
     conn = db.get_db()
     with conn:
         conn.execute("DELETE FROM plan_blocks WHERE id = ?", (block_id,))
+        if row["type"] == "meal" and row["label"] in ("Lunch", "Dinner"):
+            conn.execute("INSERT OR IGNORE INTO plan_meal_skips (semester_id, date, label) VALUES (?, ?, ?)",
+                         (sid, row["date"], row["label"]))
+        refresh_targets(conn, sid)
+    return jsonify(stored_plan(sid))
+
+
+@bp.delete("/semesters/<semkez>/plan/days/<date>")
+def clear_day(semkez, date):
+    """Empty a day: every slot on it, generated or the user's own, lunch and dinner too. The
+    day starts over, so generating it again brings the meals back."""
+    semkez = checked(semkez)
+    start, end = phase(semkez)
+    if not iso_date(date) or not start <= date <= end:
+        raise RequestError(400, f"Choose a day in the study phase, {start} to {end}.")
+    sid = semester_id(current_user()["id"], semkez)
+    if sid is None:
+        raise RequestError(404, f"You have no plan for {label_of(semkez)} yet.")
+    conn = db.get_db()
+    with conn:
+        conn.execute("DELETE FROM plan_blocks WHERE semester_id = ? AND date = ?", (sid, date))
+        conn.execute("DELETE FROM plan_meal_skips WHERE semester_id = ? AND date = ?", (sid, date))
         refresh_targets(conn, sid)
     return jsonify(stored_plan(sid))
