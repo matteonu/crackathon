@@ -401,6 +401,10 @@ textarea { resize: vertical; line-height: 1.7; }
 /* Subject workspace and planning calendar. */
 .subject-meta { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:14px; color:var(--muted); font-size:12px; }
 .subject-meta a { color:var(--green); text-decoration:underline; text-underline-offset:3px; }
+/* Title, then code and ECTS, close above the progress card; Record hours sits on the title's bottom edge. */
+.subject-heading { display:block; min-height:0; padding-bottom:18px; }
+.subject-title-row { display:flex; align-items:flex-end; justify-content:space-between; gap:15px 24px; flex-wrap:wrap; }
+.subject-heading .subject-meta { margin-top:8px; }
 .subject-workspace { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:22px; align-items:start; }
 .subject-sidebar { display:grid; gap:20px; min-width:0; }
 .subject-sidebar .panel { padding:22px; }
