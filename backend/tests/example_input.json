@@ -1,0 +1,26 @@
+{
+  "subjects": {
+    "Number Theory": {
+      "ects": 7,
+      "lecture_per_week": 4,
+      "difficulty": 3,
+      "priority": 2,
+      "examdate": "2026-11-20",
+      "max_study_hours": 12
+    },
+    "Geometry": {
+      "ects": 9,
+      "lecture_per_week": 4,
+      "difficulty": 5,
+      "priority": 1,
+      "examdate": "2026-11-18"
+    }
+  },
+  "exam_session": {"start_date": "2026-11-01", "range_length": 21},
+  "days_off": ["2026-11-04", {"start_date": "2026-11-10", "range_length": 2}],
+  "day_start": "08:00",
+  "day_end": "20:00",
+  "lunch_time": ["12:00", "13:00"],
+  "dinner_time": ["18:00", "19:00"],
+  "study_block_size": 90
+}
