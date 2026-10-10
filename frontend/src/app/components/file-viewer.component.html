@@ -9,9 +9,14 @@
     }
     @if(kind()!=='pdf'){<div class="file-detail-actions"><button class="button secondary" type="submit" [disabled]="saving()">{{saving()?'Saving…':'Save details'}}</button></div>}
   </form>
-  <div class="file-meta-bar"><button type="button" class="file-kind source-file-button" [attr.aria-label]="kind()==='pdf'?'Back to PDF':'Back to file'" [attr.aria-pressed]="!card()" (click)="returnToFile()">{{kind().toUpperCase()}}</button><a class="text-button" [href]="fileUrl()" [download]="file.name"><app-icon name="download" />Download file</a></div>
+  <div class="file-meta-bar"><button type="button" class="file-kind source-file-button" [attr.aria-label]="kind()==='pdf'?'Back to PDF':'Back to file'" [attr.aria-pressed]="!card()" (click)="returnToFile()">{{kind().toUpperCase()}}</button>@if(kind()!=='deck'){<a class="text-button" [href]="fileUrl()" [download]="file.name"><app-icon name="download" />Download file</a>}@else{<label>Folder <select [ngModel]="file.parentId??null" (ngModelChange)="moveDeck($event)"><option [ngValue]="null">Materials</option>@for(folder of folders();track folder.id){<option [ngValue]="folder.id">{{folder.name}}</option>}</select></label>@if(file.sourcePdfId){<button class="text-button" (click)="openFile.emit(file.sourcePdfId)">Open source PDF</button>}@else{<span class="muted">Source PDF removed · deck retained</span>}}</div>
   @if(error()||materials.error()){<p class="form-error" role="alert">{{error()||materials.error()}}</p>}<p class="viewer-notice" aria-live="polite">{{notice()}}</p>
   @if(file.processing?.error){<p class="form-error" role="alert">{{file.processing!.error}}</p>}
+  @if(kind()==='deck'){
+    <app-folder-flashcards [cards]="deckCards()" [name]="file.name" [subjectId]="file.subjectId" [deckId]="file.id" (openFile)="openFile.emit($event)" (startLearning)="startLearning.emit(file.id)" />
+    <button class="text-button" (click)="addingCard.set(!addingCard())">Add a flashcard</button>
+    @if(addingCard()){<form class="add-card-form" [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><button class="button secondary" type="submit">Save flashcard</button></form>}
+  }@else{
   <div class="file-viewer-columns">
     <section #stage class="file-stage" aria-label="File and flashcard viewer">
       <div class="file-stage-toolbar"><span>{{card()?'FLASHCARD PREVIEW':'SOURCE FILE'}}</span>@if(!card()&&kind()!=='pdf'){<button class="text-button" (click)="editing.set(!editing())">{{editing()?'Preview':'Edit file'}}</button>}</div>
@@ -30,16 +35,18 @@
       @if(card();as card){<article class="flashcard-stage" aria-label="Selected flashcard"><div class="flashcard-stage-top"><span class="eyebrow">QUESTION</span>@if(card.demo){<span class="demo-badge">Demo card</span>}</div><h2>{{card.question}}</h2>@if(revealed()){<div class="flashcard-answer"><span class="eyebrow">ANSWER</span><p>{{card.answer}}</p></div>}@else{<button class="button primary" (click)="revealed.set(true)">Reveal answer</button>}<p class="field-hint">Click outside this card, press Escape, or click the file badge above to return to your source.</p></article>}
     </section>
     <aside class="flashcard-panel" aria-label="File flashcards"><div class="tool-heading"><div><span class="eyebrow">ACTIVE RECALL</span><h3>Flashcards <span class="card-count">{{cards().length}}</span></h3></div><app-icon name="book" /></div>
+      @if(linkedDeck();as deck){<button class="button primary" [disabled]="!cards().length" (click)="startLearning.emit(deck.id)">Start learning</button>}
       @if(kind()==='pdf'){
         <app-learning-mode [mode]="selectedMode()" [disabled]="generating()" (modeChange)="selectedMode.set($event)" />
         @if(file.processing?.status!=='complete'||modeChanged()){<button class="button primary generate-cards" [disabled]="generating()" (click)="generate()">@if(generating()){<app-loading-dots label="Generating summary and flashcards" />}@else{ {{modeChanged()?'Generate in '+selectedMode()+' mode':file.processing?.status==='error'?'Retry processing':'Generate summary and flashcards'}} }</button>}
         <p class="field-hint" aria-live="polite">@if(generating()){<app-loading-dots [label]="selectedMode()==='deep'?'Reading text and visuals':'Reading extracted text'" />}@else if(file.processing?.status==='complete'){Generated in {{file.processing.mode??'shallow'}} mode.}@else{Processing uses the PDF contents to create your summary and flashcards.}</p>
       }
       <div class="flashcard-list">@for(card of cards();track card.id){<button class="flashcard-choice" [class.selected]="selectedCard()===card.id" [attr.aria-pressed]="selectedCard()===card.id" (click)="selectCard(card.id!)"><span class="flashcard-number">{{ $index+1 }}</span><span><strong>{{card.question}}</strong><small>{{card.generated?'Generated from PDF':card.demo?'Demo card':'Your card'}} · Click to review</small></span><app-icon name="right" /></button>}@empty{<div class="empty-state">@if(generating()){<app-loading-dots label="Preparing your flashcards" />}@else{No flashcards yet.}</div>}</div>
-      <button class="text-button" (click)="addingCard.set(!addingCard())"><app-icon name="plus" /> Add a flashcard</button>
+      @if(kind()==='pdf'){<button class="text-button" (click)="addingCard.set(!addingCard())"><app-icon name="plus" /> Add a flashcard</button>}
       @if(addingCard()){<form class="add-card-form" [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><button class="button secondary" type="submit">Save flashcard</button></form>}
     </aside>
   </div>
+  }
 </div>
 }
 

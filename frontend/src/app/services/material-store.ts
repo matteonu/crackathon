@@ -3,7 +3,7 @@ import { Material, MaterialCategory, MaterialKind, Flashcard, LearningMode, norm
 import { learningPatch } from '../models/learning';
 import { LearningPipelineService } from './learning-pipeline.service';
 
-type MaterialPatch=Partial<Pick<Material,'category'|'marker'|'outputs'|'name'|'description'|'parentId'|'content'|'processing'>>;
+type MaterialPatch=Partial<Pick<Material,'category'|'marker'|'outputs'|'name'|'description'|'parentId'|'content'|'processing'|'folderWeight'>>;
 /** The file library, stored on the server: metadata in SQLite, PDFs and generated JSON on disk. */
 @Injectable({providedIn:'root'})
 export class MaterialStore {
@@ -31,6 +31,7 @@ export class MaterialStore {
   private assertParent(subjectId:string,parentId:string|null,id?:string):void {
     if(!validParent(this.files(),subjectId,parentId,id))throw new Error('Choose a folder in this subject. A folder cannot contain itself.');
   }
+  async refresh():Promise<void>{this.files.set((await this.request<Material[]>('/api/materials')).map(normalizeMaterial));}
   private assertUnique(file:Material):void {
     if(this.files().some(f=>f.id!==file.id&&f.subjectId===file.subjectId&&(f.parentId??null)===(file.parentId??null)&&f.name.toLowerCase()===file.name.toLowerCase()))throw new Error('That name already exists in this folder.');
   }
@@ -72,11 +73,11 @@ export class MaterialStore {
     });for(const file of added)void this.process(file.id);}catch(e){this.error.set(e instanceof Error?e.message:'Could not save PDFs. Please retry.');}finally{this.busy.set(false);}
   }
   remove(id:string):Promise<boolean>{return this.queue(async()=>{
-    const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)!=='pdf')return false;
+    const file=this.files().find(f=>f.id===id);if(!file||!['pdf','deck'].includes(materialKind(file)))return false;
     try{
       // The server deletes the row, the stored PDF and every generated result together.
       await this.request(`/api/materials/${id}`,{method:'DELETE'});
-      this.files.update(files=>files.filter(f=>f.id!==id));this.error.set('');return true;
+      await this.refresh();this.error.set('');return true;
     }catch(e){this.error.set(e instanceof Error?e.message:'Could not delete this PDF. Please retry.');return false;}
   });}
   async process(id:string,resume=false,selectedMode?:LearningMode):Promise<void>{
@@ -88,6 +89,7 @@ export class MaterialStore {
       if(!resume&&!await this.update(id,current=>(current.processing?.mode??'shallow')===mode?{processing:{status:'queued',mode,requestedQuestions}}:learningPatch(current,{id,mode,requested_questions:requestedQuestions,status:'queued',documents:[]})))throw new Error(this.error());
       await this.pipeline.process(file,async result=>{
         if(!await this.update(id,current=>learningPatch(current,result)))throw new Error(this.error()||'Could not save generated results.');
+        if(result.status==='complete')await this.refresh();
       },resume,mode);
     }catch(e){await this.update(id,{processing:{status:'error',mode,requestedQuestions,error:e instanceof Error?e.message:'Processing failed. Retry this file.'}});}
     finally{this.activeJobs.delete(id);}
@@ -106,8 +108,7 @@ export class MaterialStore {
   });}
   appendCards(id:string,cards:Flashcard[]):Promise<boolean>{return this.queue(async()=>{
     const file=this.files().find(f=>f.id===id);if(!file||materialKind(file)==='folder')return false;
-    const outputs={...file.outputs,flashcards:{cards:[...file.outputs?.flashcards?.cards??[],...cards.map(c=>({...c,id:crypto.randomUUID()}))]}};
-    try{this.store(await this.request<Material>(`/api/materials/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({outputs})}));return true;}
+    try{this.store(await this.request<Material>(`/api/materials/${id}/cards`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cards})}));return true;}
     catch(e){this.error.set(e instanceof Error?e.message:'Could not save flashcards. Please retry.');return false;}
   });}
 }

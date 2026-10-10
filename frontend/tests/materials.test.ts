@@ -46,6 +46,22 @@ test('moves cannot create cycles or cross subject boundaries',()=>{
   assert.throws(()=>materialName('../notes','txt'));
 });
 
+test('independent decks expose cards once, preserve IDs on moves and retain source links',()=>{
+  const folder=file('folder',null,'folder');
+  const source=file('pdf',null,'pdf');
+  const deck=file('deck',null,'deck');
+  deck.sourcePdfId=source.id;
+  deck.outputs={flashcards:{cards:[{id:'stable-card',question:'Q',answer:'A',generated:true,demo:false}]}};
+  const files=[folder,source,deck];
+  assert.equal(folderCards(files,null).length,1);
+  assert.equal(folderCards(files,null)[0].fileId,source.id);
+  deck.parentId=folder.id;
+  assert.equal(folderCards(files,folder.id)[0].key,'stable-card');
+  deck.sourcePdfId=null;
+  assert.equal(folderCards(files,folder.id)[0].fileId,deck.id);
+  assert.equal(materialName('Renamed deck','deck'),'Renamed deck');
+});
+
 test('APKG is a readable Anki SQLite package with escaped content and stable note identity',async()=>{
   const SQL=await initSqlJs();
   const cards=[{key:'a',fileId:'f',fileName:'Notes.md',question:'What is <script>?',answer:'A & B\nC',demo:true},{key:'b',fileId:'g',fileName:'Slides.pdf',question:'Second question',answer:'Second answer',demo:false}];

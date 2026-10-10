@@ -13,7 +13,7 @@ DEMO_SEED = PRODUCTION_SEED + [os.path.join(BACKEND_DIR, 'seed_demo')]
 
 def emails(app):
     with app.app_context():
-        return [r['email'] for r in db.connect().execute('SELECT email FROM users ORDER BY id')]
+        return [r['email'] for r in db.get_db().execute('SELECT email FROM users ORDER BY id')]
 
 
 class SeedTests(unittest.TestCase):
@@ -21,7 +21,7 @@ class SeedTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             app = build_app(temp, seed=True, SEED_DIRS=PRODUCTION_SEED)
             with app.app_context():
-                conn = db.connect()
+                conn = db.get_db()
                 counts = {table: conn.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0]
                           for table in ('users', 'courses', 'course_resources', 'semesters', 'materials')}
             self.assertEqual(counts, {'users': 0, 'courses': 0, 'course_resources': 0,
@@ -31,7 +31,7 @@ class SeedTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             app = build_app(temp, seed=True, SEED_DIRS=DEMO_SEED)
             with app.app_context():
-                conn = db.connect()
+                conn = db.get_db()
                 self.assertGreater(conn.execute('SELECT count(*) FROM courses').fetchone()[0], 0)
                 self.assertGreater(conn.execute('SELECT count(*) FROM semesters').fetchone()[0], 0)
                 self.assertGreater(conn.execute('SELECT count(*) FROM course_resources').fetchone()[0], 0)

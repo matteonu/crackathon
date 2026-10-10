@@ -5,6 +5,7 @@ starting rows are read from, in order), so tests and dev mode can point at a dif
 database and a different dataset.
 """
 import glob
+from contextlib import closing
 import json
 import os
 import sqlite3
@@ -55,10 +56,41 @@ def close_db(_exc=None):
 
 
 def init_db():
-    """Create every table the schema declares. Existing tables and rows are left alone."""
+    """Apply schema and migrate the legacy material table in one transaction."""
     os.makedirs(os.path.dirname(db_path()), exist_ok=True)
-    with connect() as db, open(SCHEMA_PATH) as f:
-        db.executescript(f.read())
+    with closing(connect()) as db, open(SCHEMA_PATH) as f:
+        schema = f.read()
+        # executescript commits implicitly, so execute complete statements individually.
+        statements, pending = [], ''
+        for line in schema.splitlines(keepends=True):
+            pending += line
+            if sqlite3.complete_statement(pending):
+                statements.append(pending)
+                pending = ''
+        db.execute('PRAGMA foreign_keys = OFF')
+        db.execute('BEGIN IMMEDIATE')
+        try:
+            columns = {r['name'] for r in db.execute('PRAGMA table_info(materials)')}
+            if columns and 'source_pdf_id' not in columns:
+                material_sql = next(s for s in statements if 'CREATE TABLE IF NOT EXISTS materials (' in s)
+                db.execute(material_sql.replace('CREATE TABLE IF NOT EXISTS materials (',
+                                               'CREATE TABLE materials_new ('))
+                names = ','.join('"' + name + '"' for name in sorted(columns))
+                db.execute(f'INSERT INTO materials_new ({names}) SELECT {names} FROM materials')
+                db.execute('DROP TABLE materials')
+                db.execute('ALTER TABLE materials_new RENAME TO materials')
+            for statement in statements:
+                db.execute(statement)
+            from decks import migrate_embedded_cards
+            migrate_embedded_cards(db)
+            if db.execute('PRAGMA foreign_key_check').fetchone():
+                raise sqlite3.IntegrityError('Foreign key check failed during deck migration')
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.execute('PRAGMA foreign_keys = ON')
 
 
 def exists():
@@ -80,7 +112,7 @@ def reset_db():
     if os.path.exists(db_path()):
         os.remove(db_path())
     init_db()
-    with connect() as db:
+    with closing(connect()) as db, db:
         for path, table in seed_files():
             with open(path) as f:
                 rows = json.load(f)
@@ -88,6 +120,8 @@ def reset_db():
                 cols = ", ".join(f'"{c}"' for c in row)
                 marks = ", ".join("?" for _ in row)
                 db.execute(f'INSERT INTO "{table}" ({cols}) VALUES ({marks})', list(row.values()))
+        from decks import migrate_embedded_cards
+        migrate_embedded_cards(db)
 
 
 def dump_seed():
@@ -101,7 +135,7 @@ def dump_seed():
     existing = {table: path for path, table in seed_files()}
     next_num = len(existing) + 1
     written = []
-    with connect() as db:
+    with closing(connect()) as db:
         tables = [r["name"] for r in db.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid"
         )]

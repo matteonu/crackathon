@@ -36,7 +36,7 @@ class AuthTests(unittest.TestCase):
             client.get('/api/me', headers={'X-User-Id': 'NEW.PERSON@ethz.ch', 'X-User-Name': 'Ren%C3%A9%20M.'})
             with app.app_context():
                 import db
-                rows = db.connect().execute('SELECT email, display_name FROM users').fetchall()
+                rows = db.get_db().execute('SELECT email, display_name FROM users').fetchall()
             self.assertEqual([tuple(r) for r in rows], [('new.person@ethz.ch', 'René M.')])
 
     def test_a_missing_name_header_falls_back_to_the_local_part(self):

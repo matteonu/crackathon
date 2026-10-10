@@ -26,11 +26,12 @@ __all__ = ["DEFAULT_QUESTIONS", "SUMMARY_SENTENCES", "RequestError", "StudyJobs"
 
 
 class StudyJobs:
-    def __init__(self, directory: Path, questions: int = DEFAULT_QUESTIONS, runner=None):
+    def __init__(self, directory: Path, questions: int = DEFAULT_QUESTIONS, runner=None, on_complete=None):
         self.directory = Path(directory).resolve()
         self.directory.mkdir(parents=True, exist_ok=True)
         self.questions = questions
         self.runner = runner or pdf_study.run
+        self.on_complete = on_complete
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pdf-study")
         self.lock = threading.Lock()
         self.active: set[tuple[str, str]] = set()
@@ -172,6 +173,8 @@ class StudyJobs:
             if not data["documents"] or not data["documents"][0].get("complete"):
                 raise pdf_study.WorkflowError("Processing did not finish. Retry to resume saved work.")
             data.update(status="complete", error="")
+            if self.on_complete:
+                self.on_complete(document_id, data)
             pdf_study.write_json(output, data)
         except Exception as exc:
             if self.is_deleted(document_id):

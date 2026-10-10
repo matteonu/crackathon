@@ -174,7 +174,10 @@ CREATE TABLE IF NOT EXISTS materials (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     subject_id TEXT NOT NULL,         -- the subject's id in the frontend's study data
     parent_id TEXT REFERENCES materials(id) ON DELETE CASCADE,
-    kind TEXT NOT NULL CHECK (kind IN ('folder', 'pdf', 'md', 'txt')),
+    kind TEXT NOT NULL CHECK (kind IN ('folder', 'pdf', 'md', 'txt', 'deck')),
+    source_pdf_id TEXT REFERENCES materials(id) ON DELETE SET NULL,
+    generation_mode TEXT CHECK (generation_mode IN ('shallow', 'deep')),
+    folder_weight REAL NOT NULL DEFAULT 1 CHECK (folder_weight > 0),
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     category TEXT NOT NULL,
@@ -183,13 +186,71 @@ CREATE TABLE IF NOT EXISTS materials (
     content TEXT,                     -- md and txt only; PDFs keep their bytes on disk
     sha256 TEXT,                      -- of the stored PDF
     added_at INTEGER NOT NULL,        -- milliseconds since the epoch
-    -- Summaries, flashcards and the state of the last pipeline run, as the JSON the
-    -- frontend sends. The server stores them whole and never reads inside them.
+    -- PDF summaries and pipeline state. Deck cards live in flashcards, not outputs.
     outputs TEXT,
-    processing TEXT
+    processing TEXT,
+    UNIQUE (id, user_id)
 );
 
 -- One name per folder, per subject, per user, ignoring case. ifnull() covers the root,
 -- where parent_id is NULL and NULLs would otherwise all count as different.
 CREATE UNIQUE INDEX IF NOT EXISTS materials_unique_name
     ON materials (user_id, subject_id, ifnull(parent_id, ''), lower(name));
+
+-- A deck is independent of its PDF: deleting the source only clears this reference.
+CREATE UNIQUE INDEX IF NOT EXISTS materials_source_deck
+    ON materials(source_pdf_id) WHERE kind = 'deck' AND source_pdf_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS flashcards (
+    id TEXT PRIMARY KEY,
+    deck_id TEXT NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    demo INTEGER NOT NULL DEFAULT 0,
+    generated INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (id, deck_id)
+);
+CREATE INDEX IF NOT EXISTS flashcards_deck ON flashcards(deck_id, position);
+
+-- Scheduler state belongs to the learner, deck and stable card ID.
+CREATE TABLE IF NOT EXISTS flashcard_progress (
+    user_id INTEGER NOT NULL,
+    deck_id TEXT NOT NULL,
+    card_id TEXT NOT NULL,
+    maturity REAL NOT NULL DEFAULT 0,
+    n_times_seen INTEGER NOT NULL DEFAULT 0,
+    n_mistakes INTEGER NOT NULL DEFAULT 0,
+    lapses INTEGER NOT NULL DEFAULT 0,
+    ease REAL NOT NULL DEFAULT 2.5,
+    status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'learning', 'review', 'relearning')),
+    learning_step INTEGER NOT NULL DEFAULT 0,
+    due TEXT NOT NULL,
+    last_review TEXT,
+    successful_streak INTEGER NOT NULL DEFAULT 0,
+    again_count INTEGER NOT NULL DEFAULT 0,
+    hard_count INTEGER NOT NULL DEFAULT 0,
+    good_count INTEGER NOT NULL DEFAULT 0,
+    easy_count INTEGER NOT NULL DEFAULT 0,
+    total_response_seconds REAL NOT NULL DEFAULT 0,
+    timed_reviews INTEGER NOT NULL DEFAULT 0,
+    version INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, deck_id, card_id),
+    FOREIGN KEY (deck_id, user_id) REFERENCES materials(id, user_id) ON DELETE CASCADE,
+    FOREIGN KEY (card_id, deck_id) REFERENCES flashcards(id, deck_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS flashcard_progress_due ON flashcard_progress(user_id, due);
+
+CREATE TABLE IF NOT EXISTS flashcard_reviews (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    deck_id TEXT NOT NULL,
+    card_id TEXT NOT NULL,
+    rating TEXT NOT NULL CHECK (rating IN ('again', 'hard', 'good', 'easy')),
+    reviewed_at TEXT NOT NULL,
+    response_seconds REAL,
+    card_version INTEGER NOT NULL,
+    next_due TEXT NOT NULL,
+    FOREIGN KEY (deck_id, user_id) REFERENCES materials(id, user_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS flashcard_reviews_deck ON flashcard_reviews(user_id, deck_id, reviewed_at);

@@ -2,7 +2,7 @@ export const MATERIAL_CATEGORIES = ['Slides','Notes','Transcripts','Books','Exam
 export const MATERIAL_MARKERS = ['To read','Done','Revisit','Ignore'] as const;
 export type MaterialCategory = typeof MATERIAL_CATEGORIES[number];
 export type MaterialMarker = typeof MATERIAL_MARKERS[number];
-export type MaterialKind = 'folder' | 'pdf' | 'md' | 'txt';
+export type MaterialKind = 'folder' | 'pdf' | 'md' | 'txt' | 'deck';
 export type ToolId = 'summary' | 'flashcards';
 export interface Flashcard { id?:string; question:string; answer:string; demo?:boolean; generated?:boolean; }
 export type LearningMode = 'shallow' | 'deep';
@@ -14,10 +14,11 @@ export interface Material {
   /** Only while a newly chosen file is still being uploaded; the server is the source. */
   blob?:Blob;
   kind?:MaterialKind; parentId?:string|null; description?:string; content?:string;
+  sourcePdfId?:string|null;generationMode?:LearningMode|null;folderWeight?:number;
   outputs?:Partial<Record<ToolId,ToolResult>>;
   processing?:ProcessingState;
 }
-export interface FolderCard extends Flashcard { key:string; fileId:string; fileName:string; }
+export interface FolderCard extends Flashcard { key:string; fileId:string; fileName:string; deckId?:string; }
 export interface TreeRow { material:Material; depth:number; }
 
 export function materialKind(file:Material):MaterialKind { return file.kind??'pdf'; }
@@ -38,7 +39,7 @@ export function descendants(files:readonly Material[],parentId:string|null):Mate
   visit(parentId);return found;
 }
 export function folderCards(files:readonly Material[],folderId:string|null):FolderCard[] {
-  return descendants(files,folderId).filter(f=>materialKind(f)!=='folder').flatMap(file=>(file.outputs?.flashcards?.cards??[]).map((card,i)=>({...card,key:card.id??`${file.id}-${i}`,fileId:file.id,fileName:file.name})));
+  return descendants(files,folderId).filter(f=>materialKind(f)!=='folder').flatMap(file=>(file.outputs?.flashcards?.cards??[]).map((card,i)=>({...card,key:card.id??`${file.id}-${i}`,fileId:file.sourcePdfId??file.id,fileName:file.name,deckId:materialKind(file)==='deck'?file.id:undefined})));
 }
 export function treeRows(files:readonly Material[],expanded:ReadonlySet<string>,query='',marker=''):TreeRow[] {
   const rows:TreeRow[]=[];const seen=new Set<string>();const filtering=!!query||!!marker;
@@ -62,6 +63,6 @@ export function validParent(files:readonly Material[],subjectId:string,parentId:
 }
 export function materialName(name:string,kind:MaterialKind):string {
   let value=name.trim();if(!value||value.length>180||/[\\/\x00-\x1f]/.test(value)||value==='.'||value==='..')throw new Error('Use a name of 1–180 characters, without slashes.');
-  if(kind!=='folder'&&!value.toLowerCase().endsWith('.'+kind))value+='.'+kind;
+  if(!['folder','deck'].includes(kind)&&!value.toLowerCase().endsWith('.'+kind))value+='.'+kind;
   return value;
 }

@@ -1,10 +1,4 @@
-"""The subject file library: folders, lecture PDFs and text notes, scoped to the caller.
-
-Metadata is in SQLite, PDF bytes are on disk in the pipeline's folder for the same id, so
-an upload is stored once and processing reads it from there. `outputs` and `processing` are
-kept as the JSON the frontend sends; the server does not read inside them, so the card
-shape can change without a migration here.
-"""
+"""User-scoped file library and independent decks; PDF bytes stay in pipeline storage."""
 import json
 import sqlite3
 import time
@@ -14,17 +8,18 @@ from flask import Blueprint, Response, current_app, jsonify, request, send_file
 
 from auth import current_user
 import db
+import decks
 from errors import RequestError
 
 bp = Blueprint("materials", __name__, url_prefix="/api/materials")
 
-KINDS = {"folder", "pdf", "md", "txt"}
+KINDS = {"folder", "pdf", "md", "txt", "deck"}
 CATEGORIES = {"Slides", "Notes", "Transcripts", "Books", "Exams", "Exercises"}
 MARKERS = {"To read", "Done", "Revisit", "Ignore"}
 MAX_TEXT = 200_000      # a note's content
 MAX_JSON = 1_000_000    # outputs or processing, serialised
 COLUMNS = ("id, subject_id, parent_id, kind, name, description, category, marker, size, "
-           "content, added_at, outputs, processing")
+           "content, added_at, outputs, processing, source_pdf_id, generation_mode, folder_weight")
 
 
 def jobs():
@@ -36,12 +31,15 @@ def to_json(row):
     data = {"id": row["id"], "subjectId": row["subject_id"], "parentId": row["parent_id"],
             "kind": row["kind"], "name": row["name"], "description": row["description"],
             "category": row["category"], "marker": row["marker"], "size": row["size"],
-            "added": row["added_at"]}
+            "added": row["added_at"], "sourcePdfId": row["source_pdf_id"],
+            "generationMode": row["generation_mode"], "folderWeight": row["folder_weight"]}
     if row["content"] is not None:
         data["content"] = row["content"]
     for key in ("outputs", "processing"):
         if row[key]:
             data[key] = json.loads(row[key])
+    if row["kind"] == "deck":
+        data["outputs"] = {"flashcards": {"cards": decks.deck_cards(db.get_db(), row["id"])}}
     return data
 
 
@@ -50,7 +48,7 @@ def valid_name(name, kind):
         return False
     if any(c in name for c in "\\/") or any(ord(c) < 32 for c in name):
         return False
-    return kind == "folder" or name.lower().endswith("." + kind)
+    return kind in {"folder", "deck"} or name.lower().endswith("." + kind)
 
 
 def as_json_text(value, field):
@@ -147,7 +145,7 @@ def create():
     if body.get("category") not in CATEGORIES or body.get("marker", "To read") not in MARKERS:
         raise RequestError(400, "Choose a category and a marker the app offers.")
     content = body.get("content")
-    if kind in {"folder", "pdf"}:
+    if kind in {"folder", "pdf", "deck"}:
         content = None
     elif not isinstance(content, str) or len(content) > MAX_TEXT:
         raise RequestError(400, "This note is too long to save.")
@@ -204,6 +202,14 @@ def update(material_id):
         check_parent(conn, user["id"], existing["subject_id"], parent_id, material_id)
         sets.append("parent_id = ?")
         values.append(parent_id)
+    if "folderWeight" in body:
+        import math
+        weight = body["folderWeight"]
+        if (existing["kind"] != "folder" or isinstance(weight, bool) or not isinstance(weight, (float, int))
+                or not math.isfinite(weight) or weight <= 0):
+            raise RequestError(400, "Folder weights must be finite positive numbers.")
+        sets.append("folder_weight = ?")
+        values.append(weight)
     if "content" in body:
         if existing["kind"] not in {"md", "txt"}:
             raise RequestError(400, "Only text files can be edited.")
@@ -212,15 +218,60 @@ def update(material_id):
             raise RequestError(400, "This note is too long to save.")
         sets += ["content = ?", "size = ?"]
         values += [content, len(content.encode())]
+    outputs = body.get("outputs")
+    if outputs is not None and (not isinstance(outputs, dict)
+                               or ("flashcards" in outputs and not isinstance(outputs["flashcards"], dict))):
+        raise RequestError(400, "Invalid material outputs.")
     for field in ("outputs", "processing"):
         if field in body:
+            value = body[field]
+            if field == "outputs" and existing["kind"] in {"pdf", "deck"} and value is not None:
+                value = {key: val for key, val in value.items() if key != "flashcards"}
             sets.append(f"{field} = ?")
-            values.append(as_json_text(body[field], field))
+            values.append(as_json_text(value, field))
 
-    if sets:
-        write(conn, f"UPDATE materials SET {', '.join(sets)} WHERE id = ? AND user_id = ?",
-              values + [material_id, user["id"]])
+    with conn:
+        if outputs and "flashcards" in outputs:
+            cards = outputs["flashcards"].get("cards", [])
+            decks.validate_cards(cards)
+            if existing["kind"] == "deck":
+                decks.replace_cards(conn, material_id, cards)
+            elif existing["kind"] == "pdf":
+                # Legacy clients can still submit card outputs; content lives only in the deck.
+                processing = body.get("processing") or json.loads(existing["processing"] or "{}")
+                if processing.get("status") == "complete":
+                    generated = [c for c in cards if c.get("generated") or c.get("demo")]
+                    deck_id = decks.sync_generated(conn, existing, generated, processing.get("mode", "shallow"))
+                    manual = [c for c in cards if not c.get("generated") and not c.get("demo")]
+                    saved = decks.deck_cards(conn, deck_id)
+                    ids = {c['id'] for c in saved}
+                    decks.replace_cards(conn, deck_id, saved + [c for c in manual if c.get('id') not in ids])
+        if sets:
+            try:
+                conn.execute(f"UPDATE materials SET {', '.join(sets)} WHERE id = ? AND user_id = ?",
+                             values + [material_id, user["id"]])
+            except sqlite3.IntegrityError:
+                raise RequestError(409, "That material name or relationship is already in use.") from None
     return jsonify(to_json(row(material_id)))
+
+
+@bp.post("/<uuid:material_id>/cards")
+def append_cards(material_id):
+    existing = row(str(material_id))
+    body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict):
+        raise RequestError(400, "Provide an object containing the cards.")
+    cards = body.get("cards")
+    decks.validate_cards(cards)
+    if existing["kind"] not in {"deck", "pdf"}:
+        raise RequestError(400, "Add cards to a deck or its source PDF.")
+    conn = db.get_db()
+    with conn:
+        deck_id = existing["id"] if existing["kind"] == "deck" else decks.ensure_deck(conn, existing)
+        # IDs are assigned by the server for additions.
+        decks.replace_cards(conn, deck_id, decks.deck_cards(conn, deck_id) +
+                            [{**c, "id": str(uuid.uuid4()), "generated": False, "demo": False} for c in cards])
+    return jsonify(to_json(row(deck_id))), 201
 
 
 @bp.delete("/<uuid:material_id>")
