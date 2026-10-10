@@ -4,6 +4,14 @@ export const MATERIAL_MARKERS = ['To read','Done','Revisit','Ignore'] as const;
 export type MaterialCategory = typeof MATERIAL_CATEGORIES[number];
 export type MaterialMarker = typeof MATERIAL_MARKERS[number];
 export type MaterialKind = 'folder' | 'pdf' | 'md' | 'txt';
+export type DocumentType = 'slides' | 'mock_exam' | 'exercise' | 'exercise_solution' | 'script' | 'summary' | 'cards' | 'mcq';
+export const CATEGORY_DOCUMENT_TYPES:Partial<Record<MaterialCategory,DocumentType>> = {
+  Slides:'slides', Exams:'mock_exam', Exercises:'exercise', Solutions:'exercise_solution', Scripts:'script'
+};
+const DOCUMENT_TYPE_LABELS:Record<DocumentType,string> = {
+  slides:'slides', mock_exam:'exam', exercise:'exercise', exercise_solution:'exercise solution',
+  script:'script', summary:'summary', cards:'flashcards', mcq:'multiple choice'
+};
 export type ToolId = 'summary' | 'flashcards';
 export interface Flashcard { id?:string; question:string; answer:string; demo?:boolean; generated?:boolean; }
 export type LearningMode = 'shallow' | 'deep';
@@ -15,7 +23,7 @@ export interface Material {
   marker:MaterialMarker; added:number;
   /** Only while a newly chosen file is still being uploaded; the server is the source. */
   blob?:Blob;
-  kind?:MaterialKind; parentId?:string|null; description?:string; content?:string;
+  kind?:MaterialKind; type?:DocumentType|null; parentId?:string|null; description?:string; content?:string;
   outputs?:Partial<Record<ToolId,ToolResult>>;
   processing?:ProcessingState;
 }
@@ -23,11 +31,19 @@ export interface FolderCard extends Flashcard { key:string; fileId:string; fileN
 export interface TreeRow { material:Material; depth:number; }
 
 export function materialKind(file:Material):MaterialKind { return file.kind??'pdf'; }
-export function canGenerateFlashcards(file:Material):boolean { return materialKind(file)==='pdf'&&['Slides','Solutions','Scripts'].includes(file.category); }
+export function materialType(file:Material):DocumentType|null {
+  if(materialKind(file)==='folder')return null;
+  return file.type===undefined?(CATEGORY_DOCUMENT_TYPES[file.category]??null):file.type;
+}
+export function materialTypeLabel(file:Material):string {
+  const type=materialType(file);
+  return type?DOCUMENT_TYPE_LABELS[type]:file.category.toLowerCase();
+}
+export function canGenerateFlashcards(file:Material):boolean { return materialKind(file)==='pdf'&&['slides','exercise_solution','script'].includes(materialType(file)??''); }
 /** Where the server serves this file's bytes: the PDF itself, or a text file's content. */
 export function materialFileUrl(id:string):string { return `/api/materials/${encodeURIComponent(id)}/file`; }
 export function normalizeMaterial(file:Material):Material {
-  return {...file,kind:materialKind(file),parentId:file.parentId??null,description:file.description??'',
+  return {...file,kind:materialKind(file),type:materialType(file),parentId:file.parentId??null,description:file.description??'',
     outputs:{...file.outputs,flashcards:file.outputs?.flashcards?{...file.outputs.flashcards,cards:file.outputs.flashcards.cards?.map((card,i)=>({...card,id:card.id??`${file.id}-${i}`,demo:card.demo??true}))}:undefined}};
 }
 export function descendants(files:readonly Material[],parentId:string|null):Material[] {

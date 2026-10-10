@@ -256,6 +256,10 @@ CREATE TABLE IF NOT EXISTS materials (
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     category TEXT NOT NULL,
+    -- Document purpose; kind remains the storage format. NULL for folders and
+    -- unclassified legacy notes/books/transcripts. Generated types are reserved.
+    type TEXT CHECK (type IS NULL OR (type IN ('slides', 'mock_exam', 'exercise', 'exercise_solution',
+                              'script', 'summary', 'cards', 'mcq') AND kind <> 'folder')),
     marker TEXT NOT NULL,
     size INTEGER NOT NULL DEFAULT 0,
     content TEXT,                     -- md and txt only; PDFs keep their bytes on disk
@@ -271,3 +275,18 @@ CREATE TABLE IF NOT EXISTS materials (
 -- where parent_id is NULL and NULLs would otherwise all count as different.
 CREATE UNIQUE INDEX IF NOT EXISTS materials_unique_name
     ON materials (user_id, subject_id, ifnull(parent_id, ''), lower(name));
+
+-- A user's to-do list per subject, like Google Tasks: add, tick off, edit, reorder, delete.
+CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,              -- the uuid the browser generates
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    subject_id TEXT NOT NULL,         -- the subject's id in the frontend's study data
+    title TEXT NOT NULL,
+    notes TEXT NOT NULL DEFAULT '',
+    due TEXT,                         -- 'YYYY-MM-DD' or NULL
+    done INTEGER NOT NULL DEFAULT 0,
+    completed_at INTEGER,             -- milliseconds since the epoch, NULL while open
+    position REAL NOT NULL,           -- manual order among open tasks, ascending
+    created_at INTEGER NOT NULL       -- milliseconds since the epoch
+);
+CREATE INDEX IF NOT EXISTS tasks_by_subject ON tasks (user_id, subject_id);

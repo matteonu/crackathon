@@ -11,6 +11,7 @@ from urllib.parse import unquote
 from flask import Blueprint, current_app, jsonify, request
 
 import materials
+from material_types import FLASHCARD_TYPES
 
 from . import pdf_study
 from .jobs import SUMMARY_SENTENCES, RequestError
@@ -34,7 +35,7 @@ def owned(document_id):
 def health():
     return jsonify(ok=True, keyConfigured=bool(pdf_study.API_KEY.strip()),
                    summarySentences=SUMMARY_SENTENCES, questions=jobs().questions,
-                   model=pdf_study.MODEL)
+                   model=pdf_study.MODEL, summaryModel=pdf_study.SUMMARY_MODEL)
 
 
 @bp.post("/documents/<uuid:document_id>")
@@ -57,7 +58,7 @@ def submit(document_id):
     material = materials.row(document_id)
     if material["kind"] != "pdf":
         raise RequestError(400, "Choose a PDF to process.")
-    if task == "flashcards" and material["category"] not in materials.FLASHCARD_CATEGORIES:
+    if task == "flashcards" and material["type"] not in FLASHCARD_TYPES:
         raise RequestError(400, "Flashcards are available for slides, solutions and scripts.")
     try:
         questions = int(request.headers.get("X-Flashcard-Count", str(jobs().questions)))

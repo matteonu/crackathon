@@ -541,6 +541,8 @@ textarea { resize: vertical; line-height: 1.7; }
 .explorer-name:hover strong { color:var(--green); }
 .root-row .explorer-name strong { font-weight:600; }
 .tree-file-label { display:grid; min-width:0; }
+.tree-file-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 8px; min-width:0; }
+.tree-document-type { color:#8a918c; font-size:11px; font-weight:400; }
 .tree-file-label small { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:10px; margin-top:3px; }
 .tree-meta { font-size:10px; color:var(--muted); white-space:nowrap; }
 .tree-chevron { border:0; background:none; padding:0; display:flex; align-items:center; width:16px; flex:0 0 16px; color:#87947c; }
@@ -667,3 +669,66 @@ html:has(.file-viewer-dialog[open]) { overflow:hidden; }
 @media(max-width:1100px){.explorer-row{gap:3px;padding-right:6px;}.folder-actions{gap:0;}.tree-meta{display:none;}.file-viewer-columns{grid-template-columns:minmax(0,1.2fr) minmax(270px,1fr);}}
 @media(max-width:700px){.file-viewer-dialog{--viewer-padding:16px;}}
 @media(max-width:700px){.file-viewer-dialog{width:calc(100vw - 20px);padding:16px;}.file-viewer-columns{grid-template-columns:1fr;gap:16px;}.file-details .editable-file-title{font-size:21px;}.file-meta-bar{gap:9px;}.file-meta-bar label{flex-wrap:wrap;}.file-meta-bar>a{margin-left:0;}.flashcard-stage{padding:20px;margin:12px;min-height:280px;}.flashcard-stage h2{font-size:21px;}.text-file-preview,.text-file-editor{min-height:260px;max-height:45vh;}.folder-card-heading{flex-wrap:wrap;}.folder-export-footer{flex-wrap:wrap;}.explorer-name strong{font-size:11px;}.explorer-name{min-width:90px;}.tree-marker{width:74px;flex-basis:74px;}.explorer-row{padding-left:calc(5px + var(--depth,0)*9px);}.folder-actions .icon-button{width:25px;}.learning-card{padding:20px;}.file-detail-actions{align-items:start;}.file-detail-actions>.text-button{flex-wrap:wrap;}.flashcard-list{max-height:38vh;}}
+
+/* Task list (subject sidebar) */
+.task-panel { padding-bottom: 18px; }
+.task-panel .panel-heading { margin-bottom: 16px; }
+.task-add { display: flex; gap: 8px; margin-bottom: 10px; }
+.task-add input { flex: 1; min-width: 0; }
+.task-add .button { min-width: 42px; padding: 0 12px; gap: 0; }
+.task-list { list-style: none; margin: 0; padding: 0; display: grid; }
+/* Rows reach 10px past the text on both sides so the hover wash has room for its corners. The
+   hairline between rows is the row's top border; it fades out next to a highlighted row. */
+.task { position: relative; display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 10px; align-items: start; margin: 0 -10px; padding: 9px 10px; border-radius: 0; cursor: pointer; transition: background-color .22s ease, border-radius .22s ease; }
+/* The separator is a short hairline above the row, inset to the text column (not the wash's
+   full width); it fades out next to a highlighted row. Corners only round while washed. */
+.task::before { content: ''; position: absolute; top: 0; left: 10px; right: 10px; height: 1px; background: var(--line); transition: opacity .22s ease; }
+.task:first-child::before, .task:hover::before, .task:focus-within::before, .task:hover + .task::before, .task:focus-within + .task::before, .task-editing + .task::before { opacity: 0; }
+.task:hover, .task:focus-within, .task-editing { border-radius: 10px; }
+.task:hover, .task:focus-within { background: var(--sage); }
+.task-editing, .task-editing:hover { background: var(--sage); cursor: default; }
+.task-done { cursor: default; }
+.task-done:hover { background: #f1f4ee; }
+.task-check { width: 17px; height: 17px; min-height: 0; margin-top: 3px; accent-color: var(--green); cursor: pointer; }
+.task-body { min-width: 0; display: grid; gap: 3px; }
+.task-title { font-size: 13px; line-height: 1.45; color: var(--ink); overflow-wrap: anywhere; }
+.task-notes { font-size: 11px; color: var(--muted); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-due { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: #71816e; margin-top: 2px; }
+.task-due app-icon { width: 13px; height: 13px; }
+.task-due.today { color: var(--green); font-weight: 600; }
+.task-due.tomorrow { color: var(--green); }
+.task-due.overdue { color: #9f453f; font-weight: 600; }
+/* Tools are bare icons that appear with the wash; no box, no border, just a darker wash on hover. */
+.task-tools { display: flex; gap: 1px; opacity: 0; transition: opacity .22s ease; }
+.task:hover .task-tools, .task:focus-within .task-tools { opacity: 1; }
+.task-tool { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 0; border-radius: 7px; background: transparent; color: #6d7c69; transition: background-color .18s ease, color .18s ease; }
+.task-tool app-icon { width: 14px; height: 14px; }
+.task-tool:nth-child(1) app-icon, .task-tool:nth-child(2) app-icon { transform: rotate(90deg); }
+.task-tool:hover:not(:disabled) { background: #d5dfd0; color: var(--green-dark); }
+.task-tool-danger:hover:not(:disabled) { background: #f1dcd7; color: #9f453f; }
+.task-tool:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+/* Content that replaces other content (editor <-> row text) fades in; the row's height is tweened by the component. */
+@keyframes task-fade { from { opacity: 0; } to { opacity: 1; } }
+.task-fade { animation: task-fade .22s ease-out; }
+.task-editing { grid-template-columns: auto minmax(0,1fr); }
+.task-edit { display: grid; gap: 8px; }
+.task-edit input, .task-edit textarea { background: #fff; }
+.task-edit textarea { min-height: 0; line-height: 1.5; }
+.task-edit-row { display: flex; justify-content: space-between; align-items: end; gap: 10px; flex-wrap: wrap; }
+.task-due-field { display: grid; gap: 4px; font-size: 10px; color: var(--muted); }
+.task-due-field input { min-height: 36px; padding: 6px 10px; width: auto; }
+.task-edit .action-buttons { display: flex; gap: 10px; align-items: center; }
+.task-done .task-title { color: var(--muted); text-decoration: line-through; }
+.task-empty { padding: 10px 0 4px; font-size: 12px; }
+/* Completed section: a toggle plus a container that tweens between 0fr and 1fr both ways. */
+.task-completed { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.task-completed-toggle { display: flex; align-items: center; gap: 8px; width: calc(100% + 20px); margin: 0 -10px; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .02em; transition: background-color .22s ease, color .18s ease; }
+.task-completed-toggle:hover { background: var(--sage); color: var(--ink); }
+.task-chevron { width: 6px; height: 6px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(-45deg); transition: transform .26s ease; margin-left: 2px; }
+.task-chevron.open { transform: rotate(45deg); }
+.task-collapse { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows .26s cubic-bezier(.2,.7,.2,1), opacity .2s ease, visibility 0s linear .26s; }
+.task-collapse.open { grid-template-rows: 1fr; opacity: 1; visibility: visible; transition: grid-template-rows .26s cubic-bezier(.2,.7,.2,1), opacity .2s ease .06s, visibility 0s; }
+.task-collapse > div { min-height: 0; overflow: hidden; }
+.task-completed .task-list { margin-top: 4px; }
+.task-completed .text-button { margin-top: 8px; }
+@media (prefers-reduced-motion: reduce) { .task, .task-tools, .task-tool, .task-completed-toggle, .task-chevron, .task-collapse { transition: none; } .task-fade { animation: none; } }

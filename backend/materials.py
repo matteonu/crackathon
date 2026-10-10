@@ -15,16 +15,16 @@ from flask import Blueprint, Response, current_app, jsonify, request, send_file
 from auth import current_user
 import db
 from errors import RequestError
+from material_types import CATEGORY_TYPES, DOCUMENT_TYPES, TYPE_CATEGORIES
 
 bp = Blueprint("materials", __name__, url_prefix="/api/materials")
 
 KINDS = {"folder", "pdf", "md", "txt"}
 CATEGORIES = {"Slides", "Solutions", "Scripts", "Notes", "Transcripts", "Books", "Exams", "Exercises"}
-FLASHCARD_CATEGORIES = {"Slides", "Solutions", "Scripts"}
 MARKERS = {"To read", "Done", "Revisit", "Ignore"}
 MAX_TEXT = 200_000      # a note's content
 MAX_JSON = 1_000_000    # outputs or processing, serialised
-COLUMNS = ("id, subject_id, parent_id, kind, name, description, category, marker, size, "
+COLUMNS = ("id, subject_id, parent_id, kind, name, description, category, type, marker, size, "
            "content, added_at, outputs, processing")
 
 
@@ -36,7 +36,7 @@ def jobs():
 def to_json(row):
     data = {"id": row["id"], "subjectId": row["subject_id"], "parentId": row["parent_id"],
             "kind": row["kind"], "name": row["name"], "description": row["description"],
-            "category": row["category"], "marker": row["marker"], "size": row["size"],
+            "category": row["category"], "type": row["type"], "marker": row["marker"], "size": row["size"],
             "added": row["added_at"]}
     if row["content"] is not None:
         data["content"] = row["content"]
@@ -44,6 +44,26 @@ def to_json(row):
         if row[key]:
             data[key] = json.loads(row[key])
     return data
+
+
+def classification(body, kind, existing_category=None):
+    """Accept stable types or older category-only requests without conflicting flags."""
+    document_type = body.get("type")
+    if document_type is not None and (not isinstance(document_type, str) or document_type not in DOCUMENT_TYPES):
+        raise RequestError(400, "Choose a document type the app offers.")
+    category = body.get("category", TYPE_CATEGORIES.get(document_type, existing_category))
+    if not isinstance(category, str) or category not in CATEGORIES:
+        raise RequestError(400, "Choose a category the app offers.")
+    if kind == "folder":
+        if document_type is not None:
+            raise RequestError(400, "Folders do not have a document type.")
+        return category, None
+    if "type" not in body:
+        document_type = CATEGORY_TYPES.get(category)
+    elif (document_type is not None and TYPE_CATEGORIES[document_type] != category
+          or document_type is None and category in CATEGORY_TYPES):
+        raise RequestError(400, "The document type must match its category.")
+    return category, document_type
 
 
 def valid_name(name, kind):
@@ -145,8 +165,9 @@ def create():
     subject_id = body.get("subjectId")
     if not isinstance(subject_id, str) or not subject_id or len(subject_id) > 100:
         raise RequestError(400, "This file needs a subject.")
-    if body.get("category") not in CATEGORIES or body.get("marker", "To read") not in MARKERS:
-        raise RequestError(400, "Choose a category and a marker the app offers.")
+    category, document_type = classification(body, kind)
+    if body.get("marker", "To read") not in MARKERS:
+        raise RequestError(400, "Choose a marker the app offers.")
     content = body.get("content")
     if kind in {"folder", "pdf"}:
         content = None
@@ -162,10 +183,10 @@ def create():
     check_parent(conn, user["id"], subject_id, parent_id)
     size = len(content.encode()) if content is not None else int(body.get("size") or 0)
     write(conn, """INSERT INTO materials (id, user_id, subject_id, parent_id, kind, name, description,
-                                          category, marker, size, content, added_at, processing)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                          category, type, marker, size, content, added_at, processing)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
           (material_id, user["id"], subject_id, parent_id, kind, name, body.get("description") or "",
-           body["category"], body.get("marker", "To read"), size, content,
+           category, document_type, body.get("marker", "To read"), size, content,
            int(time.time() * 1000), as_json_text(body.get("processing"), "processing")))
     return jsonify(to_json(row(material_id))), 201
 
@@ -195,11 +216,10 @@ def update(material_id):
             raise RequestError(400, "This description is too long.")
         sets.append("description = ?")
         values.append(description)
-    if "category" in body:
-        if body["category"] not in CATEGORIES:
-            raise RequestError(400, "Choose a category the app offers.")
-        sets.append("category = ?")
-        values.append(body["category"])
+    if "category" in body or "type" in body:
+        category, document_type = classification(body, existing["kind"], existing["category"])
+        sets += ["category = ?", "type = ?"]
+        values += [category, document_type]
     if "marker" in body:
         if body["marker"] not in MARKERS:
             raise RequestError(400, "Choose a marker the app offers.")

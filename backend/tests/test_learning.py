@@ -35,6 +35,23 @@ def fake_model(client, model, data, schema, label, file_input=None):
 
 
 class PipelineTests(unittest.TestCase):
+    def test_result_polling_retries_a_windows_sharing_violation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result = Path(temp) / 'result.json'
+            result.write_text('{"status":"complete","documents":[]}', encoding='utf-8')
+            original = Path.read_text
+            attempts = []
+
+            def temporary_lock(path, *args, **kwargs):
+                attempts.append(path)
+                if len(attempts) == 1:
+                    raise PermissionError('A worker is replacing the result file')
+                return original(path, *args, **kwargs)
+
+            with patch.object(Path, 'read_text', autospec=True, side_effect=temporary_lock):
+                self.assertEqual(StudyJobs.read(result)['status'], 'complete')
+            self.assertEqual(len(attempts), 2)
+
     def test_json_write_retries_a_windows_sharing_violation(self):
         original = Path.replace
         attempts = []
