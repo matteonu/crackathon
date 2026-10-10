@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Refuse to push main anything that is not already on origin/dev.
+#
+# Install once per clone:  git config core.hooksPath .githooks
+#
+# This is a convenience, not a wall: `git push --no-verify` skips it, and a clone that
+# never ran the command above has no hook at all. The real gate is the from-dev job in
+# .github/workflows/deploy.yml, which refuses to deploy such a commit.
+set -u
+empty=0000000000000000000000000000000000000000
+
+while read -r _local_ref local_sha remote_ref _remote_sha; do
+  [ "$remote_ref" = "refs/heads/main" ] || continue
+
+  if [ "$local_sha" = "$empty" ]; then
+    echo "pre-push: refusing to delete main." >&2
+    exit 1
+  fi
+
+  git fetch -q origin dev 2>/dev/null || true
+  if ! git rev-parse -q --verify origin/dev >/dev/null; then
+    echo "pre-push: cannot see origin/dev, so this push cannot be checked." >&2
+    exit 1
+  fi
+
+  if ! git merge-base --is-ancestor "$local_sha" origin/dev; then
+    echo "pre-push: $(git rev-parse --short "$local_sha") is not on origin/dev." >&2
+    echo >&2
+    echo "  main is only ever fast-forwarded to dev. Merge your work into dev first:" >&2
+    echo "    git switch dev && git merge <your-branch> && git push" >&2
+    echo "    git switch main && git merge --ff-only origin/dev && git push" >&2
+    exit 1
+  fi
+done

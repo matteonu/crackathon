@@ -1,6 +1,73 @@
 # crackathon
 
-Team repo for the VIScon 2026 Hackathon. Replace `NN` below with our team number.
+Team repo for the VIScon 2026 Hackathon. We are team 13.
+
+## How we work
+
+Two long-lived branches:
+
+- **`main` is what is live.** Every push to it deploys to the VM. It is only ever
+  fast-forwarded to `dev`; nothing is committed on it directly.
+- **`dev` is where features come together.** Keep it runnable.
+
+Your loop:
+
+```bash
+git switch dev && git pull            # start from integration
+git switch -c study-state             # short-lived branch, hours not days
+# ... work, commit ...
+git push -u origin study-state        # then open a PR into dev
+```
+
+While others move `dev`, keep your branch current with `git fetch origin && git rebase
+origin/dev` (your own branch) or `git merge origin/dev` (one somebody else also works on).
+PRs for anything touching shared files -- `backend/app.py`, `backend/schema.sql`,
+`frontend/src/app/services/` -- and a direct push to `dev` is fine for your own new files.
+Nobody force-pushes `dev`.
+
+### Releasing to the VM
+
+```bash
+git switch main && git pull
+git merge --ff-only origin/dev        # main stays exactly a dev commit
+git push                              # this deploys
+```
+
+`--ff-only` is the point: every commit on `main` is also on `dev`, so there is nothing on
+`main` that was never integrated, and rolling back is one commit. Then watch the Actions run
+-- it refuses to deploy if the tests fail or the container does not come back healthy -- and
+**open <https://13.hackathon.ethz.ch> yourself**. A health check does not catch a blank page.
+
+Rolling back, in order of preference:
+
+```bash
+git revert <bad-sha> && git push                              # forward fix, redeploys
+git reset --hard <good-sha> && git push --force-with-lease     # only if a revert is messy
+```
+
+Merge `dev` into `main` early and often, not once at the deadline: each release is a
+rehearsal of the thing that has to work on Sunday. Freeze `main` a couple of hours before
+noon and only revert after that. Never `ssh` in and edit files on the VM -- the deploy does
+`git reset --hard`, so that work disappears without a trace.
+
+### What keeps a stray commit off main
+
+1. **The deploy refuses it.** The `from-dev` job in `.github/workflows/deploy.yml` checks
+   that the pushed commit is already on `origin/dev` and fails the run otherwise, so the VM
+   never sees it. A non-fast-forward merge commit fails this too, which is deliberate.
+2. **A pre-push hook catches the accident locally.** Run this once per clone:
+
+   ```bash
+   git config core.hooksPath .githooks
+   ```
+
+   It then refuses to push anything to `main` that is not on `origin/dev`, and refuses to
+   delete `main`. `--no-verify` skips it, so it is a seatbelt, not a wall.
+3. **A branch ruleset on GitHub** is the only server-side half, and needs repo admin:
+   Settings -> Rules -> Rulesets -> New branch ruleset, target `main`, and enable *Require a
+   pull request before merging*, *Require status checks* (`from-dev` and `check`), *Require
+   linear history*, *Block force pushes* and *Restrict deletions*. With those on, a direct
+   push to `main` is rejected by GitHub itself.
 
 ## Running the app
 
@@ -124,8 +191,8 @@ on the VM `DEV_USER` is unset, so a request that bypasses the proxy gets 401.
 ## Infrastructure
 
 - **VM:** Ubuntu 26.04, 4 vCPUs, 8 GB RAM, 80 GB disk. The user is `viscon` with full sudo. Docker, Node.js 24 and Python 3.14 are preinstalled. The SSH config and the password are on the team page.
-- **Web app:** serve plain HTTP on `0.0.0.0:8080`. The proxy at `https://NN.hackathon.ethz.ch` handles TLS and login. By default only our team, our mentors and the staff can access it.
-- **Direct access:** `NN-direct.viscon-hackathon.ch` is for SSH and any ports we open ourselves (`sudo ufw allow <port>/tcp`). Don't open 8080: that is what makes the user headers trustworthy.
+- **Web app:** serve plain HTTP on `0.0.0.0:8080`. The proxy at `https://13.hackathon.ethz.ch` handles TLS and login. By default only our team, our mentors and the staff can access it.
+- **Direct access:** `13-direct.viscon-hackathon.ch` is for SSH and any ports we open ourselves (`sudo ufw allow <port>/tcp`). Don't open 8080: that is what makes the user headers trustworthy.
 - **Auth for free:** the proxy sends `X-User-Id` (the user's email) and `X-User-Name` with every request. These are only trustworthy while the app is reachable solely through the managed address.
 - **No WebSockets.** Use Server-Sent Events or Socket.IO instead.
 - **Template:** a React and FastAPI example app is running in `~/template`. Redeploy it with `docker compose up -d --build`, or remove it with `docker compose down`.

@@ -10,6 +10,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # main is only ever fast-forwarded to dev, so every commit here is also on dev.
+  # Anything else is a mistake, and a mistake must not reach the VM.
+  from-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: This commit must already be on dev
+        run: |
+          git fetch origin dev
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/dev; then
+            echo "::error::$GITHUB_SHA is not on origin/dev, so it is not deployed."
+            echo "Merge into dev first, then: git switch main && git merge --ff-only origin/dev"
+            exit 1
+          fi
+          echo "$GITHUB_SHA is on dev."
+
   check:
     runs-on: ubuntu-latest
     steps:
@@ -37,7 +55,7 @@ jobs:
           cd backend && python -m unittest discover -s tests -t . -v
 
   deploy:
-    needs: check
+    needs: [from-dev, check]
     runs-on: ubuntu-latest
     steps:
       - name: Set up SSH
