@@ -1,9 +1,13 @@
 -- Every table the app uses. Add new tables here; their starting data goes in backend/seed/.
 
+-- Identity comes from the reverse proxy, which authenticates every request and sends
+-- X-User-Id (the email) and X-User-Name. A row is created the first time we see an email;
+-- there are no passwords in this app.
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL COLLATE NOCASE,
+    display_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
     birth_date TEXT,                  -- 'YYYY-MM-DD'; age is computed from it
     study_start TEXT                  -- 'YYYY-MM-DD'
 );

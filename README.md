@@ -47,7 +47,7 @@ The database is rebuilt from git on every start, both locally and on the server.
 - **`backend/schema.sql`:** all tables. Add new tables here. Currently: `users`, `courses` (shared catalog) with `course_resources`, each user's `semesters`, the courses taken per semester (`semester_courses`, with `desired_grade`), and `statistics` per user and semester.
 - **`backend/seed/NN_<table>.json`:** the starting rows for each table, as a list of `{column: value}` objects. Files load in number order, so a table that others reference needs a lower number. A `password` field is hashed into `password_hash` when loading.
 
-Demo logins: `alice` / `alice123`, `bob` / `bob123` (see `backend/seed/01_users.json`). The repo is public, so these are not secret.
+The seed knows two users, `alice@ethz.ch` and `bob@ethz.ch` (see `backend/seed/01_users.json`).
 
 ```bash
 cd backend
@@ -57,7 +57,21 @@ cd backend
 
 To build test data by hand, click it together in the app, run `dump-seed`, check the diff, and commit. On the server, `docker compose restart` reloads the seed.
 
-**Login:** there's no sign-up form; accounts come from the seed. Flask-Login keeps the session in a cookie. Protect a new endpoint with `@login_required`, and use `current_user.username` to see who's calling.
+## Who is signed in
+
+There is no login form and no password anywhere in this app. The reverse proxy authenticates
+every request and adds `X-User-Id` (the user's email) and `X-User-Name`; `backend/auth.py`
+reads them and creates the user row the first time it sees an email. Every path under `/api`
+needs an identity (except `/api/health`), so a new endpoint is protected by default — call
+`auth.current_user()` for the row and scope your query to its `id`.
+
+Those headers are only trustworthy while the app is reachable through the managed address
+alone. **Do not** open port 8080 in ufw, and **do not** set access control to `Disabled` on
+the team page: either one lets anyone send the headers themselves.
+
+Locally there is no proxy. `python backend/app.py` stands in as `alice@ethz.ch`; set
+`DEV_USER=bob@ethz.ch` in `.env` to be someone else. A real header always wins over it, and
+on the VM `DEV_USER` is unset, so a request that bypasses the proxy gets 401.
 
 ## Deadlines
 

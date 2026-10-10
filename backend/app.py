@@ -24,17 +24,10 @@ def load_env_file(path=os.path.join(BACKEND_DIR, "..", ".env")):
 load_env_file()
 
 import click  # noqa: E402
-from flask import Flask, jsonify, request, send_from_directory  # noqa: E402
-from flask_login import (  # noqa: E402
-    LoginManager,
-    UserMixin,
-    current_user,
-    login_required,
-    login_user,
-    logout_user,
-)
-from werkzeug.security import check_password_hash  # noqa: E402
+from flask import Flask, jsonify, send_from_directory  # noqa: E402
 
+import auth  # noqa: E402
+from auth import current_user  # noqa: E402
 import db  # noqa: E402
 import learning  # noqa: E402
 from learning import RequestError, StudyJobs  # noqa: E402
@@ -47,6 +40,9 @@ def config_from_env():
         "DATA_DIR": data_dir,
         "DATABASE_PATH": os.environ.get("DATABASE_PATH", os.path.join(data_dir, "app.db")),
         "SEED_DIR": os.environ.get("SEED_DIR", os.path.join(BACKEND_DIR, "seed")),
+        # Stands in for the proxy's X-User-Id when there is no proxy. Never set on the VM.
+        "DEV_USER": os.environ.get("DEV_USER", ""),
+        "DEV_USER_NAME": os.environ.get("DEV_USER_NAME", ""),
         "LEARNING_DIR": os.environ.get("LEARNING_DIR", os.path.join(data_dir, "learning")),
         "STATIC_DIR": os.environ.get("STATIC_DIR", os.path.join(BACKEND_DIR, "..", "frontend", "dist")),
         "SESSION_COOKIE_HTTPONLY": True,
@@ -54,12 +50,6 @@ def config_from_env():
         # 50 MB PDFs, with headroom for the request around them.
         "MAX_CONTENT_LENGTH": 70 * 1024 * 1024,
     }
-
-
-class User(UserMixin):
-    def __init__(self, row):
-        self.id = row["id"]
-        self.username = row["username"]
 
 
 def create_app(overrides=None):
@@ -73,19 +63,8 @@ def create_app(overrides=None):
         db.init_db()
 
     app.extensions["learning_jobs"] = StudyJobs(app.config["LEARNING_DIR"])
+    auth.init_app(app)
     app.register_blueprint(learning.bp)
-
-    login_manager = LoginManager(app)
-
-    @login_manager.user_loader
-    def load_user(user_id):
-        row = db.get_user_by_id(user_id)
-        return User(row) if row else None
-
-    @login_manager.unauthorized_handler
-    def unauthorized():
-        # The frontend is a single-page app, so answer with JSON instead of redirecting.
-        return jsonify(error="unauthorized"), 401
 
     @app.errorhandler(RequestError)
     def request_error(exc):
@@ -99,30 +78,14 @@ def create_app(overrides=None):
     def health():
         return jsonify(ok=True)
 
-    @app.post("/api/login")
-    def login():
-        data = request.get_json(silent=True) or {}
-        row = db.get_user_by_username(data.get("username", ""))
-        if row is None or not check_password_hash(row["password_hash"], data.get("password", "")):
-            return jsonify(error="invalid credentials"), 401
-        login_user(User(row))
-        return jsonify(username=row["username"])
-
-    @app.post("/api/logout")
-    @login_required
-    def logout():
-        logout_user()
-        return "", 204
-
     @app.get("/api/me")
-    @login_required
     def me():
-        return jsonify(username=current_user.username)
+        user = current_user()
+        return jsonify(email=user["email"], name=user["display_name"])
 
     @app.get("/api/dashboard")
-    @login_required
     def dashboard():
-        return jsonify(db.get_dashboard(current_user.id))
+        return jsonify(db.get_dashboard(current_user()["id"]))
 
     @app.get("/", defaults={"path": ""})
     @app.get("/<path:path>")
@@ -152,7 +115,10 @@ def create_app(overrides=None):
 
 
 if __name__ == "__main__":
-    app = create_app({"SECRET_KEY": os.environ.get("SECRET_KEY") or "dev-only-secret"})
+    # No proxy locally, so stand in for its headers unless the shell says otherwise.
+    app = create_app({"SECRET_KEY": os.environ.get("SECRET_KEY") or "dev-only-secret",
+                      "DEV_USER": os.environ.get("DEV_USER") or "alice@ethz.ch",
+                      "DEV_USER_NAME": os.environ.get("DEV_USER_NAME") or "Alice Example"})
     # The debug reloader runs this file twice; only reset in the outer process,
     # so code reloads keep the data you clicked together.
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true":

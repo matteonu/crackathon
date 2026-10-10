@@ -3,12 +3,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, NavigationEnd, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { StudyStore } from './services/study-store';
+import { UserStore } from './services/user-store';
 import { IconComponent } from './shared/icon.component';
 import { HoursEditorComponent } from './shared/hours-editor.component';
 
 @Component({selector:'app-root',standalone:true,imports:[RouterLink,RouterLinkActive,RouterOutlet,IconComponent,HoursEditorComponent],templateUrl:'./app.component.html'})
 export class AppComponent {
-  readonly store=inject(StudyStore);private readonly router=inject(Router);
+  readonly store=inject(StudyStore);readonly users=inject(UserStore);private readonly router=inject(Router);
   readonly main=viewChild<ElementRef<HTMLElement>>('main');
   readonly settings=viewChild<ElementRef<HTMLDialogElement>>('settings');
   readonly importError=signal('');

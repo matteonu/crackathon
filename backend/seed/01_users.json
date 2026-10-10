@@ -1,16 +1,16 @@
 [
   {
     "id": 1,
-    "username": "alice",
+    "email": "alice@ethz.ch",
+    "display_name": "Alice Example",
     "birth_date": "2005-03-14",
-    "study_start": "2024-09-16",
-    "password": "alice123"
+    "study_start": "2024-09-16"
   },
   {
     "id": 2,
-    "username": "bob",
+    "email": "bob@ethz.ch",
+    "display_name": "Bob Example",
     "birth_date": "2004-11-02",
-    "study_start": "2025-09-15",
-    "password": "bob123"
+    "study_start": "2025-09-15"
   }
 ]

@@ -9,7 +9,6 @@ import os
 import sqlite3
 
 from flask import current_app, g
-from werkzeug.security import check_password_hash, generate_password_hash
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_PATH = os.path.join(BACKEND_DIR, "schema.sql")
@@ -70,8 +69,6 @@ def reset_db():
             with open(path) as f:
                 rows = json.load(f)
             for row in rows:
-                if "password" in row:
-                    row["password_hash"] = generate_password_hash(row.pop("password"))
                 cols = ", ".join(f'"{c}"' for c in row)
                 marks = ", ".join("?" for _ in row)
                 db.execute(f'INSERT INTO "{table}" ({cols}) VALUES ({marks})', list(row.values()))
@@ -93,7 +90,6 @@ def dump_seed():
                 path = os.path.join(seed_dir(), f"{next_num:02d}_{table}.json")
                 next_num += 1
             rows = [dict(r) for r in db.execute(f'SELECT * FROM "{table}" ORDER BY rowid')]
-            rows = _keep_plaintext_passwords(path, rows)
             with open(path, "w") as f:
                 json.dump(rows, f, indent=2, ensure_ascii=False)
                 f.write("\n")
@@ -101,34 +97,34 @@ def dump_seed():
     return written
 
 
-def _keep_plaintext_passwords(path, rows):
-    # If the seed already has a plaintext password that still matches, keep it
-    # instead of replacing it with the hash, so the seed stays readable.
-    if not os.path.exists(path):
-        return rows
-    with open(path) as f:
-        old = {r.get("id"): r for r in json.load(f)}
-    for row in rows:
-        prev = old.get(row.get("id"), {})
-        if "password_hash" in row and "password" in prev and check_password_hash(row["password_hash"], prev["password"]):
-            row["password"] = prev["password"]
-            del row["password_hash"]
-    return rows
-
-
 def get_user_by_id(user_id):
     return get_db().execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 
 
-def get_user_by_username(username):
-    return get_db().execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+def get_user_by_email(email):
+    return get_db().execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+
+
+def upsert_user(email, display_name):
+    """The user row for this email, created on first sight. Keeps the name the proxy sends."""
+    conn = get_db()
+    with conn:
+        conn.execute(
+            "INSERT INTO users (email, display_name) VALUES (?, ?) ON CONFLICT (email) DO NOTHING",
+            (email, display_name),
+        )
+        conn.execute(
+            "UPDATE users SET display_name = ? WHERE email = ? AND display_name IS NOT ?",
+            (display_name, email, display_name),
+        )
+    return get_user_by_email(email)
 
 
 def get_dashboard(user_id):
     """Everything the dashboard shows for one user."""
     conn = get_db()
     user = conn.execute(
-        "SELECT username, birth_date, study_start FROM users WHERE id = ?", (user_id,)
+        "SELECT email, display_name, birth_date, study_start FROM users WHERE id = ?", (user_id,)
     ).fetchone()
     semesters = [dict(r) for r in conn.execute(
         "SELECT id, label, study_hours_per_week FROM semesters WHERE user_id = ? ORDER BY id",

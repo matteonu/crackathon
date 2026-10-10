@@ -10,19 +10,11 @@ import unittest
 from unittest.mock import patch
 import uuid
 
-from app import create_app
 from learning import pdf_study
 from learning.jobs import RequestError, StudyJobs
+from tests.support import build_app
 
 FIXTURE = Path(__file__).resolve().parents[2] / 'frontend/tests/fixtures/study-demo.pdf'
-
-
-def build_app(temp, **overrides):
-    """An app whose database, data directory and seed are all inside a temp folder."""
-    config = {'SECRET_KEY': 'test-only', 'DATA_DIR': str(temp), 'DATABASE_PATH': str(Path(temp) / 'app.db'),
-              'LEARNING_DIR': str(Path(temp) / 'learning'), 'STATIC_DIR': str(temp)}
-    config.update(overrides)
-    return create_app(config)
 
 
 def fake_model(client, model, data, schema, label, file_input=None):
@@ -125,7 +117,7 @@ class PipelineTests(unittest.TestCase):
                     failures.append(repr(exc))
                     raise
             jobs = StudyJobs(Path(temp) / 'learning', questions=5, runner=tracked_runner)
-            app = build_app(temp)
+            app = build_app(temp, DEV_USER='alice@ethz.ch')
             app.extensions['learning_jobs'] = jobs
             client = app.test_client()
             document_id = str(uuid.uuid4())
