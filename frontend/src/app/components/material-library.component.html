@@ -1,7 +1,7 @@
 <section class="panel explorer-panel" [class.dragging]="dragging()" (dragover)="$event.preventDefault();dragging.set(true)" (dragleave)="dragging.set(false)" (drop)="drop($event)">
   <div class="panel-heading"><h2>Materials</h2></div>
   <div class="material-upload-bar">
-    <details #uploadMenu class="material-upload-menu">
+    <details #uploadMenu class="material-upload-menu" data-popup>
       <summary class="button primary" [attr.aria-disabled]="materials.loading()||materials.busy()"><app-icon name="upload" />Upload PDF<app-icon name="down" /></summary>
       <div class="upload-type-options" aria-label="Document type">
         @for(category of uploadCategories;track category){<button type="button" [disabled]="materials.loading()||materials.busy()" (click)="prepareUpload(category);rootUpload.click();uploadMenu.open=false"><span>{{category}}</span><small>{{category==='Slides'||category==='Solutions'||category==='Scripts'?'Summary · Optional flashcards':'Summary only'}}</small></button>}

@@ -1,4 +1,6 @@
-import { Component, ElementRef, HostListener, inject, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, HostListener, inject, signal, viewChild } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { installPopupDismissal } from './models/popup-dismissal';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, NavigationEnd, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
@@ -16,7 +18,10 @@ export class AppComponent {
   readonly store=inject(StudyStore);readonly users=inject(UserStore);private readonly router=inject(Router);
   readonly main=viewChild<ElementRef<HTMLElement>>('main');
   readonly settings=viewChild<ElementRef<HTMLDialogElement>>('settings');
-  constructor(){this.router.events.pipe(filter(e=>e instanceof NavigationEnd),takeUntilDestroyed()).subscribe(()=>{requestAnimationFrame(()=>{this.main()?.nativeElement.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});});});}
+  constructor(){
+    inject(DestroyRef).onDestroy(installPopupDismissal(inject(DOCUMENT)));
+    this.router.events.pipe(filter(e=>e instanceof NavigationEnd),takeUntilDestroyed()).subscribe(()=>{requestAnimationFrame(()=>{this.main()?.nativeElement.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});});});
+  }
   /** The sidebar course whose ⋯ menu is open. */
   readonly menuFor=signal<string|null>(null);
   toggleMenu(id:string,event:Event):void {
