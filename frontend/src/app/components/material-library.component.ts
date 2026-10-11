@@ -1,4 +1,4 @@
-import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MaterialStore } from '../services/material-store';
 import { MATERIAL_MARKERS, Material, MaterialKind, MaterialMarker, MaterialCategory, UPLOAD_CATEGORIES, materialKind, materialListType, materialListTypeLabel, materialCards, materialPath, folderCards, treeRows, validParent } from '../models/material';
@@ -17,6 +17,13 @@ export class MaterialLibraryComponent {
   readonly uploadCategories=UPLOAD_CATEGORIES;readonly uploadCategory=signal<MaterialCategory>('Slides');
   private uploadParent:string|null=null;
   private openRequest=0;
+  private readonly injector=inject(Injector);
+  private openTimer:ReturnType<typeof setTimeout>|undefined;
+  readonly renameDialog=viewChild<ElementRef<HTMLDialogElement>>('renameDialog');
+  readonly renameInput=viewChild<ElementRef<HTMLInputElement>>('renameInput');
+  readonly renameId=signal<string|null>(null);readonly savingRename=signal(false);readonly renameError=signal('');
+  readonly renameTarget=computed(()=>this.subjectFiles().find(file=>file.id===this.renameId()));
+  renameDraft='';
   prepareUpload(category:MaterialCategory):void{this.uploadCategory.set(category);this.uploadParent=this.activeFolder();}
   readonly deleting=signal(new Set<string>());
   readonly deleteDialog=viewChild<ElementRef<HTMLDialogElement>>('deleteDialog');readonly pendingDelete=signal<Material|null>(null);
@@ -34,7 +41,8 @@ export class MaterialLibraryComponent {
   readonly exporting=signal(false);readonly localError=signal('');readonly status=signal('');readonly creating=signal(false);readonly creationError=signal('');
   createType:Exclude<MaterialKind,'pdf'|'deck'>='folder';newName='';private createParent:string|null=null;
   constructor(){
-    effect(()=>{this.subjectId();this.endFileDrag();this.activeFolder.set(null);this.selectedId.set(null);this.expanded.set(new Set());this.query.set('');this.marker.set('');});
+    inject(DestroyRef).onDestroy(()=>this.cancelPendingOpen());
+    effect(()=>{this.subjectId();this.cancelPendingOpen();this.renameDialog()?.nativeElement.close();this.renameId.set(null);this.endFileDrag();this.activeFolder.set(null);this.selectedId.set(null);this.expanded.set(new Set());this.query.set('');this.marker.set('');});
     effect(()=>{
       const ids=new Set(this.subjectFiles().map(file=>file.id));
       if(this.selectedId()&&!ids.has(this.selectedId()!)){this.preview()?.nativeElement.close();this.selectedId.set(null);}
@@ -43,12 +51,46 @@ export class MaterialLibraryComponent {
       const learningId=this.learningDeck()??this.learningFolder();
       if(learningId&&!ids.has(learningId)){this.learningDialog()?.nativeElement.close();this.learningOpen.set(false);}
       if(this.pendingDelete()&&!ids.has(this.pendingDelete()!.id)){this.deleteDialog()?.nativeElement.close();this.pendingDelete.set(null);}
+      if(this.renameId()&&!ids.has(this.renameId()!)){this.renameDialog()?.nativeElement.close();this.renameId.set(null);}
     });
   }
   count(folderId:string|null):number{return folderCards(this.subjectFiles(),folderId).length;}
-  chooseFolder(id:string|null):void{this.activeFolder.set(id);if(id)this.expanded.update(s=>new Set([...s,id]));}
+  private cancelPendingOpen():void{clearTimeout(this.openTimer);this.openTimer=undefined;}
+  clickMaterial(event:MouseEvent,file:Material):void{
+    this.cancelPendingOpen();
+    if(this.draggedFile()||this.deleting().has(file.id)||event.detail>1)return;
+    if(materialKind(file)==='folder'){this.chooseFolder(file.id);return;}
+    // Mouse clicks wait for the double-click gesture; keyboard activation stays immediate.
+    if(!['pdf','deck'].includes(materialKind(file))||event.detail===0){void this.open(file.id);return;}
+    this.openTimer=setTimeout(()=>void this.open(file.id),500);
+  }
+  beginRename(event:Event,file:Material):void{
+    if(!['folder','pdf','deck'].includes(materialKind(file)))return;
+    event.preventDefault();event.stopPropagation();this.cancelPendingOpen();
+    if(this.savingRename()||this.draggedFile()||this.movingFile()||this.deleting().has(file.id))return;
+    this.renameDraft=file.name;this.renameError.set('');this.renameId.set(file.id);
+    this.renameDialog()?.nativeElement.showModal();
+    afterNextRender(()=>{
+      if(this.renameId()!==file.id)return;
+      const field=this.renameInput()?.nativeElement;if(!field)return;
+      field.focus();field.setSelectionRange(0,materialKind(file)==='pdf'?file.name.length-4:file.name.length);
+    },{injector:this.injector});
+  }
+  async saveRename():Promise<void>{
+    const file=this.renameTarget();if(!file||this.savingRename())return;
+    this.savingRename.set(true);this.renameError.set('');
+    try{
+      if(await this.materials.update(file.id,{name:this.renameDraft})){
+        this.renameDialog()?.nativeElement.close();
+        this.renameId.set(null);
+        this.status.set(`Renamed to ${this.subjectFiles().find(item=>item.id===file.id)?.name??this.renameDraft}.`);
+      }else this.renameError.set(this.materials.error()||'Could not rename this item. Please retry.');
+    }finally{this.savingRename.set(false);}
+  }
+  chooseFolder(id:string|null):void{this.cancelPendingOpen();this.activeFolder.set(id);if(id)this.expanded.update(s=>new Set([...s,id]));}
   toggle(id:string):void{this.expanded.update(s=>{const next=new Set(s);next.has(id)?next.delete(id):next.add(id);return next;});}
   async open(id:string):Promise<void>{
+    this.cancelPendingOpen();
     const request=++this.openRequest,subject=this.subjectId();
     const cached=this.subjectFiles().some(file=>file.id===id);
     if(cached){
@@ -68,6 +110,7 @@ export class MaterialLibraryComponent {
   async create():Promise<void>{this.creating.set(true);try{const file=await this.materials.create(this.subjectId(),this.createParent,this.createType,this.newName);if(this.createParent)this.expanded.update(s=>new Set([...s,this.createParent!]));this.createDialog()?.nativeElement.close();if(file.kind==='folder')this.chooseFolder(file.id);else this.open(file.id);this.status.set(`${file.name} created.`);}catch(e){this.creationError.set(e instanceof Error?e.message:'Could not create item.');}finally{this.creating.set(false);}}
   async upload(event:Event):Promise<void>{const input=event.target as HTMLInputElement;await this.materials.add(this.subjectId(),Array.from(input.files??[]),this.uploadCategory(),this.uploadParent);input.value='';}
   startFileDrag(event:DragEvent,id:string):void{
+    this.cancelPendingOpen();
     if(this.movingFile()||this.deleting().has(id)||!event.dataTransfer){event.preventDefault();return;}
     this.draggedFile.set(id);event.dataTransfer.effectAllowed='move';
     event.dataTransfer.setData('application/x-studyhub-material',id);
@@ -101,17 +144,19 @@ export class MaterialLibraryComponent {
       }finally{this.movingFile.set(null);}
     }else await this.materials.add(this.subjectId(),Array.from(event.dataTransfer?.files??[]),this.uploadCategory(),parentId);
   }
-  requestFolderDelete(id:string):void{const file=this.subjectFiles().find(file=>file.id===id);if(!file||materialKind(file)!=='folder')return;this.pendingDelete.set(file);this.deleteDialog()?.nativeElement.showModal();}
+  requestFolderDelete(id:string):void{this.cancelPendingOpen();const file=this.subjectFiles().find(file=>file.id===id);if(!file||materialKind(file)!=='folder')return;this.pendingDelete.set(file);this.deleteDialog()?.nativeElement.showModal();}
   async confirmFolderDelete():Promise<void>{const file=this.pendingDelete();if(file&&await this.remove(file.id)){this.deleteDialog()?.nativeElement.close();this.pendingDelete.set(null);}}
   async remove(id:string):Promise<boolean>{
+    this.cancelPendingOpen();
     if(this.deleting().has(id))return false;const file=this.subjectFiles().find(f=>f.id===id);if(!file)return true;
     this.deleting.update(ids=>new Set([...ids,id]));
     try{if(await this.materials.remove(id)){if(this.selectedId()===id)this.preview()?.nativeElement.close();this.status.set(`${file.name} deleted.`);return true;}return false;}
     finally{this.deleting.update(ids=>{const next=new Set(ids);next.delete(id);return next;});}
   }
   setMarker(id:string,value:MaterialMarker):void{void this.materials.update(id,{marker:value});}
-  showCards(id:string|null,learn=false):void{if(learn){this.startLearning(id);return;}this.collectionFolder.set(id);this.collectionOpen.set(true);this.collectionDialog()?.nativeElement.showModal();}
+  showCards(id:string|null,learn=false):void{this.cancelPendingOpen();if(learn){this.startLearning(id);return;}this.collectionFolder.set(id);this.collectionOpen.set(true);this.collectionDialog()?.nativeElement.showModal();}
   startLearning(folderId:string|null,deckId:string|null=null):void{
+    this.cancelPendingOpen();
     this.collectionDialog()?.nativeElement.close();this.preview()?.nativeElement.close();
     this.learningFolder.set(folderId);this.learningDeck.set(deckId);this.learningOpen.set(true);this.learningDialog()?.nativeElement.showModal();
   }
