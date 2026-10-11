@@ -26,7 +26,7 @@ class SeedTests(unittest.TestCase):
             path = Path(temp) / 'app.db'
             with sqlite3.connect(path) as conn:
                 conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, display_name TEXT)")
-                conn.execute("INSERT INTO users VALUES (1, 'alice@ethz.ch', 'Alice')")
+                conn.execute("INSERT INTO users VALUES (1, 'kaaddi@ethz.ch', 'Karim Addi')")
                 conn.execute("""CREATE TABLE materials (
                     id TEXT PRIMARY KEY, user_id INTEGER, subject_id TEXT, parent_id TEXT,
                     kind TEXT, source_pdf_id TEXT, name TEXT, category TEXT,
@@ -51,7 +51,7 @@ class SeedTests(unittest.TestCase):
             conn = sqlite3.connect(path)
             try:
                 conn.executescript('''CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, display_name TEXT);
-                    INSERT INTO users VALUES (1, 'alice@ethz.ch', 'Alice');
+                    INSERT INTO users VALUES (1, 'kaaddi@ethz.ch', 'Karim Addi');
                     CREATE TABLE materials (
                       id TEXT PRIMARY KEY, user_id INTEGER, subject_id TEXT, parent_id TEXT,
                       kind TEXT, name TEXT, description TEXT NOT NULL DEFAULT '', category TEXT,
@@ -89,7 +89,7 @@ class SeedTests(unittest.TestCase):
     def test_first_start_seeds_and_releases_the_database_file(self):
         with tempfile.TemporaryDirectory() as temp:
             app = build_app(temp, SEED_IF_NEW=True, SEED_DIRS=DEMO_SEED)
-            self.assertEqual(emails(app), ['alice@ethz.ch', 'bob@ethz.ch'])
+            self.assertEqual(emails(app), ['kaaddi@ethz.ch', 'bob@ethz.ch'])
             # Windows refuses to rename the file if a connection is still open.
             path = app.config['DATABASE_PATH']
             os.rename(path, path + '.moved')
@@ -102,7 +102,7 @@ class SeedTests(unittest.TestCase):
                 db.upsert_user('guest@ethz.ch', 'Guest')
                 db.reset_db()
                 self.assertIsNone(db.get_user_by_email('guest@ethz.ch'))
-                self.assertIsNotNone(db.get_user_by_email('alice@ethz.ch'))
+                self.assertIsNotNone(db.get_user_by_email('kaaddi@ethz.ch'))
 
     def test_production_starts_with_an_empty_database(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -129,10 +129,10 @@ class SeedTests(unittest.TestCase):
             source = Path(temp) / 'learning' / material['id'] / 'source.pdf'
             self.assertEqual(source.stat().st_size, material['size'])
             response = app.test_client().get(f"/api/materials/{material['id']}/file",
-                                             headers={'X-User-Id': 'alice@ethz.ch'})
+                                             headers={'X-User-Id': 'kaaddi@ethz.ch'})
             self.assertEqual((response.status_code, len(response.data)), (200, material['size']))
             response.close()
-            self.assertEqual(emails(app), ['alice@ethz.ch', 'bob@ethz.ch'])
+            self.assertEqual(emails(app), ['kaaddi@ethz.ch', 'bob@ethz.ch'])
 
     def test_a_restart_keeps_the_data_and_still_applies_the_schema(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -147,7 +147,7 @@ class SeedTests(unittest.TestCase):
             app = build_app(temp, seed=True, SEED_DIRS=DEMO_SEED)
             app.test_client().get('/api/me', headers={'X-User-Id': 'guest@ethz.ch'})
             fresh = build_app(temp, SEED_DIRS=DEMO_SEED, RESET_DB_ON_START=True)
-            self.assertEqual(emails(fresh), ['alice@ethz.ch', 'bob@ethz.ch'])
+            self.assertEqual(emails(fresh), ['kaaddi@ethz.ch', 'bob@ethz.ch'])
 
 
 class DatabaseConcurrencyTests(unittest.TestCase):

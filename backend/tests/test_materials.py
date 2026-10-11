@@ -12,7 +12,7 @@ from material_types import CATEGORY_TYPES
 from tests.support import build_app
 
 FIXTURE = Path(__file__).resolve().parents[2] / 'frontend/tests/fixtures/study-demo.pdf'
-ALICE = {'X-User-Id': 'alice@ethz.ch'}
+ALICE = {'X-User-Id': 'kaaddi@ethz.ch'}
 BOB = {'X-User-Id': 'bob@ethz.ch'}
 
 

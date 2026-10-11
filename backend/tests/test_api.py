@@ -89,17 +89,17 @@ class AuthTests(unittest.TestCase):
 
     def test_dev_user_stands_in_for_the_proxy_and_a_header_still_wins(self):
         with tempfile.TemporaryDirectory() as temp:
-            client = build_app(temp, DEV_USER='alice@ethz.ch', DEV_USER_NAME='Alice Example').test_client()
+            client = build_app(temp, DEV_USER='kaaddi@ethz.ch', DEV_USER_NAME='Karim Addi').test_client()
             self.assertEqual(client.get('/api/me').get_json(),
-                             {'email': 'alice@ethz.ch', 'name': 'Alice Example'})
+                             {'email': 'kaaddi@ethz.ch', 'name': 'Karim Addi'})
             self.assertEqual(client.get('/api/me', headers={'X-User-Id': 'bob@ethz.ch'}).get_json()['email'],
                              'bob@ethz.ch')
 
     def test_a_seeded_user_keeps_their_data(self):
         with tempfile.TemporaryDirectory() as temp:
             client = build_app(temp, seed=True).test_client()
-            data = client.get('/api/dashboard', headers={'X-User-Id': 'alice@ethz.ch'}).get_json()
-            self.assertEqual(data['user']['email'], 'alice@ethz.ch')
+            data = client.get('/api/dashboard', headers={'X-User-Id': 'kaaddi@ethz.ch'}).get_json()
+            self.assertEqual(data['user']['email'], 'kaaddi@ethz.ch')
             self.assertEqual([s['label'] for s in data['semesters']], ['HS25', 'FS26', 'HS26'])   # HS26 is the demo study phase (seed_demo/generate_plan.py)
             # A visitor the seed does not know gets an account, not someone else's data.
             fresh = client.get('/api/dashboard', headers={'X-User-Id': 'guest@ethz.ch'}).get_json()
