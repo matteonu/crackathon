@@ -111,9 +111,9 @@ export class StudyStore {
   }
 
   /** Sends a change after the ones before it. On failure the server's version is reloaded. */
-  private write<T=unknown>(url:string, init:RequestInit, saved?:(result:T)=>void):Promise<boolean> {
+  private write<T=unknown>(url:string, init:RequestInit, saved?:(result:T)=>void|Promise<void>):Promise<boolean> {
     const run = this.writes.then(async () => {
-      try { const result=await this.request<T>(url, init); saved?.(result); return true; }
+      try { const result=await this.request<T>(url, init); await saved?.(result); return true; }
       catch (e) {
         const message = e instanceof Error ? e.message : 'Could not save that change.';
         this.announce(`Not saved: ${message}`);
@@ -190,8 +190,11 @@ export class StudyStore {
     const url=this.courseUrl(id);
     const semester=this.semkez();
     this.state.set(data); this.announce('Subject changes saved.');
-    void this.write<PlanSubject>(url,this.json('PATCH',patch),subject=>{
-      if(this.semkez()===semester)this.planSubjects.update(subjects=>subjects.map(s=>s.id===id?subject:s));
+    void this.write<PlanSubject>(url,this.json('PATCH',patch),async subject=>{
+      if(this.semkez()===semester){
+        this.planSubjects.update(subjects=>subjects.map(s=>s.id===id?subject:s));
+        await this.refreshTargets();
+      }
     });
   }
   /** The slots the calendar shows on one day, earliest first, lunch and dinner included. */
@@ -293,6 +296,7 @@ export class StudyStore {
     try {
       this.preferences.set(await this.request<Preferences>(
         `/api/semesters/${this.semkez()}/preferences`, this.json('PUT', patch)));
+      await this.refreshTargets();
       this.announce('Study habits saved.');
       return true;
     } catch (e) {
@@ -312,11 +316,23 @@ export class StudyStore {
       this.state.update(d => ({...d, subjects: d.subjects.map(s => s.courseId === courseId
         ? {...s, examDate:subject.examDate, examStart:subject.examStart, examEnd:subject.examEnd,
           targetHours:subject.targetHours, completed:subject.completed} : s)}));
+      await this.refreshTargets();
       return true;
     } catch (e) {
       this.planError.set(e instanceof Error ? e.message : 'Could not save that course.');
       return false;
     }
+  }
+
+  /** One course's availability can change every course's share of the semester target. */
+  private async refreshTargets():Promise<void> {
+    const semester=this.semkez();
+    const plan=await this.request<Plan>(`/api/semesters/${semester}/plan`);
+    if(this.semkez()!==semester)return;
+    this.planSubjects.set(plan.subjects);
+    const targets=new Map(plan.subjects.map(s=>[s.id,s.targetHours]));
+    this.state.update(data=>({...data,subjects:data.subjects.map(subject=>
+      ({...subject,targetHours:targets.get(subject.id)??0}))}));
   }
 
   toggleDone(id:string):void {

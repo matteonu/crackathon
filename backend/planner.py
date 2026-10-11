@@ -38,7 +38,6 @@ from auth import current_user
 import db
 from errors import RequestError
 from schedule_planner.main import generate_schedule
-from schedule_planner.schedule import HOURS_PER_ECTS, WEEKS_IN_SEMESTER
 from vvz.sync import semester_of, term_of
 
 bp = Blueprint("planner", __name__, url_prefix="/api")
@@ -285,6 +284,7 @@ def search():
 def subjects(sid, semkez, course_id=None):
     """The semester's courses as the app's subjects, with the hours recorded for each."""
     conn = db.get_db()
+    targets = schedule_targets(sid, semkez)
     hours = {}
     for r in conn.execute("SELECT course_id, date, hours FROM study_hours WHERE semester_id = ? ORDER BY date", (sid,)):
         hours.setdefault(r["course_id"], {})[r["date"]] = r["hours"]
@@ -307,7 +307,7 @@ def subjects(sid, semkez, course_id=None):
     for i, r in enumerate(conn.execute(sql + " ORDER BY sc.rowid", params)):
         result.append({
             "id": f"course-{r['id']}", "courseId": r["id"], "name": r["title"], "shortName": r["title"],
-            "color": r["color"] or COLORS[i % len(COLORS)], "targetHours": r["target_hours"],
+            "color": r["color"] or COLORS[i % len(COLORS)], "targetHours": targets.get(r["id"], 0),
             "examDate": r["exam_date"] or phase(semkez)[1], "completed": bool(r["completed"]),
             "examStart": r["exam_start"], "examEnd": r["exam_end"],
             "nextAction": r["next_action"], "ects": r["ects"], "lectureId": r["code"],
@@ -537,7 +537,7 @@ def preferences(sid):
                                WHERE semester_id = ? ORDER BY start_date""", (sid,))]}
 
 
-def scheduler_request(sid, semkez, from_date, to_date):
+def scheduler_request(sid, semkez, from_date, to_date, *, for_targets=False):
     """The schedule_planner request for one semester, and the course id behind each subject.
 
     Subjects are keyed by course code: unique, stable, and short enough to read in a dump.
@@ -556,16 +556,16 @@ def scheduler_request(sid, semkez, from_date, to_date):
            FROM semester_courses sc JOIN courses c ON c.id = sc.course_id
            LEFT JOIN course_offerings o ON o.course_id = c.id AND o.semkez = ?
            LEFT JOIN course_ratings r ON r.code = c.code
-           WHERE sc.semester_id = ? AND sc.completed = 0
-           ORDER BY c.code""", (DEFAULT_DIFFICULTY, end, semkez, sid)).fetchall()
-    if not courses:
+           WHERE sc.semester_id = ? AND (sc.completed = 0 OR ?)
+           ORDER BY c.code""", (DEFAULT_DIFFICULTY, end, semkez, sid, for_targets)).fetchall()
+    if not courses and not for_targets:
         raise RequestError(400, "Add a course you have not finished yet, then generate a plan.")
     ids = {r["code"]: r["id"] for r in courses}
     subjects_input = {r["code"]: {
         "ects": r["ects"], "lecture_per_week": r["lectures"],
         "difficulty": min(5, max(1, r["difficulty"])), "priority": r["priority"],
         "max_study_hours": r["max_study_hours"], "examdate": r["exam_date"]} for r in courses}
-    if all(subject["examdate"] <= from_date for subject in subjects_input.values()):
+    if not for_targets and all(subject["examdate"] <= from_date for subject in subjects_input.values()):
         raise RequestError(400, "Every exam is on or before this date. Set a later exam date first.")
 
     codes = {course_id: code for code, course_id in ids.items()}
@@ -648,21 +648,32 @@ def plan_payload(from_date, generated_at, plan, ids):
                         for code, hours in scheduled.items()]}
 
 
-def refresh_targets(conn, sid):
-    """Give a course without a target the scheduler's own workload estimate for it: ECTS times
-    HOURS_PER_ECTS, less the lectures over the semester. A target the user typed, or the seed
-    set, is never touched -- it is a goal for the semester, not what this week's plan holds."""
-    conn.execute(
-        """UPDATE semester_courses SET target_hours = (
-               SELECT max(0, round(? * coalesce(o.ects, c.ects, 0)
-                                   - ? * coalesce(semester_courses.lecture_per_week, o.weekly_hours, c.weekly_hours, 0), 2))
-               FROM courses c LEFT JOIN course_offerings o ON o.course_id = c.id
-                    AND o.semkez = (SELECT CASE substr(s.label, 1, 2) WHEN 'HS' THEN '20' || substr(s.label, 3) || 'W'
-                                                ELSE '20' || substr(s.label, 3) || 'S' END
-                                    FROM semesters s WHERE s.id = semester_courses.semester_id)
-               WHERE c.id = semester_courses.course_id)
-           WHERE semester_id = ? AND target_hours = 0""",
-        (HOURS_PER_ECTS, WEEKS_IN_SEMESTER, sid))
+def schedule_targets(sid, semkez):
+    """Forecast each course's study hours over the full phase using the saved schedule settings.
+
+    This is a dry run: existing generated weeks do not determine the goal or get replaced.
+    Manual commitments still reserve time. Completed courses keep their full-phase goal,
+    so marking one done does not erase it from the analytics denominator. Active-learning
+    caps, exam availability, study weekdays, days off and weekly budgets use the scheduler's
+    rules; recall counts towards the target but is exempt from the active-learning cap.
+    The legacy target_hours column is retained for old imports, not used as the goal.
+    """
+    start, end = phase(semkez)
+    payload, ids = scheduler_request(sid, semkez, start, end, for_targets=True)
+    if not ids:
+        return {}
+    projection = generate_schedule(payload)
+    totals = dict(projection["summary"]["scheduled_hours_per_subject"])
+    # The scheduler's summary contains generated blocks only. The manual study it
+    # allocated around belongs to the same goal, including proposed edge extensions.
+    adjustments = {entry["index"]: entry for entry in projection["busy_adjustments"]}
+    for index, entry in enumerate(payload["busy"]):
+        code = entry.get("subject")
+        if code not in ids or entry["type"] == "meal":
+            continue
+        times = adjustments.get(index, entry)
+        totals[code] += (minutes_of(times["end_time"]) - minutes_of(times["start_time"])) / 60
+    return {ids[code]: round(hours, 2) for code, hours in totals.items()}
 
 
 def store_plan(sid, from_date, to_date, payload, result):
@@ -708,7 +719,6 @@ def store_plan(sid, from_date, to_date, payload, result):
                             input_json = excluded.input_json, summary_json = excluded.summary_json""",
                      (sid, result["generatedAt"], from_date, json.dumps(payload),
                       json.dumps(result["summary"])))
-        refresh_targets(conn, sid)
 
 
 def block_json(r):
@@ -967,7 +977,6 @@ def create_block(semkez):
                         VALUES (?, ?, ?, ?, ?, ?, ?, 'manual')""",
                      (sid, course_id, date, begin, finish,
                       "active_learning" if kind == "course" else "meal", None if kind == "course" else "Break"))
-        refresh_targets(conn, sid)
     return jsonify(stored_plan(sid)), 201
 
 
@@ -986,7 +995,6 @@ def move_block(semkez, block_id):
         make_room(conn, sid, date, begin, finish, keep=block_id)
         conn.execute("""UPDATE plan_blocks SET date = ?, start_time = ?, end_time = ?, source = 'manual'
                         WHERE id = ?""", (date, begin, finish, block_id))
-        refresh_targets(conn, sid)
     return jsonify(stored_plan(sid))
 
 
@@ -1003,7 +1011,6 @@ def delete_block(semkez, block_id):
         if row["type"] == "meal" and row["label"] in ("Lunch", "Dinner"):
             conn.execute("INSERT OR IGNORE INTO plan_meal_skips (semester_id, date, label) VALUES (?, ?, ?)",
                          (sid, row["date"], row["label"]))
-        refresh_targets(conn, sid)
     return jsonify(stored_plan(sid))
 
 
@@ -1022,7 +1029,6 @@ def clear_day(semkez, date):
     with conn:
         conn.execute("DELETE FROM plan_blocks WHERE semester_id = ? AND date = ?", (sid, date))
         conn.execute("DELETE FROM plan_meal_skips WHERE semester_id = ? AND date = ?", (sid, date))
-        refresh_targets(conn, sid)
     return jsonify(stored_plan(sid))
 
 
