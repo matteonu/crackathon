@@ -1,5 +1,5 @@
 @if(!learning()){
-  <div class="folder-card-heading"><div><h2>{{name()}}</h2><p class="muted">{{cards().length}} cards</p></div><button class="button primary" [disabled]="!cards().length" (click)="startLearning.emit()">Start learning</button></div>
+  <div class="folder-card-heading"><div><h2 [title]="name()">{{name()}}</h2><div class="folder-card-meta"><p class="muted">{{cards().length}} cards</p><ng-content select="[deck-subtitle]" /></div></div><ng-content select="[deck-toolbar]" /><button class="button primary" [disabled]="!cards().length" (click)="startLearning.emit()">Start learning</button></div>
   @if(preferenceFolders().length){
     <details class="deck-preferences"><summary>Deck preferences</summary><p class="field-hint">Folder weights control how often their cards are selected. A higher weight gives a folder more turns.</p>
       @for(folder of preferenceFolders();track folder.id){<label>{{folder.name}} <input type="number" min="0.01" step="0.1" [attr.aria-label]="'Learning weight for '+folder.name" [ngModel]="folder.folderWeight??1" [disabled]="savingPreference()" (ngModelChange)="setWeight(folder.id,$event)"></label>}
@@ -7,6 +7,7 @@
     </details>
   }
   @if(deletionError()){<p class="form-error" role="alert">{{deletionError()}}</p>}
+  <ng-content />
   <div class="folder-card-list">@for(card of cards();track card.key){
     <div class="folder-card-row">
       <details class="folder-card-item"><summary><span><strong><app-study-text [text]="card.question" [compact]="true" /></strong><small>{{card.fileName}} @if(card.demo){ · Demo card}</small></span></summary><app-card-source [card]="card" /><p><app-study-text [text]="card.answer" /></p><button class="text-button" (click)="openFile.emit(card.fileId)">Open source or deck →</button></details>

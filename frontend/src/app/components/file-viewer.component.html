@@ -1,5 +1,6 @@
 @if(file();as file){
 <div class="file-viewer" [class.deck-viewer]="kind()==='deck'" (click)="surfaceClick($event)" (keydown.escape)="escape($event)">
+  @if(kind()!=='deck'||editing()){
   <form class="file-details" novalidate [formGroup]="details" (ngSubmit)="saveDetails()">
     <div class="file-title-row">
       <label class="sr-only" for="file-title">File title</label><input id="file-title" class="editable-file-title" formControlName="name" maxlength="180" required (blur)="kind()==='pdf'&&saveDetails()">
@@ -17,13 +18,16 @@
     }
     @if(kind()!=='pdf'){<div class="file-detail-actions"><button class="button secondary" type="submit" [disabled]="saving()">{{saving()?'Saving…':'Save details'}}</button></div>}
   </form>
+  }
   @if(error()||materials.error()){<p class="form-error" role="alert">{{error()||materials.error()}}</p>}@if(notice()){<p class="viewer-notice" aria-live="polite">{{notice()}}</p>}
   @if(file.processing?.error){<p class="form-error" role="alert">{{file.processing!.error}}</p>}
   @if(kind()==='deck'){
-    <div class="file-meta-bar"><span class="file-kind">DECK</span><label>Folder <select [ngModel]="file.parentId??null" (ngModelChange)="moveDeck($event)"><option [ngValue]="null">Materials</option>@for(folder of folders();track folder.id){<option [ngValue]="folder.id">{{folder.name}}</option>}</select></label>@if(file.sourcePdfId){<button class="text-button" (click)="openFile.emit(file.sourcePdfId)">Open source PDF</button>}@else{<span class="muted">Source PDF removed · deck retained</span>}</div>
-    <app-folder-flashcards [cards]="deckCards()" [name]="file.name" [subjectId]="file.subjectId" [deckId]="file.id" (openFile)="openFile.emit($event)" (startLearning)="startLearning.emit(file.id)" />
-    <button class="text-button" (click)="addingCard.set(!addingCard())">Add a flashcard</button>
+    <app-folder-flashcards [cards]="deckCards()" [name]="file.name" [subjectId]="file.subjectId" [deckId]="file.id" (openFile)="openFile.emit($event)" (startLearning)="startLearning.emit(file.id)">
+      <span deck-subtitle>@if(file.sourcePdfId){<button class="text-button" (click)="openFile.emit(file.sourcePdfId)">Open source PDF</button>}</span>
+    <div class="deck-card-actions"><button type="button" class="text-button" [attr.aria-expanded]="editing()" (click)="editing.set(!editing())">{{editing()?'Hide deck details':'Edit deck details'}}</button>
+    <button class="text-button" (click)="addingCard.set(!addingCard())">Add a flashcard</button></div>
     @if(addingCard()){<form class="add-card-form" [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><details class="card-draft-preview"><summary>Preview card</summary><span class="eyebrow">QUESTION</span><p><app-study-text [text]="cardForm.controls.question.value" /></p><span class="eyebrow">ANSWER</span><p><app-study-text [text]="cardForm.controls.answer.value" /></p></details><p class="field-hint">{{mathHint}}</p><button class="button secondary" type="submit">Save flashcard</button></form>}
+    </app-folder-flashcards>
   }@else{
   <div class="file-viewer-columns" [class.summary-only]="!allowsCards()&&!allowsMcq()&&!allowsChat()">
     <section #stage class="file-stage" aria-label="File and flashcard viewer">

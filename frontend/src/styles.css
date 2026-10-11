@@ -704,7 +704,25 @@ html:has(.file-viewer-dialog[open]) { overflow:hidden; }
 .file-viewer-dialog>.dialog-top { position:static; flex-shrink:0; margin:0 0 8px; padding:0; }
 .file-viewer-dialog>app-file-viewer { display:block; flex:1; min-height:0; }
 .file-viewer { display:flex; flex-direction:column; height:100%; min-height:0; overflow:hidden; }
-.file-viewer.deck-viewer { overflow:auto; }
+.file-viewer-dialog.deck-viewer-dialog { width:min(760px,calc(100vw - 32px)); }
+.file-viewer-dialog.deck-viewer-dialog[open] { height:min(800px,calc(100dvh - 48px)); overflow:hidden; }
+.file-viewer.deck-viewer { overflow:hidden; gap:12px; }
+.deck-viewer>app-folder-flashcards { display:flex; flex-direction:column; flex:1; min-height:0; gap:12px; }
+.deck-viewer .folder-card-heading { flex:none; flex-wrap:nowrap; gap:12px; margin:0; }
+.deck-viewer .folder-card-heading>div:first-child { flex:1; min-width:0; }
+.deck-viewer .folder-card-meta { display:flex; align-items:center; gap:12px; margin-top:5px; }
+.deck-viewer .folder-card-meta .text-button { font-size:12px; }
+.file-path { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-transform:uppercase; }
+.explorer-row.drop-target { background:var(--sage); outline:2px solid var(--green); outline-offset:-2px; border-radius:8px; }
+.explorer-row.file-dragging { opacity:0.5; }
+.deck-viewer .folder-card-heading h2 { font-size:18px; margin:0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.deck-viewer .folder-card-heading p.muted,.deck-viewer .folder-card-heading button { flex-shrink:0; white-space:nowrap; }
+.deck-viewer .folder-card-heading>.button { padding:8px 10px; font-size:12px; }
+.deck-card-actions { display:flex; flex:none; align-items:center; justify-content:space-between; gap:12px; }
+.deck-card-actions>button:last-child { order:-1; }
+.deck-viewer .add-card-form { flex:none; margin:0; padding-top:10px; }
+.deck-viewer .deck-preferences { flex:none; margin:0; padding:8px 12px; }
+.deck-viewer .folder-card-list { flex:1; min-height:0; max-height:none; align-content:start; overscroll-behavior:contain; }
 .file-viewer>.file-details { flex-shrink:0; }
 .file-viewer .generated-file-description { max-height:4.5em; overflow:auto; margin-bottom:12px; }
 /* Keep scrolling inside the rounded viewer, with inset, rounded thumbs. */
