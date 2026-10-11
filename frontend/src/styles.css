@@ -1056,6 +1056,8 @@ html:has(.file-viewer-dialog[open]) { overflow:hidden; }
 .stats-grid .stats-panel { margin-top: 20px; }
 .chart { display: block; max-width: 100%; height: auto; font-family: inherit; overflow: visible; }
 .chart-scroll .chart { max-width: none; }
+.chart-scroll .daily-hours-chart { height: auto; }
+.daily-chart-legend { flex-wrap: wrap; gap: 8px 20px; }
 .chart .grid { stroke: var(--line); stroke-width: 1; }
 .chart .baseline { stroke: var(--line-strong); stroke-width: 1; }
 .chart .axis { font-size: 9px; fill: var(--muted); }
@@ -1083,8 +1085,10 @@ html:has(.file-viewer-dialog[open]) { overflow:hidden; }
 .stats-table tbody th { font-weight: 500; }
 .stats-table tbody th a { display: inline-flex; align-items: center; gap: 8px; }
 .stats-table tbody th a:hover { color: var(--green); }
-.stats-table td:nth-child(2) { min-width: 160px; }
-.bar-track.wide { width: 140px; height: 6px; }
+.stats-table td:nth-child(2) { min-width: 470px; }
+.stats-table th:nth-child(2), .stats-table td:nth-child(2) { text-align: center; }
+.stats-table td:nth-child(2) .bar-track { margin-inline: auto; }
+.bar-track.wide { width: 450px; height: 6px; }
 .stat-pill { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 5px; font-size: 9px; font-weight: 600; letter-spacing: .02em; }
 .stat-pill.on-track { background: var(--success-soft); color: var(--success); }
 .stat-pill.done { background: var(--sage); color: var(--green-dark); }

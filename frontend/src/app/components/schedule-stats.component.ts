@@ -1,10 +1,10 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { StudyStore } from '../services/study-store';
 import { ScrollButtonsComponent } from '../shared/scroll-buttons.component';
-import { WEEKDAYS, asOfDate, balanceDelta, consistency, dailySeries, pace, planAdherence, planDeviation, plannedAhead, subjectStats, weekdayProfile, weeklySeries } from '../models/analytics';
+import { WEEKDAYS, asOfDate, balanceDelta, consistency, dailyChartLayout, dailySeries, pace, planAdherence, planDeviation, plannedAhead, subjectStats, weekdayProfile, weeklySeries } from '../models/analytics';
 
-const DAY_W = 18, CHART_H = 150, PAD_L = 34, PAD_B = 26, PAD_T = 18;
+const CHART_H = 150, PAD_L = 34, PAD_B = 26, PAD_T = 18;
 
 /** Schedule statistics for the analytics page: pace, consistency, plan adherence, and the charts
  *  behind them. Every number comes from models/analytics.ts; this component only lays them out. */
@@ -58,19 +58,19 @@ const DAY_W = 18, CHART_H = 150, PAD_L = 34, PAD_B = 26, PAD_T = 18;
   </section>
 
   <section class="panel stats-panel" aria-labelledby="daily-title">
-    <div class="panel-heading"><div><h2 id="daily-title">Hours per day</h2><p>Recorded hours stacked by subject; planned sessions outlined; exams flagged.</p></div><app-scroll-buttons [target]="dailyViewport" label="daily hours" /></div>
-    <div class="chart-legend">@for(s of store.subjects();track s.id){<span><i [style.background]="s.color"></i>{{s.shortName}}</span>}<span><i class="legend-planned"></i>Planned</span><span><i class="legend-asof"></i>As of</span></div>
+    <div class="panel-heading"><div><h2 id="daily-title">Hours per day</h2><p>Recorded hours stacked by subject; planned sessions outlined; exams flagged.</p></div></div>
+    <div class="chart-legend daily-chart-legend">@for(s of store.subjects();track s.id){<span><i [style.background]="s.color"></i>{{s.shortName}}</span>}<span><i class="legend-planned"></i>Planned</span><span><i class="legend-asof"></i>As of</span></div>
     <div #dailyViewport class="horizontal-scroll chart-scroll" tabindex="0" role="region" aria-label="Hours per day, scroll horizontally">
-      <svg class="chart" [attr.viewBox]="'0 0 '+dailyWidth()+' '+chartHeight" [attr.width]="dailyWidth()" [attr.height]="chartHeight" role="img" [attr.aria-label]="'Hours per day from '+store.dates()[0]+' to '+store.dates()[store.dates().length-1]">
-        @for(tick of yTicks(dailyMax());track tick){<line class="grid" [attr.x1]="padL" [attr.x2]="dailyWidth()" [attr.y1]="yScale(tick,dailyMax())" [attr.y2]="yScale(tick,dailyMax())" /><text class="axis" [attr.x]="padL-6" [attr.y]="yScale(tick,dailyMax())+3" text-anchor="end">{{tick}}</text>}
+      <svg class="chart daily-hours-chart" [attr.viewBox]="'0 0 '+dailyWidth()+' '+dailyHeight()" [attr.width]="dailyWidth()" [attr.height]="dailyHeight()" role="img" [attr.aria-label]="'Hours per day from '+store.dates()[0]+' to '+store.dates()[store.dates().length-1]">
+        @for(tick of yTicks(dailyMax());track tick){<line class="grid" [attr.x1]="padL" [attr.x2]="dailyWidth()" [attr.y1]="dailyY(tick)" [attr.y2]="dailyY(tick)" /><text class="axis" [attr.x]="padL-6" [attr.y]="dailyY(tick)+3" text-anchor="end">{{tick}}</text>}
         @for(day of days();track day.date;let i=$index){
-          @if(day.planned>0){<rect class="planned" [attr.x]="padL+i*dayW+3" [attr.y]="yScale(day.planned,dailyMax())" [attr.width]="dayW-6" [attr.height]="yScale(0,dailyMax())-yScale(day.planned,dailyMax())" rx="2"><title>{{dayLabel(day.date)}}: {{day.planned}} h planned</title></rect>}
-          @for(seg of stack(day);track seg.id){<rect [attr.fill]="seg.color" [attr.x]="padL+i*dayW+3" [attr.y]="yScale(seg.top,dailyMax())" [attr.width]="dayW-6" [attr.height]="max(0,yScale(seg.bottom,dailyMax())-yScale(seg.top,dailyMax())-1)" [attr.rx]="seg.last?2:0"><title>{{dayLabel(day.date)}}: {{seg.name}} {{seg.hours}} h (day total {{day.recorded}} h)</title></rect>}
-          @if(day.weekday===0||i===0){<text class="axis" [attr.x]="padL+i*dayW+dayW/2" [attr.y]="chartHeight-8" text-anchor="middle">{{shortDate(day.date)}}</text>}
+          @if(day.planned>0){<rect class="planned" [attr.x]="padL+i*dayW()+(dayW()-dailyBarWidth())/2" [attr.y]="dailyY(day.planned)" [attr.width]="dailyBarWidth()" [attr.height]="dailyY(0)-dailyY(day.planned)" rx="2"><title>{{dayLabel(day.date)}}: {{day.planned}} h planned</title></rect>}
+          @for(seg of stack(day);track seg.id){<rect [attr.fill]="seg.color" [attr.x]="padL+i*dayW()+(dayW()-dailyBarWidth())/2" [attr.y]="dailyY(seg.top)" [attr.width]="dailyBarWidth()" [attr.height]="max(0,dailyY(seg.bottom)-dailyY(seg.top)-1)" [attr.rx]="seg.last?2:0"><title>{{dayLabel(day.date)}}: {{seg.name}} {{seg.hours}} h (day total {{day.recorded}} h)</title></rect>}
+          @if(day.weekday===0||i===0){<text class="axis" [attr.x]="padL+i*dayW()+dayW()/2" [attr.y]="dailyHeight()-8" text-anchor="middle">{{shortDate(day.date)}}</text>}
         }
-        @for(s of store.subjects();track s.id){@if(dayIndex(s.examDate)>=0){<g class="exam"><line [attr.x1]="padL+dayIndex(s.examDate)*dayW+dayW/2" [attr.x2]="padL+dayIndex(s.examDate)*dayW+dayW/2" [attr.y1]="padT-6" [attr.y2]="yScale(0,dailyMax())" [attr.stroke]="s.color" /><circle [attr.cx]="padL+dayIndex(s.examDate)*dayW+dayW/2" [attr.cy]="padT-6" r="3.5" [attr.fill]="s.color"><title>{{s.shortName}} exam · {{dayLabel(s.examDate)}}</title></circle></g>}}
-        <line class="asof" [attr.x1]="padL+(dayIndex(asOf())+1)*dayW" [attr.x2]="padL+(dayIndex(asOf())+1)*dayW" [attr.y1]="padT-10" [attr.y2]="yScale(0,dailyMax())" />
-        <line class="baseline" [attr.x1]="padL" [attr.x2]="dailyWidth()" [attr.y1]="yScale(0,dailyMax())" [attr.y2]="yScale(0,dailyMax())" />
+        @for(marker of examMarkers();track marker.subject.id){<g class="exam"><line [attr.x1]="padL+marker.day*dayW()+dayW()/2" [attr.x2]="padL+marker.day*dayW()+dayW()/2" [attr.y1]="dailyPadT()" [attr.y2]="dailyY(0)" [attr.stroke]="marker.subject.color" /><circle [attr.cx]="padL+marker.day*dayW()+dayW()/2" [attr.cy]="padT-6+marker.row*10" r="3.5" [attr.fill]="marker.subject.color" tabindex="0" [attr.aria-label]="marker.subject.shortName+' exam · '+dayLabel(marker.subject.examDate)"><title>{{marker.subject.shortName}} exam · {{dayLabel(marker.subject.examDate)}}</title></circle></g>}
+        <line class="asof" [attr.x1]="padL+(dayIndex(asOf())+1)*dayW()" [attr.x2]="padL+(dayIndex(asOf())+1)*dayW()" [attr.y1]="dailyPadT()-10" [attr.y2]="dailyY(0)" />
+        <line class="baseline" [attr.x1]="padL" [attr.x2]="dailyWidth()" [attr.y1]="dailyY(0)" [attr.y2]="dailyY(0)" />
       </svg>
     </div>
   </section>
@@ -136,7 +136,17 @@ const DAY_W = 18, CHART_H = 150, PAD_L = 34, PAD_B = 26, PAD_T = 18;
 `})
 export class ScheduleStatsComponent {
   readonly store=inject(StudyStore);
-  readonly dayW=DAY_W;readonly chartHeight=CHART_H;readonly padL=PAD_L;readonly padT=PAD_T;readonly smallW=360;readonly weekdays=WEEKDAYS;
+  readonly chartHeight=CHART_H;readonly padL=PAD_L;readonly padT=PAD_T;readonly smallW=360;readonly weekdays=WEEKDAYS;
+  private readonly destroyRef=inject(DestroyRef);
+  private readonly dailyViewport=viewChild.required<ElementRef<HTMLElement>>('dailyViewport');
+  private readonly viewportWidth=signal(0);
+  constructor(){afterNextRender(()=>{
+    const viewport=this.dailyViewport().nativeElement;
+    const resize=new ResizeObserver(()=>this.viewportWidth.set(viewport.clientWidth));
+    this.viewportWidth.set(viewport.clientWidth);
+    resize.observe(viewport);
+    this.destroyRef.onDestroy(()=>resize.disconnect());
+  });}
   readonly min=Math.min;readonly max=Math.max;readonly abs=Math.abs;
   readonly asOf=computed(()=>asOfDate(this.store.data(),today()));
   readonly days=computed(()=>dailySeries(this.store.data()));
@@ -152,7 +162,20 @@ export class ScheduleStatsComponent {
   readonly dailyMax=computed(()=>Math.max(2,...this.days().map(d=>Math.max(d.recorded,d.planned))));
   readonly weekMax=computed(()=>Math.max(2,...this.weeks().map(w=>Math.max(w.recorded,w.planned,w.target))));
   readonly profileMax=computed(()=>Math.max(1,...this.profile()));
-  readonly dailyWidth=computed(()=>PAD_L+this.days().length*DAY_W+8);
+  readonly dailyLayout=computed(()=>dailyChartLayout(this.days().length,this.viewportWidth()));
+  readonly examMarkers=computed(()=>{
+    const rows=new Map<string,number>();
+    return this.store.subjects().filter(subject=>this.dayIndex(subject.examDate)>=0).map(subject=>{
+      const row=rows.get(subject.examDate)??0;
+      rows.set(subject.examDate,row+1);
+      return {subject,day:this.dayIndex(subject.examDate),row};
+    });
+  });
+  readonly dailyPadT=computed(()=>PAD_T+Math.max(0,...this.examMarkers().map(marker=>marker.row))*10);
+  readonly dailyWidth=computed(()=>this.dailyLayout().width);
+  readonly dailyHeight=computed(()=>this.dailyLayout().height+this.dailyPadT()-PAD_T);
+  readonly dayW=computed(()=>this.dailyLayout().dayWidth);
+  readonly dailyBarWidth=computed(()=>this.dailyLayout().barWidth);
   readonly weekSlot=computed(()=>(this.smallW-PAD_L)/Math.max(1,this.weeks().length));
   readonly weekLabelEvery=computed(()=>Math.max(1,Math.ceil(this.weeks().length/7)));   // at most ~7 week labels
   readonly daySlot=computed(()=>(this.smallW-PAD_L)/7);
@@ -167,6 +190,7 @@ export class ScheduleStatsComponent {
     return points;
   }
   yScale(value:number,maxValue:number):number {return PAD_T+(1-Math.min(value,maxValue)/Math.max(maxValue,0.01))*(CHART_H-PAD_T-PAD_B);}
+  dailyY(value:number):number {return this.dailyPadT()+(1-Math.min(value,this.dailyMax())/this.dailyMax())*(this.dailyHeight()-this.dailyPadT()-PAD_B);}
   /** At most six gridlines at a round step (1, 2, 5, 10, 20, 50, ...). */
   yTicks(maxValue:number):number[]{
     const raw=Math.max(maxValue,1)/5;const magnitude=10**Math.floor(Math.log10(raw));const step=[1,2,5,10].map(m=>m*magnitude).find(m=>m>=raw)??10*magnitude;

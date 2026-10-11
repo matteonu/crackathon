@@ -24,8 +24,12 @@ export class ThemeService {
 
   private apply(id:ThemeId):void {
     this.document.documentElement.dataset['theme']=id;
-    const color=getComputedStyle(this.document.documentElement).getPropertyValue('--canvas').trim();
-    this.document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content',color);
+    const palette=getComputedStyle(this.document.documentElement);
+    this.document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content',palette.getPropertyValue('--canvas').trim());
+    const background=palette.getPropertyValue('--accent').trim();
+    const foreground=palette.getPropertyValue('--on-accent').trim();
+    const icon=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="13" fill="${background}"/><path d="M31 14H21a6 6 0 0 0 0 12h6a4 4 0 0 1 0 8H16" fill="none" stroke="${foreground}" stroke-width="4" stroke-linecap="round"/></svg>`;
+    this.document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.setAttribute('href',`data:image/svg+xml,${encodeURIComponent(icon)}`);
     try{this.document.defaultView?.localStorage.setItem(THEME_STORAGE_KEY,id);}catch{/* Theme changes still work without storage. */}
   }
 }

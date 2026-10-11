@@ -1,12 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activityWeeks, asOfDate, balanceDelta, consistency, dailySeries, pace, planAdherence, planDeviation, plannedAhead, recentPlanVsRecorded, subjectStats, weekdayProfile, weeklySeries } from '../src/app/models/analytics.ts';
+import { activityWeeks, asOfDate, balanceDelta, consistency, dailyChartLayout, dailySeries, pace, planAdherence, planDeviation, plannedAhead, recentPlanVsRecorded, subjectStats, weekdayProfile, weeklySeries } from '../src/app/models/analytics.ts';
 import type { StudyData, Subject } from '../src/app/models/study.ts';
 import type { DayPoint } from '../src/app/models/analytics.ts';
 
 // A 14-day phase: Mon 2027-01-04 .. Sun 2027-01-17.
 const dates=Array.from({length:14},(_,i)=>`2027-01-${String(4+i).padStart(2,'0')}`);
 const subject=(id:string,targetHours:number,examDate:string,hours:Record<string,number|null>):Subject=>({id,name:id,shortName:id,color:'#2598A2',targetHours,examDate,completed:false,nextAction:'',hours});
+
+test('daily chart scrolls below minimum bar width, fits within bounds, and grows vertically above maximum',()=>{
+  const narrow=dailyChartLayout(28,200);
+  assert.deepEqual(narrow,{width:434,height:170,dayWidth:14,barWidth:8});
+  assert.deepEqual(dailyChartLayout(28,434),narrow);
+  assert.deepEqual(dailyChartLayout(28,602),{width:602,height:170,dayWidth:20,barWidth:14});
+  assert.deepEqual(dailyChartLayout(28,882),{width:882,height:170,dayWidth:30,barWidth:24});
+  const wide=dailyChartLayout(28,1722);
+  assert.deepEqual(wide,{width:1722,height:340,dayWidth:60,barWidth:24});
+  assert.equal(dailyChartLayout(56,882).barWidth,9);
+  assert.deepEqual(dailyChartLayout(0,0),{width:56,height:170,dayWidth:14,barWidth:8});
+});
 const data=():StudyData=>({version:1,semester:'HS26',referenceDate:'2027-01-10',dates,notes:'',anki:[],
   subjects:[subject('a',20,'2027-01-15',{'2027-01-04':2,'2027-01-05':3,'2027-01-07':1}),subject('b',10,'2027-01-20',{'2027-01-05':1,'2027-01-08':4})],
   examSession:{start:dates[0],end:dates[13]},

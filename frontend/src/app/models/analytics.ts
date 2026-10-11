@@ -9,6 +9,15 @@ export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export function round1(value: number): number { return Math.round(value * 10) / 10; }
 
+/** Fit the viewport with 8–24 px bars. Below 8 px, scroll; above 24 px, grow height
+ * proportionally and give the extra horizontal space to the gaps between days. */
+export function dailyChartLayout(dayCount: number, viewportWidth: number): {width: number; height: number; dayWidth: number; barWidth: number} {
+  const count = Math.max(1, dayCount);
+  const width = Math.max(viewportWidth, 34 + count * 14 + 8);
+  const dayWidth = (width - 34 - 8) / count;
+  return {width, dayWidth, barWidth: Math.min(24, dayWidth - 6), height: 170 * Math.max(1, dayWidth / 30)};
+}
+
 export function addDay(iso: string, offset: number): string {
   const d = new Date(iso + 'T12:00:00Z');
   d.setUTCDate(d.getUTCDate() + offset);
