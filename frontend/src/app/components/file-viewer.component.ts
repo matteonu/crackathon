@@ -11,9 +11,11 @@ import { FolderFlashcardsComponent } from './folder-flashcards.component';
 import { McqService } from '../services/mcq.service';
 import { McqAnswerResult, McqSession, McqSessionAnswer, McqSet } from '../models/mcq';
 import { CardSourceComponent } from '../shared/card-source.component';
+import { StudyTextComponent } from '../shared/study-text.component';
 
-@Component({selector:'app-file-viewer',standalone:true,imports:[FormsModule,ReactiveFormsModule,PdfPreviewComponent,IconComponent,LoadingDotsComponent,LearningModeComponent,FolderFlashcardsComponent,DocumentChatComponent,CardSourceComponent],templateUrl:'./file-viewer.component.html'})
+@Component({selector:'app-file-viewer',standalone:true,imports:[FormsModule,ReactiveFormsModule,PdfPreviewComponent,IconComponent,LoadingDotsComponent,LearningModeComponent,FolderFlashcardsComponent,DocumentChatComponent,CardSourceComponent,StudyTextComponent],templateUrl:'./file-viewer.component.html'})
 export class FileViewerComponent {
+  readonly mathHint=String.raw`Inline math: \(x^2\). Display math: \[\frac{x}{y}\].`;
   readonly fileId=input.required<string>();readonly materials=inject(MaterialStore);
   readonly openFile=output<string>();
   readonly startLearning=output<string>();

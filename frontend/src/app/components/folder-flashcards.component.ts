@@ -3,11 +3,12 @@ import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { IconComponent } from '../shared/icon.component';
 import { CardSourceComponent } from '../shared/card-source.component';
+import { StudyTextComponent } from '../shared/study-text.component';
 import { FolderCard, descendants, materialKind } from '../models/material';
 import { MaterialStore } from '../services/material-store';
 import { PracticeCard, PracticeScope, Rating, RecallAnalytics, SchedulerError, SchedulerService } from '../services/scheduler.service';
 
-@Component({selector:'app-folder-flashcards',standalone:true,imports:[FormsModule,DatePipe,IconComponent,CardSourceComponent],templateUrl:'./folder-flashcards.component.html',host:{'(document:keydown)':'onKeydown($event)'}})
+@Component({selector:'app-folder-flashcards',standalone:true,imports:[FormsModule,DatePipe,IconComponent,CardSourceComponent,StudyTextComponent],templateUrl:'./folder-flashcards.component.html',host:{'(document:keydown)':'onKeydown($event)'}})
 export class FolderFlashcardsComponent implements OnDestroy {
   readonly cards=input.required<FolderCard[]>();readonly name=input.required<string>();readonly subjectId=input.required<string>();
   readonly folderId=input<string|null>(null);readonly deckId=input<string|null>(null);readonly openFile=output<string>();

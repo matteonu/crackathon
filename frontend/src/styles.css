@@ -1,4 +1,15 @@
 @import "./themes.css";
+@import "katex/dist/katex.min.css";
+
+.study-equation { display:inline; vertical-align:middle; }
+.study-equation.display-equation { display:block; margin:6px 0; padding:3px 0; }
+.study-equation .katex { font-size:1.05em; }
+.study-equation .katex-display { margin:0; }
+.study-equation .katex-display>.katex { text-align:left; }
+.card-draft-preview { border:1px solid var(--line); border-radius:8px; padding:10px; }
+.card-draft-preview>summary { cursor:pointer; font-size:11px; color:var(--muted); }
+.card-draft-preview>.eyebrow { display:block; margin-top:10px; }
+.card-draft-preview>p { margin:6px 0 10px; font-size:13px; }
 
 /* Shared visual tokens: change these to restyle the whole workspace. */
 :root {

@@ -11,7 +11,7 @@
       }
     </div>
     @if(kind()==='pdf'){
-      <div id="file-summary" class="summary-collapse" [class.expanded]="summaryExpanded()" [attr.aria-hidden]="!summaryExpanded()" [attr.inert]="summaryExpanded()?null:''"><div><p class="generated-file-description" aria-label="Generated file summary" aria-live="polite">@if(summaryRunning()){<app-loading-dots label="Generating a one-sentence summary" />}@else if(file.outputs?.summary?.text){ {{file.outputs.summary.text}} }@else{ {{file.processing?.status==='error'?'Summary generation could not finish. Retry above.':'Your summary will appear here.'}} }</p></div></div>
+      <div id="file-summary" class="summary-collapse" [class.expanded]="summaryExpanded()" [attr.aria-hidden]="!summaryExpanded()" [attr.inert]="summaryExpanded()?null:''"><div><p class="generated-file-description" aria-label="Generated file summary" aria-live="polite">@if(summaryRunning()){<app-loading-dots label="Generating a one-sentence summary" />}@else if(file.outputs?.summary?.text){ <app-study-text [text]="file.outputs.summary.text" [compact]="true" /> }@else{ {{file.processing?.status==='error'?'Summary generation could not finish. Retry above.':'Your summary will appear here.'}} }</p></div></div>
     }@else{
       <label class="sr-only" for="file-description">File description</label><textarea id="file-description" class="editable-file-description" formControlName="description" rows="2" maxlength="2000" placeholder="Add a short description of this file…"></textarea>
     }
@@ -23,7 +23,7 @@
     <div class="file-meta-bar"><span class="file-kind">DECK</span><label>Folder <select [ngModel]="file.parentId??null" (ngModelChange)="moveDeck($event)"><option [ngValue]="null">Materials</option>@for(folder of folders();track folder.id){<option [ngValue]="folder.id">{{folder.name}}</option>}</select></label>@if(file.sourcePdfId){<button class="text-button" (click)="openFile.emit(file.sourcePdfId)">Open source PDF</button>}@else{<span class="muted">Source PDF removed · deck retained</span>}</div>
     <app-folder-flashcards [cards]="deckCards()" [name]="file.name" [subjectId]="file.subjectId" [deckId]="file.id" (openFile)="openFile.emit($event)" (startLearning)="startLearning.emit(file.id)" />
     <button class="text-button" (click)="addingCard.set(!addingCard())">Add a flashcard</button>
-    @if(addingCard()){<form class="add-card-form" [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><button class="button secondary" type="submit">Save flashcard</button></form>}
+    @if(addingCard()){<form class="add-card-form" [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><details class="card-draft-preview"><summary>Preview card</summary><span class="eyebrow">QUESTION</span><p><app-study-text [text]="cardForm.controls.question.value" /></p><span class="eyebrow">ANSWER</span><p><app-study-text [text]="cardForm.controls.answer.value" /></p></details><p class="field-hint">{{mathHint}}</p><button class="button secondary" type="submit">Save flashcard</button></form>}
   }@else{
   <div class="file-viewer-columns" [class.summary-only]="!allowsCards()&&!allowsMcq()&&!allowsChat()">
     <section #stage class="file-stage" aria-label="File and flashcard viewer">
@@ -43,7 +43,7 @@
           </article>
         }
       </div>
-      @if(card();as card){<article class="flashcard-stage" aria-label="Selected flashcard"><div class="flashcard-stage-top"><span class="eyebrow">QUESTION</span>@if(card.demo){<span class="demo-badge">Demo card</span>}</div><h2>{{card.question}}</h2><app-card-source [card]="card" />@if(revealed()){<div class="flashcard-answer"><span class="eyebrow">ANSWER</span><p>{{card.answer}}</p></div>}@else{<button class="button primary" (click)="revealed.set(true)">Reveal answer</button>}<p class="field-hint">Click outside this card, press Escape, or click Back to PDF above to return to your source.</p></article>}
+      @if(card();as card){<article class="flashcard-stage" aria-label="Selected flashcard"><div class="flashcard-stage-top"><span class="eyebrow">QUESTION</span>@if(card.demo){<span class="demo-badge">Demo card</span>}</div><h2><app-study-text [text]="card.question" /></h2><app-card-source [card]="card" />@if(revealed()){<div class="flashcard-answer"><span class="eyebrow">ANSWER</span><p><app-study-text [text]="card.answer" /></p></div>}@else{<button class="button primary" (click)="revealed.set(true)">Reveal answer</button>}<p class="field-hint">Click outside this card, press Escape, or click Back to PDF above to return to your source.</p></article>}
       @if(mcqSession();as session){
         @if(session.status==='completed'&&!mcqFeedback()&&mcqReviewIndex()===null){
           <article class="mcq-complete" aria-label="Practice complete"><span>{{session.score}} / {{session.total}}</span><h2>Practice complete</h2><p>You answered {{session.score}} of {{session.total}} questions correctly.</p><button class="button secondary" (click)="returnToFile()">Back to PDF</button></article>
@@ -78,12 +78,12 @@
       }
       <div class="flashcard-list">@for(card of cards();track card.id){
         <div class="flashcard-row">
-          <button class="flashcard-choice" [class.selected]="selectedCard()===card.id" [attr.aria-pressed]="selectedCard()===card.id" (click)="selectCard(card.id!)"><span class="flashcard-number">{{ $index+1 }}</span><span><strong>{{card.question}}</strong></span><app-icon name="right" /></button>
+          <button class="flashcard-choice" [class.selected]="selectedCard()===card.id" [attr.aria-pressed]="selectedCard()===card.id" (click)="selectCard(card.id!)"><span class="flashcard-number">{{ $index+1 }}</span><span><strong><app-study-text [text]="card.question" [compact]="true" /></strong></span><app-icon name="right" /></button>
           <button type="button" class="icon-button small delete-material delete-flashcard" [attr.aria-label]="'Delete flashcard: '+card.question" title="Delete flashcard" [disabled]="!!deletingCard()||!linkedDeck()||!card.id" [attr.aria-busy]="deletingCard()===card.id" (click)="$event.stopPropagation();removeCard(card.id!)"><app-icon name="minus" /></button>
         </div>
       }@empty{<div class="empty-state">@if(generating()&&!summaryRunning()){<app-loading-dots label="Preparing your flashcards" />}@else{No flashcards yet.}</div>}</div>
       @if(kind()==='pdf'){<button class="text-button" (click)="addingCard.set(!addingCard())"><app-icon name="plus" /> Add a flashcard</button>}
-      @if(addingCard()){<form class="add-card-form" novalidate [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><button class="button secondary" type="submit">Save flashcard</button></form>}
+      @if(addingCard()){<form class="add-card-form" novalidate [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><details class="card-draft-preview"><summary>Preview card</summary><span class="eyebrow">QUESTION</span><p><app-study-text [text]="cardForm.controls.question.value" /></p><span class="eyebrow">ANSWER</span><p><app-study-text [text]="cardForm.controls.answer.value" /></p></details><p class="field-hint">{{mathHint}}</p><button class="button secondary" type="submit">Save flashcard</button></form>}
       }@else if(tool()==='mcq'&&allowsMcq()){
         <div class="tool-heading"><h3>MC questions <span class="card-count">{{mcqSets().length}}</span></h3></div>
         <div class="generation-settings viewer-generation-row">

@@ -2,11 +2,12 @@ import { Component, ElementRef, computed, effect, input, signal, viewChild } fro
 import { FormsModule } from '@angular/forms';
 import { LoadingDotsComponent } from '../shared/loading-dots.component';
 import { contextPages } from '../models/pdf-context';
+import { StudyTextComponent } from '../shared/study-text.component';
 
 interface ChatTurn {id:string;question:string;answer:string;page:number;pages:number[];searchedDocument:boolean;}
 interface ChatState {index:{status:string;error:string|null};turns:ChatTurn[];}
 
-@Component({selector:'app-document-chat',standalone:true,imports:[FormsModule,LoadingDotsComponent],template:`
+@Component({selector:'app-document-chat',standalone:true,imports:[FormsModule,LoadingDotsComponent,StudyTextComponent],template:`
   <div class="document-chat">
     <div class="chat-context" aria-live="polite">
       <strong>{{page()?'Viewing page '+page()+' of '+totalPages():'Loading page context…'}}</strong>
@@ -19,15 +20,15 @@ interface ChatState {index:{status:string;error:string|null};turns:ChatTurn[];}
     }
     <div #feed class="chat-messages" tabindex="0" role="log" aria-label="Document conversation" aria-live="polite">
       @for(turn of turns();track turn.id){
-        <div class="chat-message question"><span class="eyebrow">YOU · PAGE {{turn.page}}</span><p>{{turn.question}}</p></div>
-        <div class="chat-message answer"><span class="eyebrow">STUDY ASSISTANT</span><p>{{turn.answer}}</p><small>Context: {{pageLabel(turn.pages)}}{{turn.searchedDocument?' · Searched this document':''}}</small></div>
+        <div class="chat-message question"><span class="eyebrow">YOU · PAGE {{turn.page}}</span><p><app-study-text [text]="turn.question" /></p></div>
+        <div class="chat-message answer"><span class="eyebrow">STUDY ASSISTANT</span><p><app-study-text [text]="turn.answer" /></p><small>Context: {{pageLabel(turn.pages)}}{{turn.searchedDocument?' · Searched this document':''}}</small></div>
       }@empty{
         @if(!loading()&&!pending()){
           <p class="chat-empty">Ready when you are</p>
         }
       }
       @if(loading()){<p class="field-hint"><app-loading-dots label="Loading conversation" /></p>}
-      @if(pending();as pending){<div class="chat-message question"><span class="eyebrow">YOU · PAGE {{pending.page}}</span><p>{{pending.question}}</p></div><p class="field-hint" role="status"><app-loading-dots label="Thinking" /></p>}
+      @if(pending();as pending){<div class="chat-message question"><span class="eyebrow">YOU · PAGE {{pending.page}}</span><p><app-study-text [text]="pending.question" /></p></div><p class="field-hint" role="status"><app-loading-dots label="Thinking" /></p>}
     </div>
     @if(error()){<p class="form-error" role="alert">{{error()}}</p>}
     <form class="chat-composer" (ngSubmit)="send()">
