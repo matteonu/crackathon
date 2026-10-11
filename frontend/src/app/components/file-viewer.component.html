@@ -1,13 +1,17 @@
 @if(file();as file){
-<div class="file-viewer" (click)="surfaceClick($event)" (keydown.escape)="escape($event)">
+<div class="file-viewer" [class.deck-viewer]="kind()==='deck'" (click)="surfaceClick($event)" (keydown.escape)="escape($event)">
   <form class="file-details" novalidate [formGroup]="details" (ngSubmit)="saveDetails()">
-    <label class="sr-only" for="file-title">File title</label><input id="file-title" class="editable-file-title" formControlName="name" maxlength="180" required (blur)="kind()==='pdf'&&saveDetails()">
-    @if(kind()==='pdf'){
+    <div class="file-title-row">
+      <label class="sr-only" for="file-title">File title</label><input id="file-title" class="editable-file-title" formControlName="name" maxlength="180" required (blur)="kind()==='pdf'&&saveDetails()">
+      @if(kind()==='pdf'){
       <div class="summary-heading">
         <button type="button" class="summary-toggle" [attr.aria-expanded]="summaryExpanded()" aria-controls="file-summary" (click)="summaryExpanded.set(!summaryExpanded())"><app-icon name="down" /><span class="eyebrow">{{file.category}} · Summary</span></button>
         <button type="button" class="text-button" [disabled]="generating()" (click)="summarize()">@if(summaryRunning()){Regenerating…}@else if(file.outputs?.summary?.text){Regenerate summary}@else{ {{file.processing?.status==='error'?'Retry summary':'Generate summary'}} }</button>
       </div>
-      @if(summaryExpanded()){<p id="file-summary" class="generated-file-description" aria-label="Generated file summary" aria-live="polite">@if(summaryRunning()){<app-loading-dots label="Generating a one-sentence summary" />}@else if(file.outputs?.summary?.text){ {{file.outputs.summary.text}} }@else{ {{file.processing?.status==='error'?'Summary generation could not finish. Retry above.':'Your summary will appear here.'}} }</p>}
+      }
+    </div>
+    @if(kind()==='pdf'){
+      <div id="file-summary" class="summary-collapse" [class.expanded]="summaryExpanded()" [attr.aria-hidden]="!summaryExpanded()" [attr.inert]="summaryExpanded()?null:''"><div><p class="generated-file-description" aria-label="Generated file summary" aria-live="polite">@if(summaryRunning()){<app-loading-dots label="Generating a one-sentence summary" />}@else if(file.outputs?.summary?.text){ {{file.outputs.summary.text}} }@else{ {{file.processing?.status==='error'?'Summary generation could not finish. Retry above.':'Your summary will appear here.'}} }</p></div></div>
     }@else{
       <label class="sr-only" for="file-description">File description</label><textarea id="file-description" class="editable-file-description" formControlName="description" rows="2" maxlength="2000" placeholder="Add a short description of this file…"></textarea>
     }
@@ -54,7 +58,7 @@
       }
     </section>
     @if(allowsCards()||allowsMcq()||allowsChat()){<aside class="flashcard-panel" aria-label="Document study tools">
-      <div class="tool-switch" role="tablist" aria-label="Document study tools">
+      <div class="tool-switch" [style.--tool-count]="availableTools().length" [style.--tool-index]="toolIndex()" role="tablist" aria-label="Document study tools">
         @if(allowsCards()){<button type="button" role="tab" [attr.aria-selected]="tool()==='flashcards'" [class.active]="tool()==='flashcards'" (click)="chooseTool('flashcards')">Flashcards</button>}
         @if(allowsMcq()){<button type="button" role="tab" [attr.aria-selected]="tool()==='mcq'" [class.active]="tool()==='mcq'" (click)="chooseTool('mcq')">MC questions</button>}
         @if(allowsChat()){<button type="button" role="tab" [attr.aria-selected]="tool()==='chat'" [class.active]="tool()==='chat'" (click)="chooseTool('chat')">Q&amp;A chat</button>}
@@ -63,18 +67,14 @@
         <div role="tabpanel" [hidden]="tool()!=='chat'"><app-document-chat [documentId]="fileId()" [page]="pageContext().page" [totalPages]="pageContext().total" /></div>
       }
       @if(tool()==='flashcards'&&allowsCards()){
-      <div class="tool-heading"><div><span class="eyebrow">ACTIVE RECALL</span><h3>Flashcards <span class="card-count">{{cards().length}}</span></h3></div><app-icon name="book" /></div>
-      @if(linkedDeck();as deck){<button class="button primary" [disabled]="!cards().length" (click)="startLearning.emit(deck.id)">Start learning</button>}
+      <div class="tool-heading"><h3>Flashcards <span class="card-count">{{cards().length}}</span></h3><button type="button" class="icon-button viewer-play" aria-label="Start learning flashcards" title="Start learning" [disabled]="!cards().length||!linkedDeck()" (click)="startLearning.emit(linkedDeck()!.id)"><app-icon name="play" /></button></div>
       @if(kind()==='pdf'){
-        <div class="generation-settings">
-          <app-learning-mode label="Mode" [mode]="selectedMode()" [disabled]="generating()" (modeChange)="selectedMode.set($event)" />
-          <div class="viewer-card-count-field">
-            <label class="viewer-card-count">Anki cards<input type="number" min="5" max="300" step="1" required [ngModel]="requestedCount()" (ngModelChange)="requestedCount.set($event)" [disabled]="generating()" [attr.aria-invalid]="!validCount()" aria-describedby="viewer-count-hint"></label>
-            <p id="viewer-count-hint" class="field-hint" [class.form-error]="!validCount()">{{validCount()?'Choose 5–300 cards.':'Enter a whole number from 5 to 300.'}}</p>
-          </div>
+        <div class="generation-settings viewer-generation-row">
+          <label class="viewer-card-count">Anki cards<input type="number" min="5" max="300" step="1" required title="Choose 5–300 cards" [ngModel]="requestedCount()" (ngModelChange)="requestedCount.set($event)" [disabled]="generating()" [attr.aria-invalid]="!validCount()" aria-describedby="viewer-count-hint"></label>
+          <app-learning-mode label="Extraction" [compact]="true" [mode]="selectedMode()" [disabled]="generating()" (modeChange)="selectedMode.set($event)" />
+          <button class="button primary" [disabled]="generating()||!validCount()||cardsReady()" (click)="generate()" aria-label="Generate flashcards">{{cardsReady()?'Ready':file.processing?.status==='error'&&file.processing.task!=='summary'?'Retry':'Generate'}}</button>
         </div>
-        <button class="button primary generate-cards" [disabled]="generating()||!validCount()||cardsReady()" (click)="generate()">@if(generating()){<app-loading-dots [label]="summaryRunning()?'Preparing summary':'Generating flashcards'" />}@else{ {{cardsReady()?'Flashcards ready':file.processing?.status==='error'&&file.processing.task!=='summary'?'Retry flashcards':'Generate flashcards'}} }</button>
-        <p class="field-hint" aria-live="polite">@if(summaryRunning()){Your summary is being prepared. Generate cards when it is ready.}@else if(generating()){<app-loading-dots [label]="selectedMode()==='deep'?'Reading text and visuals':'Reading extracted text'" />}@else{Flashcards are generated only when you press the button.}</p>
+        <p id="viewer-count-hint" class="field-hint viewer-generation-hint" [class.form-error]="!validCount()" aria-live="polite">@if(!validCount()){Enter a whole number from 5 to 300.}@else if(summaryRunning()){<app-loading-dots label="Preparing summary" />}@else if(generating()){<app-loading-dots label="Generating flashcards" />}@else{Choose 5–300 cards, then generate.}</p>
       }
       <div class="flashcard-list">@for(card of cards();track card.id){
         <div class="flashcard-row">
@@ -85,13 +85,14 @@
       @if(kind()==='pdf'){<button class="text-button" (click)="addingCard.set(!addingCard())"><app-icon name="plus" /> Add a flashcard</button>}
       @if(addingCard()){<form class="add-card-form" novalidate [formGroup]="cardForm" (ngSubmit)="addCard()"><label>Question<textarea formControlName="question" rows="2" required maxlength="4000"></textarea></label><label>Answer<textarea formControlName="answer" rows="3" required maxlength="8000"></textarea></label><button class="button secondary" type="submit">Save flashcard</button></form>}
       }@else if(tool()==='mcq'&&allowsMcq()){
-        <div class="tool-heading"><div><span class="eyebrow">PRACTICE</span><h3>MC questions</h3></div><app-icon name="book" /></div>
-        <app-learning-mode label="Mode" [mode]="selectedMode()" [disabled]="mcqBusy()" (modeChange)="selectedMode.set($event)" />
-        <div class="viewer-card-count-field"><label class="viewer-card-count">Questions (optional)<input type="number" min="1" max="60" step="1" placeholder="Model decides" [ngModel]="requestedMcqCount()" (ngModelChange)="requestedMcqCount.set($event===''?null:$event)" [disabled]="mcqBusy()" [attr.aria-invalid]="!validMcqCount()" aria-describedby="mcq-count-hint"></label><p id="mcq-count-hint" class="field-hint" [class.form-error]="!validMcqCount()">{{validMcqCount()?'Leave empty to let the model decide, or choose 1–60.':'Enter a whole number from 1 to 60.'}}</p></div>
-        @if(!mcqSets().length&&!mcqLoading()){<button class="button primary generate-cards" [disabled]="mcqBusy()||!validMcqCount()" (click)="generateMcq('initial')">{{mcqBusy()?'Starting…':'Generate questions'}}</button>}
-        @else{<button class="button secondary generate-cards" [disabled]="mcqBusy()||mcqGenerating()||!validMcqCount()" (click)="generateMcq('additional')">Generate additional set</button>}
-        @if(mcqLoading()){<div class="empty-state"><app-loading-dots label="Loading question sets" /></div>}
-        <div class="mcq-set-list">@for(set of mcqSets();track set.id){<article class="mcq-set"><div class="mcq-set-heading"><div><strong>Set {{set.seriesId.slice(0,4)}} · v{{set.version}}</strong><small>{{set.mode}} · {{set.status==='complete'?set.questionCount+' questions':set.status}}</small></div><div class="mcq-set-actions">@if(set.status==='complete'){<button class="button secondary" [disabled]="mcqBusy()" (click)="startMcq(set)">New attempt</button><button class="text-button" [disabled]="mcqBusy()" (click)="generateMcq('regenerate',set)">Regenerate</button>}@else if(set.status==='error'){<span class="form-error">{{set.error}}</span><button class="text-button" [disabled]="mcqBusy()" (click)="retryMcq(set)">Retry</button>}@else{<app-loading-dots label="Generating questions" />}</div></div>@if(set.status==='complete'){<div class="mcq-attempt-list" aria-label="Past attempts">@for(session of mcqSessions()[set.id]??[];track session.id){<button class="mcq-attempt" [disabled]="mcqBusy()" (click)="resumeMcq(session)"><span><strong>{{session.status==='active'?'In progress':'Completed'}}</strong><small>{{formatSessionDate(session.createdAt)}}</small></span><span>{{session.status==='active'?(session.position+' / '+session.total):(session.score+' / '+session.total)}} · {{session.status==='active'?'Resume':'Review'}}</span></button>}@empty{<p class="field-hint">No attempts yet.</p>}</div>}</article>}@empty{@if(!mcqLoading()){<div class="empty-state">No question sets yet.</div>}}</div>
+        <div class="tool-heading"><h3>MC questions <span class="card-count">{{mcqSets().length}}</span></h3></div>
+        <div class="generation-settings viewer-generation-row">
+          <label class="viewer-card-count">Questions<input type="number" min="1" max="60" step="1" placeholder="Auto" title="Leave empty for automatic count, or choose 1–60" [ngModel]="requestedMcqCount()" (ngModelChange)="requestedMcqCount.set($event===''?null:$event)" [disabled]="mcqBusy()||mcqGenerating()" [attr.aria-invalid]="!validMcqCount()" aria-describedby="mcq-count-hint"></label>
+          <app-learning-mode label="Extraction" [compact]="true" [mode]="selectedMode()" [disabled]="mcqBusy()||mcqGenerating()" (modeChange)="selectedMode.set($event)" />
+          <button class="button primary" [disabled]="mcqLoading()||mcqBusy()||mcqGenerating()||!validMcqCount()" (click)="generateMcq(mcqSets().length?'additional':'initial')" [attr.aria-label]="mcqSets().length?'Generate additional question set':'Generate questions'">Generate</button>
+        </div>
+        <p id="mcq-count-hint" class="field-hint viewer-generation-hint" [class.form-error]="!validMcqCount()" aria-live="polite">@if(!validMcqCount()){Enter a whole number from 1 to 60.}@else if(mcqGenerating()){<app-loading-dots label="Generating questions" />}@else if(mcqBusy()){<app-loading-dots label="Working" />}@else{Leave empty for automatic count, or choose 1–60.}</p>
+        <div class="mcq-set-list">@for(set of mcqSets();track set.id){<article class="mcq-set"><div class="mcq-set-heading"><div><strong>Set {{set.seriesId.slice(0,4)}} · v{{set.version}}</strong><small>{{set.mode}} · {{set.status==='complete'?set.questionCount+' questions':set.status}}</small></div><div class="mcq-set-actions">@if(set.status==='complete'){<button type="button" class="icon-button viewer-play" [disabled]="mcqBusy()" (click)="startMcq(set)" aria-label="Start a new MCQ attempt" title="New attempt"><app-icon name="play" /></button><button class="text-button" [disabled]="mcqBusy()" (click)="generateMcq('regenerate',set)">Regenerate</button>}@else if(set.status==='error'){<span class="form-error">{{set.error}}</span><button class="text-button" [disabled]="mcqBusy()" (click)="retryMcq(set)">Retry</button>}@else{<app-loading-dots label="Generating questions" />}</div></div>@if(set.status==='complete'){<div class="mcq-attempt-list" aria-label="Past attempts">@for(session of mcqSessions()[set.id]??[];track session.id){<button class="mcq-attempt" [disabled]="mcqBusy()" (click)="resumeMcq(session)"><span><strong>{{session.status==='active'?'In progress':'Completed'}}</strong><small>{{formatSessionDate(session.createdAt)}}</small></span><span>{{session.status==='active'?(session.position+' / '+session.total):(session.score+' / '+session.total)}} · {{session.status==='active'?'Resume':'Review'}}</span></button>}@empty{<p class="field-hint">No attempts yet.</p>}</div>}</article>}@empty{<div class="empty-state">@if(mcqLoading()){<app-loading-dots label="Loading question sets" />}@else{No question sets yet.}</div>}</div>
         @if(mcq.error()){<p class="form-error" role="alert">{{mcq.error()}}</p>}
       }
     </aside>}

@@ -39,6 +39,8 @@ export class FileViewerComponent {
   readonly allowsChat=computed(()=>!!this.file()&&canChatWithDocument(this.file()!));
   readonly pageContext=signal({page:0,total:0});
   readonly allowsMcq=computed(()=>this.kind()==='pdf'&&['Slides','Scripts'].includes(this.file()?.category??''));
+  readonly availableTools=computed(()=>(['flashcards','mcq','chat'] as const).filter(tool=>tool==='flashcards'?this.allowsCards():tool==='mcq'?this.allowsMcq():this.allowsChat()));
+  readonly toolIndex=computed(()=>Math.max(0,this.availableTools().indexOf(this.tool())));
   readonly currentMcq=computed(()=>{const s=this.mcqSession();return s?.questions?.[s.position]??null;});
   readonly displayedMcq=computed(()=>{const s=this.mcqSession();if(!s?.questions)return null;const review=this.mcqReviewIndex();return s.questions[review??(this.mcqFeedback()?Math.max(0,s.position-1):s.position)]??null;});
   readonly reviewedAnswer=computed<McqSessionAnswer|null>(()=>{if(this.mcqReviewIndex()===null)return null;const session=this.mcqSession(),question=this.displayedMcq();return session?.answers?.find(answer=>answer.questionId===question?.id)??null;});
@@ -97,7 +99,9 @@ export class FileViewerComponent {
   text(line:string):string{return line.replace(/^#{1,3} /,'').replace(/^- /,'• ');}
   async loadMcq():Promise<void>{
     if(this.destroyRef.destroyed)return;
-    clearTimeout(this.mcqPoll);this.mcqLoading.set(true);
+    // Background polling keeps the current sets visible without inserting a
+    // loading row and shifting the panel every 1.5 seconds.
+    clearTimeout(this.mcqPoll);if(!this.mcqSets().length)this.mcqLoading.set(true);
     const sets=await this.mcq.sets(this.fileId(),this.mcqRequests.signal);if(this.destroyRef.destroyed)return;
     if(this.mcq.error()){this.mcqLoading.set(false);if(this.mcqGenerating())this.pollMcq();return;}
     this.mcqSets.set(sets);
