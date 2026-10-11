@@ -1,16 +1,16 @@
 export const MATERIAL_CATEGORIES = ['Slides','Solutions','Scripts','Notes','Transcripts','Books','Exams','Exercises'] as const;
-export const UPLOAD_CATEGORIES = ['Slides','Exercises','Solutions','Exams','Scripts'] as const;
+export const UPLOAD_CATEGORIES = ['Slides','Exercises','Solutions','Exams','Scripts','Notes'] as const;
 export const MATERIAL_MARKERS = ['To read','Done','Revisit','Ignore'] as const;
 export type MaterialCategory = typeof MATERIAL_CATEGORIES[number];
 export type MaterialMarker = typeof MATERIAL_MARKERS[number];
 export type MaterialKind = 'folder' | 'pdf' | 'md' | 'txt' | 'deck';
-export type DocumentType = 'slides' | 'mock_exam' | 'exercise' | 'exercise_solution' | 'script' | 'summary' | 'cards' | 'mcq';
+export type DocumentType = 'slides' | 'mock_exam' | 'exercise' | 'exercise_solution' | 'script' | 'notes' | 'summary' | 'cards' | 'mcq';
 export const CATEGORY_DOCUMENT_TYPES:Partial<Record<MaterialCategory,DocumentType>> = {
-  Slides:'slides', Exams:'mock_exam', Exercises:'exercise', Solutions:'exercise_solution', Scripts:'script'
+  Slides:'slides', Exams:'mock_exam', Exercises:'exercise', Solutions:'exercise_solution', Scripts:'script', Notes:'notes'
 };
 const DOCUMENT_TYPE_LABELS:Record<DocumentType,string> = {
   slides:'slides', mock_exam:'exam', exercise:'exercise', exercise_solution:'exercise solution',
-  script:'script', summary:'summary', cards:'flashcards', mcq:'multiple choice'
+  script:'script', notes:'notes', summary:'summary', cards:'flashcards', mcq:'multiple choice'
 };
 export type ToolId = 'summary' | 'flashcards';
 export interface FlashcardSource { pdfId:string|null; pdfName:string; pages:number[]; evidence:string; }
@@ -50,6 +50,23 @@ export function materialType(file:Material):DocumentType|null {
 export function materialTypeLabel(file:Material):string {
   const type=materialType(file);
   return type?DOCUMENT_TYPE_LABELS[type]:file.category.toLowerCase();
+}
+export function materialListType(file:Material):DocumentType|'markdown'|'text'|null {
+  switch(materialKind(file)) {
+    case 'folder': return null;
+    case 'deck': return 'cards';
+    case 'md': return 'markdown';
+    case 'txt': return 'text';
+    case 'pdf': return materialType(file);
+  }
+}
+export function materialListTypeLabel(file:Material):string {
+  switch(materialKind(file)) {
+    case 'deck': return 'Flashcards';
+    case 'md': return 'Markdown';
+    case 'txt': return 'Text';
+    default: return materialTypeLabel(file);
+  }
 }
 export function canGenerateFlashcards(file:Material):boolean { return materialKind(file)==='pdf'&&['slides','exercise_solution','script'].includes(materialType(file)??''); }
 export function canChatWithDocument(file:Material):boolean { return materialKind(file)==='pdf'&&['slides','exercise_solution','mock_exam','script'].includes(materialType(file)??''); }

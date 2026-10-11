@@ -7,7 +7,9 @@
         @for(category of uploadCategories;track category){<button type="button" [disabled]="materials.loading()||materials.busy()" (click)="prepareUpload(category);rootUpload.click();uploadMenu.open=false"><span>{{category}}</span><small>{{category==='Slides'||category==='Solutions'||category==='Scripts'?'Summary · Optional flashcards':'Summary only'}}</small></button>}
       </div>
     </details>
+    <button type="button" class="button secondary" [disabled]="materials.loading()||materials.busy()" (click)="prepareTextUpload();textUpload.click()"><app-icon name="upload" />Upload notes</button>
     <input #rootUpload hidden type="file" multiple accept=".pdf,application/pdf" (change)="upload($event)">
+    <input #textUpload hidden type="file" multiple accept=".txt,.md,text/plain,text/markdown" (change)="upload($event)">
   </div>
   <div class="library-filters"><input aria-label="Search materials" type="search" placeholder="Find a file or folder…" [ngModel]="query()" (ngModelChange)="query.set($event)"><select aria-label="Filter by marker" [ngModel]="marker()" (ngModelChange)="marker.set($event)"><option value="">All markers</option>@for(m of markers;track m){<option>{{m}}</option>}</select></div>
   @if(materials.error()||localError()){<p class="form-error" role="alert">{{localError()||materials.error()}}</p>}
@@ -18,7 +20,7 @@
     </div></div>
     @if(materials.loading()){<p class="empty-state" role="status"><app-loading-dots label="Loading materials" /></p>}
     @else{@for(row of rows();track row.material.id){
-      <div class="explorer-row" [class.drop-target]="dropFolder()===row.material.id" [class.file-dragging]="draggedFile()===row.material.id" [attr.aria-busy]="movingFile()===row.material.id" (dragover)="kind(row.material)==='folder'&&dragOverFolder($event,row.material.id)" (dragleave)="kind(row.material)==='folder'&&leaveFolder($event)" (drop)="kind(row.material)==='folder'&&drop($event,row.material.id)" [class.folder-active]="kind(row.material)==='folder'&&activeFolder()===row.material.id" [style.--depth]="row.depth+1">
+      <div class="explorer-row" [class.file-row]="kind(row.material)!=='folder'" [class.drop-target]="dropFolder()===row.material.id" [class.file-dragging]="draggedFile()===row.material.id" [attr.aria-busy]="movingFile()===row.material.id" (dragover)="kind(row.material)==='folder'&&dragOverFolder($event,row.material.id)" (dragleave)="kind(row.material)==='folder'&&leaveFolder($event)" (drop)="kind(row.material)==='folder'&&drop($event,row.material.id)" [class.folder-active]="kind(row.material)==='folder'&&activeFolder()===row.material.id" [style.--depth]="row.depth+1">
         @if(kind(row.material)==='folder'){
           <button class="tree-chevron" [attr.aria-label]="(expanded().has(row.material.id)?'Collapse ':'Expand ')+row.material.name" [attr.aria-expanded]="expanded().has(row.material.id)||!!query()||!!marker()" (click)="toggle(row.material.id)"><app-icon [name]="expanded().has(row.material.id)||!!query()||!!marker()?'down':'right'" /></button>
           <button class="explorer-name" (click)="chooseFolder(row.material.id)"><app-icon [name]="expanded().has(row.material.id)?'folder-open':'folder'" /><strong>{{row.material.name}}</strong><span class="tree-meta">{{count(row.material.id)}} cards</span></button>
@@ -28,7 +30,7 @@
             <button class="icon-button small delete-material" [attr.aria-label]="'Delete folder '+row.material.name" title="Delete folder" [disabled]="deleting().has(row.material.id)" (click)="requestFolderDelete(row.material.id)"><app-icon name="trash" /></button>
           </div>
         }@else{
-          <span class="tree-chevron tree-spacer"></span><button class="explorer-name" [draggable]="!movingFile()&&!deleting().has(row.material.id)" (dragstart)="startFileDrag($event,row.material.id)" (dragend)="endFileDrag()" (click)="!draggedFile()&&open(row.material.id)"><span class="file-type-icon" [class.pdf-type]="kind(row.material)==='pdf'">{{kind(row.material)==='md'?'M↓':kind(row.material).toUpperCase()}}</span><span class="tree-file-label"><span class="tree-file-heading"><strong>{{row.material.name}}</strong>@if(kind(row.material)==='pdf'){<span class="tree-document-type">{{typeLabel(row.material)}}</span>}</span>@if(row.material.description){<small>{{row.material.description}}</small>}</span></button>
+          <span class="tree-chevron tree-spacer"></span><button class="explorer-name" [draggable]="!movingFile()&&!deleting().has(row.material.id)" (dragstart)="startFileDrag($event,row.material.id)" (dragend)="endFileDrag()" (click)="!draggedFile()&&open(row.material.id)"><span class="tree-document-type" [attr.data-type]="documentType(row.material)">{{typeLabel(row.material)}}</span><span class="tree-file-label"><strong>{{row.material.name}}</strong>@if(row.material.description){<small>{{row.material.description}}</small>}</span></button>
           @if(row.material.processing?.status==='queued'||row.material.processing?.status==='running'){<span class="processing-status" role="status"><app-generation-loader [compact]="true" [label]="row.material.processing.task==='summary'?'Writing summary':'Generating flashcards'" /></span>}
           @if(row.material.processing?.status==='error'){<button class="text-button processing-status failed" (click)="open(row.material.id)">Processing failed · Retry</button>}
           @if(kind(row.material)==='deck'){
@@ -37,9 +39,10 @@
             <select class="tree-marker" [attr.aria-label]="'Marker for '+row.material.name" [ngModel]="row.material.marker" (ngModelChange)="setMarker(row.material.id,$event)">@for(m of markers;track m){<option>{{m}}</option>}</select>
           }
           <button class="icon-button small delete-material" [attr.aria-label]="'Delete '+row.material.name" title="Delete file" [disabled]="deleting().has(row.material.id)" (click)="remove(row.material.id)"><app-icon name="minus" /></button>
+          <span class="file-format-badge" [attr.data-kind]="kind(row.material)">{{kind(row.material).toUpperCase()}}</span>
         }
       </div>
-    }@empty{<div class="empty-state">{{query()||marker()?'No matching files or folders.':'Create a folder or upload a PDF to get started.'}}</div>}}
+    }@empty{<div class="empty-state">{{query()||marker()?'No matching files or folders.':'Create a folder or upload a PDF, .txt or .md file to get started.'}}</div>}}
   </div>
   @if(exporting()){<div class="explorer-footer"><span>Preparing .apkg…</span></div>}<p class="viewer-notice" aria-live="polite">{{status()}}</p>
 </section>

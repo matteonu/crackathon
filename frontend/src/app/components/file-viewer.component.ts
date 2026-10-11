@@ -57,6 +57,7 @@ export class FileViewerComponent {
   readonly deckCards=computed(()=>this.cards().map(c=>({...c,key:c.id!,fileId:this.file()?.sourcePdfId??this.fileId(),fileName:this.file()?.name??'',deckId:this.fileId()})));
   readonly revealed=signal(false);readonly generating=computed(()=>['queued','running'].includes(this.file()?.processing?.status??''));readonly saving=signal(false);readonly editing=signal(false);readonly addingCard=signal(false);
   readonly error=signal('');readonly notice=signal('');readonly fileUrl=computed(()=>materialFileUrl(this.fileId()));
+  readonly printViewUrl=computed(()=>`${this.fileUrl()}#page=${Math.max(1,this.pageContext().page)}`);
   readonly deletingCard=signal<string|null>(null);
   readonly details=new FormGroup({name:new FormControl('',{nonNullable:true}),description:new FormControl('',{nonNullable:true})});
   readonly content=new FormControl('',{nonNullable:true});readonly cardForm=new FormGroup({question:new FormControl('',{nonNullable:true}),answer:new FormControl('',{nonNullable:true})});

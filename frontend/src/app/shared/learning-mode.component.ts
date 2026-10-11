@@ -6,7 +6,7 @@ import type { LearningMode } from '../models/material';
   template:`<div class="learning-mode-control">
     <span class="learning-mode-label">{{label()}}</span>
     <div class="learning-mode-options" [class.deep-selected]="mode()==='deep'" role="group" [attr.aria-label]="label()" [attr.title]="hint">
-      <button type="button" [class.selected]="mode()==='shallow'" [attr.aria-pressed]="mode()==='shallow'" [disabled]="disabled()" (click)="modeChange.emit('shallow')">Shallow</button>
+      <button type="button" [class.selected]="mode()==='shallow'" [attr.aria-pressed]="mode()==='shallow'" [disabled]="disabled()" (click)="modeChange.emit('shallow')">Fast</button>
       <button type="button" [class.selected]="mode()==='deep'" [attr.aria-pressed]="mode()==='deep'" [disabled]="disabled()" (click)="modeChange.emit('deep')">Deep</button>
     </div>
     @if(!compact()){<span class="learning-mode-hint">{{hint}}</span>}

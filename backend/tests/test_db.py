@@ -21,6 +21,28 @@ def emails(app):
 
 
 class SeedTests(unittest.TestCase):
+    def test_existing_material_type_constraint_accepts_notes_after_restart(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'app.db'
+            with sqlite3.connect(path) as conn:
+                conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, display_name TEXT)")
+                conn.execute("INSERT INTO users VALUES (1, 'alice@ethz.ch', 'Alice')")
+                conn.execute("""CREATE TABLE materials (
+                    id TEXT PRIMARY KEY, user_id INTEGER, subject_id TEXT, parent_id TEXT,
+                    kind TEXT, source_pdf_id TEXT, name TEXT, category TEXT,
+                    type TEXT CHECK (type IS NULL OR type IN ('slides', 'script', 'cards')),
+                    marker TEXT, added_at INTEGER)""")
+                conn.execute("""INSERT INTO materials
+                    (id,user_id,subject_id,kind,name,category,type,marker,added_at)
+                    VALUES ('old-note',1,'subject','pdf','old.pdf','Notes',NULL,'To read',1)""")
+            app = build_app(temp)
+            self.addCleanup(app.extensions['learning_jobs'].pool.shutdown, wait=True)
+            with app.app_context():
+                conn = db.get_db()
+                self.assertEqual(conn.execute("SELECT type FROM materials WHERE id='old-note'").fetchone()['type'], 'notes')
+                with conn:
+                    conn.execute("UPDATE materials SET type='notes' WHERE id='old-note'")
+
     def test_document_type_migration_preserves_the_old_library_and_pdf(self):
         with tempfile.TemporaryDirectory() as temp:
             # Build the pre-migration table with its original material defaults.
@@ -35,7 +57,7 @@ class SeedTests(unittest.TestCase):
                       kind TEXT, name TEXT, description TEXT NOT NULL DEFAULT '', category TEXT,
                       marker TEXT NOT NULL DEFAULT 'To read', size INTEGER NOT NULL DEFAULT 0,
                       content TEXT, sha256 TEXT, added_at INTEGER NOT NULL DEFAULT 0, outputs TEXT, processing TEXT);''')
-                for category in (*CATEGORY_TYPES, 'Notes', 'Books', 'Transcripts'):
+                for category in (*CATEGORY_TYPES, 'Books', 'Transcripts'):
                     conn.execute("INSERT INTO materials VALUES (?,1,'subject',NULL,'pdf',?,'Keep me',?,'Done',123,NULL,'digest',42,?,NULL)",
                                  (category, category + '.pdf', category, '{"summary":{"text":"Keep this."}}'))
                 conn.execute("INSERT INTO materials (id, user_id, subject_id, kind, name, category) VALUES ('folder',1,'subject','folder','Folder','Slides')")

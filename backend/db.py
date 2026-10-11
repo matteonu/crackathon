@@ -123,11 +123,13 @@ def init_db():
         db.execute('BEGIN IMMEDIATE')
         try:
             columns = {r['name'] for r in db.execute('PRAGMA table_info(materials)')}
-            if columns and 'source_pdf_id' not in columns:
+            material_schema = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='materials'").fetchone()
+            if columns and ('source_pdf_id' not in columns or "'notes'" not in material_schema['sql']):
                 material_sql = next(s for s in statements if 'CREATE TABLE IF NOT EXISTS materials (' in s)
                 db.execute(material_sql.replace('CREATE TABLE IF NOT EXISTS materials (',
                                                'CREATE TABLE materials_new ('))
-                names = ','.join('"' + name + '"' for name in sorted(columns))
+                target_columns = {r['name'] for r in db.execute('PRAGMA table_info(materials_new)')}
+                names = ','.join('"' + name + '"' for name in sorted(columns & target_columns))
                 db.execute(f'INSERT INTO materials_new ({names}) SELECT {names} FROM materials')
                 db.execute('DROP TABLE materials')
                 db.execute('ALTER TABLE materials_new RENAME TO materials')

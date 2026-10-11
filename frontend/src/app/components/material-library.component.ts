@@ -1,7 +1,7 @@
 import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MaterialStore } from '../services/material-store';
-import { MATERIAL_MARKERS, Material, MaterialKind, MaterialMarker, MaterialCategory, UPLOAD_CATEGORIES, materialKind, materialTypeLabel, materialCards, materialPath, folderCards, treeRows, validParent } from '../models/material';
+import { MATERIAL_MARKERS, Material, MaterialKind, MaterialMarker, MaterialCategory, UPLOAD_CATEGORIES, materialKind, materialListType, materialListTypeLabel, materialCards, materialPath, folderCards, treeRows, validParent } from '../models/material';
 import { IconComponent } from '../shared/icon.component';
 import { FileViewerComponent } from './file-viewer.component';
 import { FolderFlashcardsComponent } from './folder-flashcards.component';
@@ -13,11 +13,12 @@ import { GenerationLoaderComponent } from '../shared/generation-loader.component
 export class MaterialLibraryComponent {
   readonly subjectId=input.required<string>();readonly materials=inject(MaterialStore);private readonly exporter=inject(FlashcardExportService);
   readonly preview=viewChild<ElementRef<HTMLDialogElement>>('preview');readonly createDialog=viewChild<ElementRef<HTMLDialogElement>>('createDialog');readonly collectionDialog=viewChild<ElementRef<HTMLDialogElement>>('collectionDialog');readonly learningDialog=viewChild<ElementRef<HTMLDialogElement>>('learningDialog');
-  readonly markers=MATERIAL_MARKERS;readonly kind=materialKind;readonly typeLabel=materialTypeLabel;
+  readonly markers=MATERIAL_MARKERS;readonly kind=materialKind;readonly typeLabel=materialListTypeLabel;readonly documentType=materialListType;
   readonly uploadCategories=UPLOAD_CATEGORIES;readonly uploadCategory=signal<MaterialCategory>('Slides');
   private uploadParent:string|null=null;
   private openRequest=0;
   prepareUpload(category:MaterialCategory):void{this.uploadCategory.set(category);this.uploadParent=this.activeFolder();}
+  prepareTextUpload():void{this.uploadParent=this.activeFolder();}
   readonly deleting=signal(new Set<string>());
   readonly deleteDialog=viewChild<ElementRef<HTMLDialogElement>>('deleteDialog');readonly pendingDelete=signal<Material|null>(null);
   readonly query=signal('');readonly marker=signal('');readonly dragging=signal(false);readonly selectedId=signal<string|null>(null);readonly activeFolder=signal<string|null>(null);readonly expanded=signal(new Set<string>());
