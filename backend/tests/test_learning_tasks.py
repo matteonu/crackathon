@@ -95,7 +95,7 @@ class LearningTaskTests(unittest.TestCase):
 
     def test_api_accepts_upload_categories_but_restricts_card_generation(self):
         with tempfile.TemporaryDirectory() as temp:
-            app = build_app(temp, DEV_USER='alice@ethz.ch')
+            app = build_app(temp, DEV_USER='kaaddi@ethz.ch')
             client = app.test_client()
             jobs = app.extensions['learning_jobs']
             with patch.object(jobs, 'submit', return_value={'status': 'queued'}) as submit:

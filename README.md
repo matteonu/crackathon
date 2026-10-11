@@ -103,7 +103,7 @@ Serving the built frontend instead of the dev server: `cd frontend && npm run bu
 **Or run it in Docker, in dev mode:**
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build   # :8080 as alice@ethz.ch
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build   # :8080 as kaaddi@ethz.ch
 ```
 
 Plain `docker compose up -d --build` is the production setup: it expects the reverse proxy to
@@ -137,7 +137,7 @@ when there is no database file yet — a deploy never discards what users added.
   needs a lower number.
 - **`backend/seed/`** holds what production starts with: the shared course catalog and no
   users, so every real visitor gets an empty workspace of their own.
-- **`backend/seed_demo/`** holds the mock dataset (`alice@ethz.ch` and `bob@ethz.ch` with
+- **`backend/seed_demo/`** holds the mock dataset (`kaaddi@ethz.ch` and `bob@ethz.ch` with
   semesters and courses). Dev mode and the tests load it *on top of* `backend/seed/` through
   `SEED_DIRS`; production never loads it.
 
@@ -225,7 +225,7 @@ Those headers are only trustworthy while the app is reachable through the manage
 alone. **Do not** open port 8080 in ufw, and **do not** set access control to `Disabled` on
 the team page: either one lets anyone send the headers themselves.
 
-Locally there is no proxy. `python backend/app.py` stands in as `alice@ethz.ch`; set
+Locally there is no proxy. `python backend/app.py` stands in as `kaaddi@ethz.ch`; set
 `DEV_USER=bob@ethz.ch` in `.env` to be someone else. A real header always wins over it, and
 on the VM `DEV_USER` is unset, so a request that bypasses the proxy gets 401.
 

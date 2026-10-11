@@ -11,6 +11,6 @@ services:
       DATABASE_PATH: /app/data/demo.db
       SEED_DIRS: /app/seed:/app/seed_demo
       RESET_DB_ON_START: "1"
-      DEV_USER: alice@ethz.ch
-      DEV_USER_NAME: Alice Example
+      DEV_USER: kaaddi@ethz.ch
+      DEV_USER_NAME: Karim Addi
     restart: "no"

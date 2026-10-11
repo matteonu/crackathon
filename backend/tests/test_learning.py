@@ -151,7 +151,7 @@ class PipelineTests(unittest.TestCase):
                     failures.append(repr(exc))
                     raise
             jobs = StudyJobs(Path(temp) / 'learning', questions=5, runner=tracked_runner)
-            app = build_app(temp, DEV_USER='alice@ethz.ch')
+            app = build_app(temp, DEV_USER='kaaddi@ethz.ch')
             app.extensions['learning_jobs'] = jobs
             client = app.test_client()
             document_id = str(uuid.uuid4())

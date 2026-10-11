@@ -10,7 +10,7 @@ from tests.support import build_app
 from tests.test_vvz import make_dump
 from vvz import sync
 
-USER = {"X-User-Id": "alice@ethz.ch", "X-User-Name": "Alice"}
+USER = {"X-User-Id": "kaaddi@ethz.ch", "X-User-Name": "Karim Addi"}
 
 
 class CatalogueInAppTests(unittest.TestCase):
