@@ -3,6 +3,7 @@ import { StudyStore } from '../services/study-store';
 import { DayOff, Preferences } from '../models/semester';
 import { IconComponent } from '../shared/icon.component';
 import { dayLabel, validExamTimes } from '../models/study';
+import { GenerationLoaderComponent } from '../shared/generation-loader.component';
 
 /** One course as the form edits it, before anything is sent. */
 interface CourseDraft {courseId:number;name:string;color:string;examDate:string;examStart:string|null;examEnd:string|null;priority:number;difficulty:number;maxStudyHours:number|null;}
@@ -12,7 +13,7 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
 
 /** Everything the scheduler needs from the user: their courses' weights and their habits.
  *  Opened from the calendar whenever they want to adjust it. */
-@Component({selector:'app-schedule-setup',standalone:true,imports:[IconComponent],template:`
+@Component({selector:'app-schedule-setup',standalone:true,imports:[IconComponent,GenerationLoaderComponent],template:`
   <dialog #dialog class="edit-dialog schedule-setup-dialog" aria-labelledby="setup-title" (close)="error.set('')">
     <div class="dialog-top"><span class="eyebrow">STUDY SETUP</span><button type="button" class="icon-button" aria-label="Close" (click)="dialog.close()"><app-icon name="close" /></button></div>
     <h2 id="setup-title">When are your exams, and when do you study?</h2>
@@ -89,7 +90,7 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
       <button type="button" class="text-button" (click)="dialog.close()">Cancel</button>
       <button type="button" class="button secondary" [disabled]="saving()" (click)="save(false)">Save</button>
       <button type="button" class="button primary" [disabled]="saving()||!courses().length" (click)="save(true)">
-        @if(saving()){Saving…}@else{Save and generate}</button>
+        @if(saving()&&store.generating()){<app-generation-loader label="Generating…" [compact]="true" />}@else if(saving()){Saving…}@else{Save and generate}</button>
     </div>
   </dialog>
 `})

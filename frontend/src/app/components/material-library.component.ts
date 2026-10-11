@@ -7,8 +7,9 @@ import { FileViewerComponent } from './file-viewer.component';
 import { FolderFlashcardsComponent } from './folder-flashcards.component';
 import { FlashcardExportService } from '../services/flashcard-export.service';
 import { LoadingDotsComponent } from '../shared/loading-dots.component';
+import { GenerationLoaderComponent } from '../shared/generation-loader.component';
 
-@Component({selector:'app-material-library',standalone:true,imports:[FormsModule,IconComponent,FileViewerComponent,FolderFlashcardsComponent,LoadingDotsComponent],templateUrl:'./material-library.component.html'})
+@Component({selector:'app-material-library',standalone:true,imports:[FormsModule,IconComponent,FileViewerComponent,FolderFlashcardsComponent,LoadingDotsComponent,GenerationLoaderComponent],templateUrl:'./material-library.component.html'})
 export class MaterialLibraryComponent {
   readonly subjectId=input.required<string>();readonly materials=inject(MaterialStore);private readonly exporter=inject(FlashcardExportService);
   readonly preview=viewChild<ElementRef<HTMLDialogElement>>('preview');readonly createDialog=viewChild<ElementRef<HTMLDialogElement>>('createDialog');readonly collectionDialog=viewChild<ElementRef<HTMLDialogElement>>('collectionDialog');readonly learningDialog=viewChild<ElementRef<HTMLDialogElement>>('learningDialog');

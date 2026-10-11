@@ -28,6 +28,7 @@ button, input, textarea, select { font: inherit; }
 button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 button:disabled { opacity: .32; cursor: not-allowed; }
+button:disabled:has(app-generation-loader) { opacity:1; }
 a { color: inherit; text-decoration: none; }
 button { color: inherit; }
 button, a { touch-action: manipulation; }

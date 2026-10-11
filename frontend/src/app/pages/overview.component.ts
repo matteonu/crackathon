@@ -10,6 +10,7 @@ import { TaskStore } from '../services/task-store';
 import { MaterialStore } from '../services/material-store';
 import { UserStore } from '../services/user-store';
 import { IconComponent } from '../shared/icon.component';
+import { GenerationLoaderComponent } from '../shared/generation-loader.component';
 import { Material, MaterialMarker, materialKind, materialTypeLabel } from '../models/material';
 import { MAX_TASK_TITLE, PRIORITIES, Priority, Task, dueLabel, dueState } from '../models/task';
 import { MATERIAL_STATES, OVERVIEW_GREETINGS, materialCoverage, overviewMaterials, overviewTasks } from '../models/overview';
@@ -18,7 +19,7 @@ import { dayLabel } from '../models/study';
 
 @Component({
   standalone: true,
-  imports: [TodayCalendarComponent, FormsModule, RouterLink, IconComponent, CdkDrag, CdkDropList, CdkDropListGroup, CdkScrollable, CdkMenu, CdkMenuItemRadio, CdkMenuTrigger],
+  imports: [TodayCalendarComponent, FormsModule, RouterLink, IconComponent, GenerationLoaderComponent, CdkDrag, CdkDropList, CdkDropListGroup, CdkScrollable, CdkMenu, CdkMenuItemRadio, CdkMenuTrigger],
   templateUrl: './overview.component.html',
   styleUrl: './overview.component.css',
 })
