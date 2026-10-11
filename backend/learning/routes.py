@@ -16,7 +16,7 @@ from flask import Blueprint, current_app, jsonify, request
 from auth import current_user
 import db
 import materials
-from material_types import FLASHCARD_TYPES
+from material_types import GENERATION_TYPES
 
 from . import pdf_study
 from .config import MODELS
@@ -69,8 +69,8 @@ def submit(document_id):
     material = materials.row(document_id)
     if material["kind"] != "pdf":
         raise RequestError(400, "Choose a PDF to process.")
-    if task == "flashcards" and material["type"] not in FLASHCARD_TYPES:
-        raise RequestError(400, "Flashcards are available for slides, solutions and scripts.")
+    if task == "flashcards" and material["type"] not in GENERATION_TYPES:
+        raise RequestError(400, "Flashcards are available for slides, solutions, exams, scripts and notes.")
     try:
         questions = int(request.headers.get("X-Flashcard-Count", str(jobs().questions)))
     except ValueError:
@@ -142,8 +142,8 @@ def questions_json(set_id):
 def document_mcq_sets(document_id):
     document_id = owned(document_id)
     material = materials.row(document_id)
-    if material["kind"] != "pdf" or material["category"] not in {"Slides", "Scripts"}:
-        raise RequestError(400, "MC questions are available for Slides and Scripts PDFs.")
+    if material["kind"] != "pdf" or material["type"] not in GENERATION_TYPES:
+        raise RequestError(400, "MC questions are available for slides, solutions, exams, scripts and notes.")
     conn = db.get_db(); user_id = current_user()["id"]
     if request.method == "GET":
         rows = conn.execute("""SELECT * FROM mcq_sets s WHERE material_id=? AND s.user_id=?

@@ -41,7 +41,7 @@ export class FileViewerComponent {
   readonly allowsCards=computed(()=>!!this.file()&&(this.kind()!=='pdf'||canGenerateFlashcards(this.file()!)));
   readonly allowsChat=computed(()=>!!this.file()&&canChatWithDocument(this.file()!));
   readonly pageContext=signal({page:0,total:0});
-  readonly allowsMcq=computed(()=>this.kind()==='pdf'&&['Slides','Scripts'].includes(this.file()?.category??''));
+  readonly allowsMcq=computed(()=>this.kind()==='pdf'&&this.allowsCards());
   readonly availableTools=computed(()=>(['flashcards','mcq','chat'] as const).filter(tool=>tool==='flashcards'?this.allowsCards():tool==='mcq'?this.allowsMcq():this.allowsChat()));
   readonly toolIndex=computed(()=>Math.max(0,this.availableTools().indexOf(this.tool())));
   readonly currentMcq=computed(()=>{const s=this.mcqSession();return s?.questions?.[s.position]??null;});
@@ -115,7 +115,7 @@ export class FileViewerComponent {
   }
   async loadSessions(setId:string):Promise<void>{const sessions=await this.mcq.sessions(setId,this.mcqRequests.signal);if(!this.destroyRef.destroyed&&!this.mcq.error())this.mcqSessions.update(current=>({...current,[setId]:sessions}));}
   async generateMcq(action:'initial'|'additional'|'regenerate',set?:McqSet):Promise<void>{
-    if(this.mcqBusy()||!this.validMcqCount())return;this.mcqBusy.set(true);const created=await this.mcq.generate(this.fileId(),this.selectedMode(),action,set?.id,this.requestedMcqCount());
+    if(!this.allowsMcq()||this.mcqBusy()||!this.validMcqCount())return;this.mcqBusy.set(true);const created=await this.mcq.generate(this.fileId(),this.selectedMode(),action,set?.id,this.requestedMcqCount());
     if(this.destroyRef.destroyed)return;
     if(created)this.mcqSets.update(values=>[created,...values]);this.mcqBusy.set(false);if(created)this.pollMcq();
   }

@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StudyStore } from '../services/study-store';
@@ -32,8 +32,8 @@ import { TaskListComponent } from '../components/task-list.component';
         } @else {<p class="muted">No flashcards yet. Generate cards from a PDF in Materials.</p>}
       </div>
     </div></section>
-    <div class="subject-workspace"><app-material-library [subjectId]="s.id" />
-      <aside class="subject-sidebar">
+    <div class="subject-workspace"><app-material-library #materialsPanel [subjectId]="s.id" />
+      <aside class="subject-sidebar" [style.height.px]="materialsHeight()">
         <app-task-list [subjectId]="s.id" />
       </aside>
     </div>
@@ -42,6 +42,8 @@ import { TaskListComponent } from '../components/task-list.component';
 `})
 export class SubjectComponent {
   readonly store=inject(StudyStore);private readonly route=inject(ActivatedRoute);
+  private readonly materialsPanel=viewChild<MaterialLibraryComponent,ElementRef<HTMLElement>>('materialsPanel',{read:ElementRef});
+  readonly materialsHeight=signal<number|null>(null);
   private readonly params=toSignal(this.route.paramMap,{initialValue:this.route.snapshot.paramMap});
   readonly subject=computed(()=>this.store.subjects().find(s=>s.id===this.params().get('id')));
   readonly scheduler=inject(SchedulerService);private readonly materials=inject(MaterialStore);
@@ -73,6 +75,17 @@ export class SubjectComponent {
   shownParts<T>(parts:T[]):T[]{return this.allDecks()?parts:parts.slice(0,this.deckLimit);}
   readonly abs=Math.abs;
   constructor(){
+    // Materials determines the height; adding or editing tasks never stretches either panel.
+    // Observe it so folders, filters and responsive layouts keep both panels aligned.
+    effect(onCleanup=>{
+      const panel=this.materialsPanel()?.nativeElement;if(!panel)return;
+      const observer=new ResizeObserver(entries=>{
+        const height=entries[0]?.borderBoxSize?.[0]?.blockSize??panel.offsetHeight;
+        this.materialsHeight.set(height);
+      });
+      observer.observe(panel);
+      onCleanup(()=>observer.disconnect());
+    });
     // New decks and cards change the numbers; ratings refresh them through SchedulerService.review().
     effect(()=>{this.materials.files();void this.scheduler.refreshAnalytics();});
     effect(()=>{this.params();this.allDecks.set(false);});

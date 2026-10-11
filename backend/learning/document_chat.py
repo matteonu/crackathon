@@ -29,7 +29,6 @@ from . import pdf_study
 from .config import model_for, reasoning_for
 from .jobs import RequestError
 
-CHAT_TYPES = {'slides', 'exercise_solution', 'mock_exam', 'script'}
 CHAT_MODEL = model_for("chat")
 CHAT_REASONING_EFFORT = reasoning_for("chat")
 bp = Blueprint('document_chat', __name__, url_prefix='/api/learning/documents')
@@ -283,8 +282,8 @@ class DocumentChat:
         state = self.index(document_id)
         if not material or (state and state['status'] in {'deleting', 'deleted'}):
             raise RequestError(404, 'This file does not exist.')
-        if material['kind'] != 'pdf' or material['type'] not in CHAT_TYPES:
-            raise RequestError(400, 'Chat is available for slides, solutions, exams and scripts.')
+        if material['kind'] != 'pdf':
+            raise RequestError(400, 'Chat is available for PDF documents.')
 
     def history(self, document_id):
         with closing(self.connect()) as conn:

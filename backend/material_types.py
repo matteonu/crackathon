@@ -13,7 +13,7 @@ TYPE_CATEGORIES = {value: key for key, value in CATEGORY_TYPES.items()}
 # results in the existing JSON files; this change does not create artifact rows.
 TYPE_CATEGORIES.update(summary="Notes", cards="Notes", mcq="Notes")
 DOCUMENT_TYPES = frozenset(TYPE_CATEGORIES)
-FLASHCARD_TYPES = {"slides", "exercise_solution", "script"}
+GENERATION_TYPES = {"slides", "exercise_solution", "mock_exam", "script", "notes"}
 
 
 def migrate_material_types(conn):

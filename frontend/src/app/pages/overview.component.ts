@@ -44,7 +44,13 @@ export class OverviewComponent {
   readonly openTasks = computed(() => overviewTasks(this.tasks.tasks(), this.subjectIds()));
   readonly completedTasks = computed(() => this.tasks.tasks().filter(task => this.subjectIds().has(task.subjectId) && task.done)
     .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0)));
-  readonly files = computed(() => overviewMaterials(this.materials.files(), this.subjectIds()));
+  readonly files = computed(() => overviewMaterials(this.materials.files(), this.subjectIds()).map(file => {
+    const marker = this.pendingFiles().get(file.id);
+    return marker ? {...file, marker} : file;
+  }));
+  // A cloned drag placeholder keeps this order, so it lands at the same upload-date
+  // position as the saved card, regardless of where CDK inserts it into the list.
+  readonly fileOrder = computed(() => new Map(this.files().map((file, index) => [file.id, index])));
   readonly coverage = computed(() => materialCoverage(this.files()));
   readonly courseProgress = computed(() => this.store.subjects().map(subject => ({subject,
     ...materialCoverage(this.files().filter(file => file.subjectId === subject.id))})));
@@ -61,7 +67,7 @@ export class OverviewComponent {
   readonly ready = computed(() => this.store.loaded() && !this.materials.loading());
   readonly showDone = signal(false);
   readonly pendingTasks = signal(new Set<string>());
-  readonly pendingFiles = signal(new Set<string>());
+  readonly pendingFiles = signal(new Map<string, MaterialMarker>());
   readonly adding = signal(false);
   readonly notice = signal('');
   readonly draftCourse = signal('');
@@ -100,10 +106,14 @@ export class OverviewComponent {
 
   async setMarker(file: Material, marker: MaterialMarker): Promise<void> {
     if (this.pendingFiles().has(file.id) || file.marker === marker) return;
-    this.pendingFiles.update(ids => new Set(ids).add(file.id));
+    this.pendingFiles.update(files => new Map(files).set(file.id, marker));
     try {
       if (await this.materials.update(file.id, {marker})) this.notice.set(`${file.name} moved to ${marker}.`);
-    } finally { this.pendingFiles.update(ids => { const next = new Set(ids); next.delete(file.id); return next; }); }
+    } finally {
+      // The server's marker takes over on success; removing the override restores
+      // the previous state if saving failed.
+      this.pendingFiles.update(files => { const next = new Map(files); next.delete(file.id); return next; });
+    }
   }
 
   dropMaterial(event: CdkDragDrop<MaterialMarker, MaterialMarker, Material>): void {
