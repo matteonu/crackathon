@@ -15,6 +15,7 @@ export class MaterialLibraryComponent {
   readonly markers=MATERIAL_MARKERS;readonly kind=materialKind;readonly typeLabel=materialTypeLabel;
   readonly uploadCategories=UPLOAD_CATEGORIES;readonly uploadCategory=signal<MaterialCategory>('Slides');
   private uploadParent:string|null=null;
+  private openRequest=0;
   prepareUpload(category:MaterialCategory):void{this.uploadCategory.set(category);this.uploadParent=this.activeFolder();}
   readonly deleting=signal(new Set<string>());
   readonly deleteDialog=viewChild<ElementRef<HTMLDialogElement>>('deleteDialog');readonly pendingDelete=signal<Material|null>(null);
@@ -44,7 +45,22 @@ export class MaterialLibraryComponent {
   count(folderId:string|null):number{return folderCards(this.subjectFiles(),folderId).length;}
   chooseFolder(id:string|null):void{this.activeFolder.set(id);if(id)this.expanded.update(s=>new Set([...s,id]));}
   toggle(id:string):void{this.expanded.update(s=>{const next=new Set(s);next.has(id)?next.delete(id):next.add(id);return next;});}
-  async open(id:string):Promise<void>{if(await this.materials.ensureAvailable(id)&&this.subjectFiles().some(file=>file.id===id)){this.selectedId.set(id);this.preview()?.nativeElement.showModal();}}
+  async open(id:string):Promise<void>{
+    const request=++this.openRequest,subject=this.subjectId();
+    const cached=this.subjectFiles().some(file=>file.id===id);
+    if(cached){
+      this.selectedId.set(id);this.preview()?.nativeElement.showModal();
+    }
+    // Refresh after opening; a confirmed deletion removes the file and the
+    // existing selection effect closes its viewer. Transient failures keep it open.
+    const available=await this.materials.ensureAvailable(id);
+    // References missing from the local list still need their details first.
+    // A late response must not replace a more recently opened file.
+    if(!cached&&available&&request===this.openRequest&&subject===this.subjectId()
+      &&this.subjectFiles().some(file=>file.id===id)){
+      this.selectedId.set(id);this.preview()?.nativeElement.showModal();
+    }
+  }
   newItem(kind:Exclude<MaterialKind,'pdf'|'deck'>,parentId:string|null):void{this.chooseFolder(parentId);this.createType=kind;this.newName='';this.createParent=parentId;this.creationError.set('');this.createDialog()?.nativeElement.showModal();}
   async create():Promise<void>{this.creating.set(true);try{const file=await this.materials.create(this.subjectId(),this.createParent,this.createType,this.newName);if(this.createParent)this.expanded.update(s=>new Set([...s,this.createParent!]));this.createDialog()?.nativeElement.close();if(file.kind==='folder')this.chooseFolder(file.id);else this.open(file.id);this.status.set(`${file.name} created.`);}catch(e){this.creationError.set(e instanceof Error?e.message:'Could not create item.');}finally{this.creating.set(false);}}
   async upload(event:Event):Promise<void>{const input=event.target as HTMLInputElement;await this.materials.add(this.subjectId(),Array.from(input.files??[]),this.uploadCategory(),this.uploadParent);input.value='';}

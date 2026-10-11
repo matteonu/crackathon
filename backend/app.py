@@ -66,6 +66,7 @@ def config_from_env():
         # The course catalogue (courses, course_offerings, ...) is filled from the ETH VVZ by a
         # background thread at start and refreshed daily; VVZ_AUTO_SYNC=0 turns that off.
         "VVZ_AUTO_SYNC": os.environ.get("VVZ_AUTO_SYNC", "1").lower() not in {"0", "false", "no"},
+        "START_BACKGROUND_TASKS": True,
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
         # 50 MB PDFs, with headroom for the request around them.
@@ -99,8 +100,8 @@ def create_app(overrides=None):
 
     app.extensions["learning_jobs"] = StudyJobs(app.config["LEARNING_DIR"], on_complete=save_deck)
     app.extensions["document_chat"] = DocumentChat(app.config["DATABASE_PATH"], app.config["LEARNING_DIR"],
-        background=app.config.get("CHAT_BACKGROUND_TASKS", True) and not app.testing)
-    if app.config.get("CHAT_BACKGROUND_TASKS", True) and not app.testing and (not _flask_cli() or "run" in sys.argv[1:]):
+        background=app.config["START_BACKGROUND_TASKS"] and app.config.get("CHAT_BACKGROUND_TASKS", True) and not app.testing)
+    if app.config["START_BACKGROUND_TASKS"] and app.config.get("CHAT_BACKGROUND_TASKS", True) and not app.testing and (not _flask_cli() or "run" in sys.argv[1:]):
         app.extensions["document_chat"].start()
     app.extensions["mcq_jobs"] = MCQJobs(app.config["DATABASE_PATH"], app.extensions["learning_jobs"])
     auth.init_app(app)
@@ -110,7 +111,7 @@ def create_app(overrides=None):
     app.register_blueprint(learning.bp)
     app.register_blueprint(practice.bp)
     app.register_blueprint(document_chat_bp)
-    if app.config["VVZ_AUTO_SYNC"] and not app.testing and not _flask_cli():
+    if app.config["START_BACKGROUND_TASKS"] and app.config["VVZ_AUTO_SYNC"] and not app.testing and not _flask_cli():
         vvz.sync.start_background(app.config["DATABASE_PATH"], app.config["DATA_DIR"])
 
     @app.errorhandler(RequestError)
@@ -190,6 +191,7 @@ def create_app(overrides=None):
 if __name__ == "__main__":
     # No proxy locally, so stand in for its headers unless the shell says otherwise.
     app = create_app({"SECRET_KEY": os.environ.get("SECRET_KEY") or "dev-only-secret",
+                      "START_BACKGROUND_TASKS": os.environ.get("WERKZEUG_RUN_MAIN") == "true",
                       "DEV_USER": os.environ.get("DEV_USER") or "alice@ethz.ch",
                       "DEV_USER_NAME": os.environ.get("DEV_USER_NAME") or "Alice Example"})
     # The debug reloader runs this file twice; only announce from the outer process.

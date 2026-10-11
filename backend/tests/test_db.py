@@ -4,6 +4,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from app import BACKEND_DIR
 import db
@@ -125,6 +126,40 @@ class SeedTests(unittest.TestCase):
             app.test_client().get('/api/me', headers={'X-User-Id': 'guest@ethz.ch'})
             fresh = build_app(temp, SEED_DIRS=DEMO_SEED, RESET_DB_ON_START=True)
             self.assertEqual(emails(fresh), ['alice@ethz.ch', 'bob@ethz.ch'])
+
+
+class DatabaseConcurrencyTests(unittest.TestCase):
+    def test_writer_can_commit_while_reader_keeps_its_snapshot(self):
+        with tempfile.TemporaryDirectory() as temp:
+            app = build_app(temp)
+            self.addCleanup(app.extensions['learning_jobs'].pool.shutdown, wait=True)
+            self.addCleanup(app.extensions['mcq_jobs'].pool.shutdown, wait=True)
+            path = app.config['DATABASE_PATH']
+            reader, writer = db.connect(path), db.connect(path)
+            try:
+                reader.execute('BEGIN')
+                self.assertEqual(reader.execute('SELECT COUNT(*) FROM users').fetchone()[0], 0)
+                writer.execute('PRAGMA busy_timeout = 0')
+                with writer:
+                    writer.execute("INSERT INTO users(email) VALUES ('concurrent@ethz.ch')")
+                # A catalogue write must not wait for an open reader to finish.
+                self.assertEqual(reader.execute('SELECT COUNT(*) FROM users').fetchone()[0], 0)
+                reader.rollback()
+                self.assertEqual(reader.execute('SELECT COUNT(*) FROM users').fetchone()[0], 1)
+            finally:
+                reader.close()
+                writer.close()
+
+    def test_reloader_parent_does_not_start_background_workers(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with patch('app.vvz.sync.start_background') as sync, patch('app.DocumentChat.start') as chat:
+                app = build_app(temp, START_BACKGROUND_TASKS=False,
+                                VVZ_AUTO_SYNC=True, CHAT_BACKGROUND_TASKS=True)
+                self.addCleanup(app.extensions['learning_jobs'].pool.shutdown, wait=True)
+                self.addCleanup(app.extensions['mcq_jobs'].pool.shutdown, wait=True)
+                sync.assert_not_called()
+                chat.assert_not_called()
+                self.assertFalse(app.extensions['document_chat'].background)
 
 
 if __name__ == '__main__':

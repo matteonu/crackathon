@@ -59,7 +59,7 @@
         @if(allowsMcq()){<button type="button" role="tab" [attr.aria-selected]="tool()==='mcq'" [class.active]="tool()==='mcq'" (click)="chooseTool('mcq')">MC questions</button>}
         @if(allowsChat()){<button type="button" role="tab" [attr.aria-selected]="tool()==='chat'" [class.active]="tool()==='chat'" (click)="chooseTool('chat')">Q&amp;A chat</button>}
       </div>
-      @if(allowsChat()){
+      @if(allowsChat()&&chatOpened()){
         <div role="tabpanel" [hidden]="tool()!=='chat'"><app-document-chat [documentId]="fileId()" [page]="pageContext().page" [totalPages]="pageContext().total" /></div>
       }
       @if(tool()==='flashcards'&&allowsCards()){

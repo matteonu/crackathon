@@ -1,4 +1,4 @@
-import { Component, ElementRef, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MaterialStore } from '../services/material-store';
 import { LearningMode, canGenerateFlashcards, canChatWithDocument, materialFileUrl, materialKind } from '../models/material';
@@ -19,6 +19,11 @@ export class FileViewerComponent {
   readonly startLearning=output<string>();
   readonly mcq=inject(McqService);readonly toolChoice=signal<'flashcards'|'mcq'|'chat'|null>(null);
   readonly tool=computed(()=>!this.allowsChat()?'flashcards':!this.allowsCards()?'chat':this.toolChoice()??(this.cards().length?'flashcards':'chat'));
+  readonly chatOpened=signal(false);
+  private readonly loadedMcq=new Set<string>();
+  private readonly destroyRef=inject(DestroyRef);
+  private readonly mcqRequests=new AbortController();
+  private mcqPoll:ReturnType<typeof setTimeout>|undefined;
   readonly mcqSets=signal<McqSet[]>([]);readonly mcqLoading=signal(false);readonly mcqBusy=signal(false);
   readonly mcqSessions=signal<Record<string,McqSession[]>>({});
   readonly requestedMcqCount=signal<number|null>(null);
@@ -53,8 +58,17 @@ export class FileViewerComponent {
   readonly content=new FormControl('',{nonNullable:true});readonly cardForm=new FormGroup({question:new FormControl('',{nonNullable:true}),answer:new FormControl('',{nonNullable:true})});
   readonly lines=computed(()=>(this.file()?.content??'').split('\n'));
   constructor(){
-    effect(()=>{this.fileId();this.toolChoice.set(null);this.summaryExpanded.set(true);this.pageContext.set({page:0,total:0});this.returnToFile();});
-    effect(()=>{const id=this.fileId();const f=this.materials.files().find(f=>f.id===id);if(f&&!this.loaded.has(id)){this.loaded.add(id);this.selectedMode.set(f.processing?.task==='summary'?'shallow':f.processing?.mode??'shallow');this.requestedCount.set(f.processing?.requestedQuestions||60);this.details.reset({name:f.name,description:f.description??''});this.content.setValue(f.content??'');if(f.kind==='pdf'&&['Slides','Scripts'].includes(f.category))void this.loadMcq();}});
+    this.destroyRef.onDestroy(()=>{clearTimeout(this.mcqPoll);this.mcqRequests.abort();});
+    effect(()=>{this.fileId();this.toolChoice.set(null);this.chatOpened.set(false);this.summaryExpanded.set(true);this.pageContext.set({page:0,total:0});this.returnToFile();});
+    effect(()=>{const id=this.fileId();const f=this.materials.files().find(f=>f.id===id);if(f&&!this.loaded.has(id)){this.loaded.add(id);this.selectedMode.set(f.processing?.task==='summary'?'shallow':f.processing?.mode??'shallow');this.requestedCount.set(f.processing?.requestedQuestions||60);this.details.reset({name:f.name,description:f.description??''});this.content.setValue(f.content??'');}});
+    // Initialize a tool on its first visit, retaining its state when tabs change.
+    effect(()=>{
+      if(this.tool()==='chat'&&this.allowsChat())this.chatOpened.set(true);
+      const id=this.fileId();
+      if(this.tool()==='mcq'&&this.allowsMcq()&&!this.loadedMcq.has(id)){
+        this.loadedMcq.add(id);void this.loadMcq();
+      }
+    });
   }
   private readonly loaded=new Set<string>();
   chooseTool(tool:'flashcards'|'mcq'|'chat'):void{this.toolChoice.set(tool);this.returnToFile();}
@@ -81,14 +95,26 @@ export class FileViewerComponent {
   async moveDeck(parentId:string|null):Promise<void>{if(!await this.materials.update(this.fileId(),{parentId}))this.error.set(this.materials.error());else this.notice.set('Deck moved. Learning progress is preserved.');}
   heading(line:string):number{return /^(#{1,3}) /.exec(line)?.[1].length??0;}
   text(line:string):string{return line.replace(/^#{1,3} /,'').replace(/^- /,'• ');}
-  async loadMcq():Promise<void>{this.mcqLoading.set(true);const sets=await this.mcq.sets(this.fileId());this.mcqSets.set(sets);await Promise.all(sets.filter(set=>set.status==='complete').map(set=>this.loadSessions(set.id)));this.mcqLoading.set(false);}
-  async loadSessions(setId:string):Promise<void>{const sessions=await this.mcq.sessions(setId);this.mcqSessions.update(current=>({...current,[setId]:sessions}));}
+  async loadMcq():Promise<void>{
+    if(this.destroyRef.destroyed)return;
+    clearTimeout(this.mcqPoll);this.mcqLoading.set(true);
+    const sets=await this.mcq.sets(this.fileId(),this.mcqRequests.signal);if(this.destroyRef.destroyed)return;
+    if(this.mcq.error()){this.mcqLoading.set(false);if(this.mcqGenerating())this.pollMcq();return;}
+    this.mcqSets.set(sets);
+    // Completed sets don't change during generation of another set. Refresh their
+    // attempts only after this viewer starts or completes a study session.
+    await Promise.all(sets.filter(set=>set.status==='complete'&&!Object.hasOwn(this.mcqSessions(),set.id)).map(set=>this.loadSessions(set.id)));
+    if(this.destroyRef.destroyed)return;
+    this.mcqLoading.set(false);if(this.mcqGenerating())this.pollMcq();
+  }
+  async loadSessions(setId:string):Promise<void>{const sessions=await this.mcq.sessions(setId,this.mcqRequests.signal);if(!this.destroyRef.destroyed&&!this.mcq.error())this.mcqSessions.update(current=>({...current,[setId]:sessions}));}
   async generateMcq(action:'initial'|'additional'|'regenerate',set?:McqSet):Promise<void>{
     if(this.mcqBusy()||!this.validMcqCount())return;this.mcqBusy.set(true);const created=await this.mcq.generate(this.fileId(),this.selectedMode(),action,set?.id,this.requestedMcqCount());
+    if(this.destroyRef.destroyed)return;
     if(created)this.mcqSets.update(values=>[created,...values]);this.mcqBusy.set(false);if(created)this.pollMcq();
   }
-  async retryMcq(set:McqSet):Promise<void>{if(this.mcqBusy())return;this.mcqBusy.set(true);await this.mcq.retry(set.id);this.mcqBusy.set(false);await this.loadMcq();this.pollMcq();}
-  private pollMcq():void{setTimeout(async()=>{await this.loadMcq();if(this.mcqSets().some(s=>s.status==='queued'||s.status==='running'))this.pollMcq();},1500);}
+  async retryMcq(set:McqSet):Promise<void>{if(this.mcqBusy())return;this.mcqBusy.set(true);await this.mcq.retry(set.id);if(this.destroyRef.destroyed)return;this.mcqBusy.set(false);await this.loadMcq();}
+  private pollMcq():void{clearTimeout(this.mcqPoll);if(!this.destroyRef.destroyed)this.mcqPoll=setTimeout(()=>void this.loadMcq(),1500);}
   async startMcq(set:McqSet):Promise<void>{if(this.mcqBusy())return;this.mcqBusy.set(true);const session=await this.mcq.start(set.id);this.mcqBusy.set(false);if(session){await this.loadSessions(set.id);this.openMcqSession(session);}}
   async resumeMcq(session:McqSession):Promise<void>{if(this.mcqBusy())return;this.mcqBusy.set(true);const detail=await this.mcq.session(session.id);this.mcqBusy.set(false);if(detail)this.openMcqSession(detail);}
   private openMcqSession(session:McqSession):void{this.toolChoice.set('mcq');this.selectedCard.set(null);this.mcqSession.set(session);this.mcqFeedback.set(null);this.mcqReviewIndex.set(session.status==='completed'?0:null);this.selectedOptions.set(new Set());requestAnimationFrame(()=>this.stage()?.nativeElement.scrollIntoView({block:'nearest'}));}

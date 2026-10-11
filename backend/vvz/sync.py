@@ -233,9 +233,11 @@ def import_dump(source_path: str, db_path: str, semesters: list[str], meta: dict
     dst = sqlite3.connect(db_path, timeout=30, isolation_level=None)
     dst.row_factory = sqlite3.Row
     try:
+        # Standalone syncs use the same reader/writer mode as app startup.
+        dst.execute('PRAGMA journal_mode = WAL')
         upgrade_schema(dst)
         dst.execute("PRAGMA foreign_keys = ON")
-        dst.execute("BEGIN")
+        dst.execute("BEGIN IMMEDIATE")
         marks = ",".join("?" for _ in semesters)
         counts = {"courses": 0, "offerings": 0, "lectures": 0, "timeslots": 0, "inherited_timeslots": 0, "lecturers": 0, "sections": 0}
         now = _now()
@@ -314,6 +316,16 @@ def import_dump(source_path: str, db_path: str, semesters: list[str], meta: dict
         courses_by_unit = {}
         for c in src.execute(f"SELECT * FROM course WHERE semkez IN ({marks})", semesters):
             courses_by_unit.setdefault(c["unit_id"], []).append(c)
+        # Most future offerings have no timetable yet. Fetch last year's
+        # timetables once instead of scanning the dump for every offering
+        # while the app database's writer lock is held.
+        previous_semesters = [shift_semester(semester, -2) for semester in semesters]
+        inherited_courses = {}
+        for c in src.execute(
+            f"SELECT c.*, l.number AS unit_number FROM course c JOIN learningunit l ON l.id = c.unit_id WHERE c.semkez IN ({marks})",
+            previous_semesters,
+        ):
+            inherited_courses.setdefault((c["unit_number"], c["semkez"]), []).append(c)
 
         for u in units:
             dst.execute(
@@ -335,10 +347,7 @@ def import_dump(source_path: str, db_path: str, semesters: list[str], meta: dict
                 # writing). ETH timetables are stable year to year, so copy the slots of the same
                 # unit one year earlier and mark them as inherited.
                 previous = shift_semester(u["semkez"], -2)
-                for c in src.execute(
-                    "SELECT c.* FROM course c JOIN learningunit l ON l.id = c.unit_id WHERE l.number = ? AND c.semkez = ?",
-                    (u["number"], previous),
-                ):
+                for c in inherited_courses.get((u["number"], previous), []):
                     parts = c["number"].rsplit(" ", 1)
                     number = c["number"] if len(parts) < 2 else f"{u['number'][:-1]} {parts[1]}"
                     rows = _slot_rows(u["id"], number, c["timeslots"], inherited_from=previous)
