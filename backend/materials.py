@@ -303,6 +303,32 @@ def append_cards(material_id):
     return jsonify(to_json(row(deck_id))), 201
 
 
+@bp.post("/<uuid:material_id>/cards/import")
+def import_cards(material_id):
+    """Import a deck without duplicating retries or resetting existing review progress."""
+    body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict):
+        raise RequestError(400, "Provide an object containing the cards.")
+    cards = body.get("cards")
+    decks.validate_cards(cards)
+    conn = db.get_db()
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        existing = row(str(material_id))
+        if existing["kind"] not in {"deck", "pdf"}:
+            raise RequestError(400, "Import cards into a deck or its source PDF.")
+        deck_id = existing["id"] if existing["kind"] == "deck" else decks.ensure_deck(conn, existing)
+        saved = decks.deck_cards(conn, deck_id)
+        contents = {(card["question"], card["answer"]) for card in saved}
+        for card in cards:
+            key = (card["question"], card["answer"])
+            if key not in contents:
+                saved.append({**card, "id": str(uuid.uuid4()), "generated": False})
+                contents.add(key)
+        decks.replace_cards(conn, deck_id, saved)
+    return jsonify(to_json(row(deck_id))), 201
+
+
 @bp.delete("/<uuid:material_id>/cards/<card_id>")
 def delete_card(material_id, card_id):
     conn = db.get_db()

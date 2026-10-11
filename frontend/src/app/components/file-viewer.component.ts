@@ -13,6 +13,7 @@ import { McqService } from '../services/mcq.service';
 import { McqAnswerResult, McqSession, McqSessionAnswer, McqSet } from '../models/mcq';
 import { CardSourceComponent } from '../shared/card-source.component';
 import { StudyTextComponent } from '../shared/study-text.component';
+import { demoFlashcards, prepareDemoFlashcards } from '../models/demo-flashcards';
 
 @Component({selector:'app-file-viewer',standalone:true,imports:[FormsModule,ReactiveFormsModule,PdfPreviewComponent,IconComponent,LoadingDotsComponent,GenerationLoaderComponent,LearningModeComponent,FolderFlashcardsComponent,DocumentChatComponent,CardSourceComponent,StudyTextComponent],templateUrl:'./file-viewer.component.html'})
 export class FileViewerComponent {
@@ -37,6 +38,12 @@ export class FileViewerComponent {
   readonly selectedOptions=signal<Set<string>>(new Set());
   readonly selectedMode=signal<LearningMode>('shallow');
   readonly requestedCount=signal<number|null>(60);
+  readonly demoMode=signal(false);
+  readonly demoReady=signal(false);
+  readonly demoGenerating=signal(false);
+  readonly demoPhase=signal('');
+  readonly demoProgress=signal(0);
+  private demoRequest:AbortController|undefined;
   readonly validCount=computed(()=>Number.isInteger(this.requestedCount())&&this.requestedCount()!>=5&&this.requestedCount()!<=300);
   readonly allowsCards=computed(()=>!!this.file()&&(this.kind()!=='pdf'||canGenerateFlashcards(this.file()!)));
   readonly allowsChat=computed(()=>!!this.file()&&canChatWithDocument(this.file()!));
@@ -52,6 +59,7 @@ export class FileViewerComponent {
   readonly cardsReady=computed(()=>this.file()?.processing?.task!=='summary'&&this.file()?.processing?.status==='complete'&&this.selectedMode()===(this.file()?.processing?.mode??'shallow')&&this.requestedCount()===(this.file()?.processing?.requestedQuestions??60)&&!this.cards().some(card=>card.generated&&!card.source));
   readonly stage=viewChild<ElementRef<HTMLElement>>('stage');
   readonly file=computed(()=>this.materials.files().find(f=>f.id===this.fileId()));readonly kind=computed(()=>this.file()?materialKind(this.file()!):'pdf');
+  readonly demoCardCount=computed(()=>demoFlashcards(this.file()?.name??'').length);
   readonly linkedDeck=computed(()=>this.materials.files().find(f=>f.kind==='deck'&&f.sourcePdfId===this.fileId()));
   readonly cards=computed(()=>(this.kind()==='pdf'?this.linkedDeck():this.file())?.outputs?.flashcards?.cards??[]);readonly selectedCard=signal<string|null>(null);readonly card=computed(()=>this.cards().find(c=>c.id===this.selectedCard()));
   readonly deckCards=computed(()=>this.cards().map(c=>({...c,key:c.id!,fileId:this.file()?.sourcePdfId??this.fileId(),fileName:this.file()?.name??'',deckId:this.fileId()})));
@@ -63,8 +71,8 @@ export class FileViewerComponent {
   readonly content=new FormControl('',{nonNullable:true});readonly cardForm=new FormGroup({question:new FormControl('',{nonNullable:true}),answer:new FormControl('',{nonNullable:true})});
   readonly lines=computed(()=>(this.file()?.content??'').split('\n'));
   constructor(){
-    this.destroyRef.onDestroy(()=>{clearTimeout(this.mcqPoll);this.mcqRequests.abort();});
-    effect(()=>{this.fileId();this.toolChoice.set(null);this.chatOpened.set(false);this.summaryExpanded.set(true);this.pageContext.set({page:0,total:0});this.returnToFile();});
+    this.destroyRef.onDestroy(()=>{clearTimeout(this.mcqPoll);this.mcqRequests.abort();this.cancelDemo();});
+    effect(()=>{this.fileId();this.cancelDemo();this.toolChoice.set(null);this.chatOpened.set(false);this.summaryExpanded.set(true);this.pageContext.set({page:0,total:0});this.returnToFile();});
     effect(()=>{const id=this.fileId();const f=this.materials.files().find(f=>f.id===id);if(f&&!this.loaded.has(id)){this.loaded.add(id);this.selectedMode.set(f.processing?.task==='summary'?'shallow':f.processing?.mode??'shallow');this.requestedCount.set(f.processing?.requestedQuestions||60);this.details.reset({name:f.name,description:f.description??''});this.content.setValue(f.content??'');}});
     // Initialize a tool on its first visit, retaining its state when tabs change.
     effect(()=>{
@@ -92,7 +100,27 @@ export class FileViewerComponent {
     }finally{this.deletingCard.set(null);}
   }
   async saveDetails():Promise<void>{const value=this.details.getRawValue();if(this.kind()==='pdf'&&value.name===this.file()?.name)return;this.saving.set(true);this.error.set('');const ok=await this.materials.update(this.fileId(),this.kind()==='pdf'?{name:value.name}:value);this.saving.set(false);if(ok){this.details.controls.name.setValue(this.file()!.name);this.notice.set('File details saved.');}else this.error.set(this.materials.error());}
-  async generate():Promise<void>{if(!this.validCount()||!this.allowsCards()||this.generating())return;this.error.set('');this.returnToFile();await this.materials.process(this.fileId(),false,this.selectedMode(),this.requestedCount()!,'flashcards');}
+  private cancelDemo():void{this.demoRequest?.abort();this.demoRequest=undefined;this.demoGenerating.set(false);this.demoReady.set(false);this.demoProgress.set(0);}
+  toggleDemo(enabled:boolean):void{this.cancelDemo();this.demoMode.set(enabled);this.returnToFile();}
+  async generate():Promise<void>{
+    if(!this.allowsCards()||this.demoGenerating())return;
+    if(this.demoMode()){
+      this.cancelDemo();this.error.set('');this.returnToFile();this.demoGenerating.set(true);
+      const request=new AbortController();this.demoRequest=request;
+      try{
+        const cards=await prepareDemoFlashcards(this.file()!.name,this.fileId(),(label,progress)=>{this.demoPhase.set(label);this.demoProgress.set(progress);},request.signal);
+        if(request.signal.aborted)return;
+        this.demoPhase.set('Saving your deck…');this.demoProgress.set(95);
+        const deck=await this.materials.importCards(this.fileId(),cards,request.signal);
+        if(!deck){if(!request.signal.aborted)this.error.set(this.materials.error());return;}
+        if(!request.signal.aborted){this.demoReady.set(true);this.demoProgress.set(100);}
+      }catch(error){if(!request.signal.aborted)this.error.set(error instanceof Error?error.message:'Demo generation could not finish.');}
+      finally{if(this.demoRequest===request){this.demoGenerating.set(false);this.demoRequest=undefined;}}
+      return;
+    }
+    if(!this.validCount()||this.generating())return;
+    this.error.set('');this.returnToFile();await this.materials.process(this.fileId(),false,this.selectedMode(),this.requestedCount()!,'flashcards');
+  }
   async summarize():Promise<void>{if(this.generating())return;this.summaryExpanded.set(true);this.error.set('');await this.materials.process(this.fileId(),false,'deep',undefined,'summary',!!this.file()?.outputs?.summary?.text);}
   async addCard():Promise<void>{const value=this.cardForm.getRawValue();if(!value.question.trim()||!value.answer.trim()){this.error.set('Enter a question and an answer.');return;}if(await this.materials.appendCards(this.fileId(),[{question:value.question.trim(),answer:value.answer.trim(),demo:false}])){this.cardForm.reset();this.addingCard.set(false);this.error.set('');}else this.error.set(this.materials.error());}
   async saveContent():Promise<void>{if(await this.materials.update(this.fileId(),{content:this.content.value})){this.editing.set(false);this.notice.set('File content saved.');}else this.error.set(this.materials.error());}

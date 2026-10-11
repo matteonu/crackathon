@@ -159,6 +159,18 @@ export class MaterialStore {
     try{this.store(await this.request<Material>(`/api/materials/${id}/cards`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cards})}));return true;}
     catch(e){if(e instanceof MaterialRequestError&&e.status===404)this.forget(id);this.error.set(e instanceof Error?e.message:'Could not save flashcards. Please retry.');return false;}
   });}
+  importCards(id:string,cards:Flashcard[],signal?:AbortSignal):Promise<Material|null>{return this.queue(async()=>{
+    if(signal?.aborted)return null;
+    try{
+      const deck=await this.request<Material>(`/api/materials/${encodeURIComponent(id)}/cards/import`,{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cards}),signal,
+      });
+      this.store(deck);this.error.set('');return deck;
+    }catch(e){
+      if(!signal?.aborted)this.error.set(e instanceof Error?e.message:'Could not import the demo deck. Please retry.');
+      return null;
+    }
+  });}
   removeCard(deckId:string,cardId:string):Promise<boolean>{return this.queue(async()=>{
     try{
       this.store(await this.request<Material>(`/api/materials/${encodeURIComponent(deckId)}/cards/${encodeURIComponent(cardId)}`,{method:'DELETE'}));

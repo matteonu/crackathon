@@ -142,6 +142,58 @@ class PersistedScheduler(unittest.TestCase):
         with restarted.app_context():
             self.assertEqual(db.get_db().execute('SELECT count(*) FROM flashcard_reviews WHERE deck_id=?', (deck['id'],)).fetchone()[0], 1)
 
+    def test_imported_demo_deck_supports_reviews_analytics_and_idempotent_retries(self):
+        pdf = self.material(name='final-slides.pdf')
+        manual = self.client.post(f"/api/materials/{pdf['id']}/cards", headers=ALICE,
+                                  json={'cards': [{'question': 'Manual card?', 'answer': 'Keep this.'}]}).get_json()
+        manual_id = manual['outputs']['flashcards']['cards'][0]['id']
+        cards = [{**CARD, 'id': 'fixture-id', 'demo': True, 'source': {
+            'pdfId': pdf['id'], 'pdfName': pdf['name'], 'pages': [4],
+            'evidence': 'Source-page reference preserved from the supplied Anki package.'}}]
+        url = f"/api/materials/{pdf['id']}/cards/import"
+        response = self.client.post(url, headers=ALICE, json={'cards': cards + cards})
+        # Incoming fixture IDs must still be valid and unique; retries are independent requests.
+        self.assertEqual(response.status_code, 400)
+        response = self.client.post(url, headers=ALICE, json={'cards': cards})
+        self.assertEqual(response.status_code, 201, response.get_json())
+        deck = response.get_json()
+        saved = deck['outputs']['flashcards']['cards']
+        self.assertEqual(len(saved), 2)
+        self.assertEqual(saved[0]['id'], manual_id)
+        self.assertNotEqual(saved[1]['id'], 'fixture-id')
+        self.assertEqual(saved[1]['source']['pdfId'], pdf['id'])
+        imported = next(c for c in self.session(deck=deck['id'])['cards'] if c['demo'])
+        self.assertEqual(self.rate(imported, 'easy').status_code, 200)
+        with self.app.app_context():
+            progress = dict(db.get_db().execute('SELECT * FROM flashcard_progress WHERE card_id=?',
+                                               (imported['id'],)).fetchone())
+        repeated = self.client.post(url, headers=ALICE, json={'cards': cards}).get_json()
+        self.assertEqual(repeated['id'], deck['id'])
+        self.assertEqual(repeated['outputs']['flashcards']['cards'], saved)
+        with self.app.app_context():
+            self.assertEqual(dict(db.get_db().execute('SELECT * FROM flashcard_progress WHERE card_id=?',
+                                                     (imported['id'],)).fetchone()), progress)
+        restarted = build_app(self.temp.name)
+        listed = restarted.test_client().get('/api/materials', headers=ALICE).get_json()
+        self.assertTrue(any(d['id'] == deck['id'] for d in listed))
+        analytics = restarted.test_client().get('/api/practice/analytics',
+                    query_string={'subject': 'subject', 'deck': deck['id']}, headers=ALICE).get_json()
+        self.assertEqual(analytics[0]['reviews'], 1)
+        self.assertEqual(self.client.post(url, headers=BOB, json={'cards': cards}).status_code, 404)
+
+    def test_import_creates_independent_card_ids_for_each_pdf_and_validates_sources(self):
+        first, second = self.material(name='first.pdf'), self.material(name='second.pdf')
+        cards = [{**CARD, 'id': 'same-fixture-id', 'demo': True}]
+        decks_saved = [self.client.post(f"/api/materials/{pdf['id']}/cards/import", headers=ALICE,
+                                       json={'cards': cards}).get_json() for pdf in (first, second)]
+        self.assertNotEqual(decks_saved[0]['outputs']['flashcards']['cards'][0]['id'],
+                            decks_saved[1]['outputs']['flashcards']['cards'][0]['id'])
+        invalid = [{**CARD, 'question': 'Invalid source?', 'source': {
+            'pdfId': str(uuid.uuid4()), 'pdfName': 'foreign.pdf', 'pages': [1], 'evidence': 'Reference'}}]
+        response = self.client.post(f"/api/materials/{first['id']}/cards/import", headers=ALICE,
+                                    json={'cards': invalid})
+        self.assertEqual(response.status_code, 400)
+
     def test_move_and_rename_preserve_progress_source_deletion_disconnects(self):
         pdf = self.material()
         deck = self.generated(pdf)
