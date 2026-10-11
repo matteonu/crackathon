@@ -1,7 +1,7 @@
 <a class="skip-link" href="#main-content" (click)="$event.preventDefault(); main.focus()">Skip to main content</a>
 <div class="app-shell">
   <aside class="sidebar">
-    <a class="brand" routerLink="/" aria-label="Studyphase overview"><span class="brand-mark">s<span>.</span></span><span>studyphase</span></a>
+    <app-theme-wheel />
     <div class="nav-label">YOUR WORKSPACE</div>
     <nav class="primary-nav" aria-label="Main navigation">
       <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" ariaCurrentWhenActive="page"><app-icon name="grid" /> <span>Overview</span></a>
