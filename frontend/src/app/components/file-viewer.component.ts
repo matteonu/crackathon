@@ -6,6 +6,7 @@ import { DocumentChatComponent } from './document-chat.component';
 import { PdfPreviewComponent } from './pdf-preview.component';
 import { IconComponent } from '../shared/icon.component';
 import { LoadingDotsComponent } from '../shared/loading-dots.component';
+import { GenerationLoaderComponent } from '../shared/generation-loader.component';
 import { LearningModeComponent } from '../shared/learning-mode.component';
 import { FolderFlashcardsComponent } from './folder-flashcards.component';
 import { McqService } from '../services/mcq.service';
@@ -13,7 +14,7 @@ import { McqAnswerResult, McqSession, McqSessionAnswer, McqSet } from '../models
 import { CardSourceComponent } from '../shared/card-source.component';
 import { StudyTextComponent } from '../shared/study-text.component';
 
-@Component({selector:'app-file-viewer',standalone:true,imports:[FormsModule,ReactiveFormsModule,PdfPreviewComponent,IconComponent,LoadingDotsComponent,LearningModeComponent,FolderFlashcardsComponent,DocumentChatComponent,CardSourceComponent,StudyTextComponent],templateUrl:'./file-viewer.component.html'})
+@Component({selector:'app-file-viewer',standalone:true,imports:[FormsModule,ReactiveFormsModule,PdfPreviewComponent,IconComponent,LoadingDotsComponent,GenerationLoaderComponent,LearningModeComponent,FolderFlashcardsComponent,DocumentChatComponent,CardSourceComponent,StudyTextComponent],templateUrl:'./file-viewer.component.html'})
 export class FileViewerComponent {
   readonly mathHint=String.raw`Inline math: \(x^2\). Display math: \[\frac{x}{y}\].`;
   readonly fileId=input.required<string>();readonly materials=inject(MaterialStore);

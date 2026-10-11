@@ -4,10 +4,11 @@ import { StudyDemoService } from '../services/study-demo.service';
 import { MaterialStore } from '../services/material-store';
 import { CardSourceComponent } from '../shared/card-source.component';
 import { StudyTextComponent } from '../shared/study-text.component';
+import { GenerationLoaderComponent } from '../shared/generation-loader.component';
 
-@Component({selector:'app-material-tool',standalone:true,imports:[CardSourceComponent,StudyTextComponent],template:`
+@Component({selector:'app-material-tool',standalone:true,imports:[CardSourceComponent,StudyTextComponent,GenerationLoaderComponent],template:`
   <section class="material-tool"><div class="tool-heading"><div><h3>{{title()}}</h3><p class="muted">{{description()}}</p></div><span class="demo-badge">Demo</span></div>
-    <button class="button secondary" [disabled]="loading()" (click)="generate()">{{loading()?'Generating…':result()?'Regenerate '+title().toLowerCase():'Generate '+title().toLowerCase()}}</button>
+    <button class="button secondary" [disabled]="loading()" (click)="generate()">@if(loading()){<app-generation-loader label="Generating…" [compact]="true" />}@else{ {{result()?'Regenerate '+title().toLowerCase():'Generate '+title().toLowerCase()}} }</button>
     <div aria-live="polite">@if(error()){<p class="form-error">{{error()}} <button class="text-button" (click)="generate()">Retry</button></p>}
     @if(result();as output){
       @if(output.text){<p class="generated-text"><app-study-text [text]="output.text" /></p>}

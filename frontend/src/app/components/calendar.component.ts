@@ -6,6 +6,7 @@ import { PlanBlock, blockLabel, dayHourDifferences, isStudyDayOff, mealBlock, mi
 import type { HourDifference } from '../models/semester';
 import { IconComponent } from '../shared/icon.component';
 import { ScheduleSetupComponent } from './schedule-setup.component';
+import { GenerationLoaderComponent } from '../shared/generation-loader.component';
 
 const HOUR=56;const SNAP=15;const MIN_SLOT=15;const BLOCK_GAP=6;
 /** A gesture in progress: moving a slot, dragging one of its edges, or drawing a new one. */
@@ -14,7 +15,7 @@ interface Drag{mode:'move'|'start'|'end'|'create';id:number|null;date:string;sta
 interface CalendarSlot extends PlanBlock{displayName:string;color:string;duration:number;top:number;height:number;
   isMeal:boolean;ariaLabel:string;title:string;deleteLabel:string;}
 
-@Component({selector:'app-calendar',standalone:true,imports:[IconComponent,ScheduleSetupComponent],templateUrl:'./calendar.component.html'})
+@Component({selector:'app-calendar',standalone:true,imports:[IconComponent,ScheduleSetupComponent,GenerationLoaderComponent],templateUrl:'./calendar.component.html'})
 export class CalendarComponent {
   readonly store=inject(StudyStore);private readonly router=inject(Router);
   private readonly destroyRef=inject(DestroyRef);
