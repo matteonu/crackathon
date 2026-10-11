@@ -70,6 +70,8 @@ export class StudyStore {
   /** The generated schedule, or null while none has been generated. */
   readonly generatedPlan = signal<GeneratedPlan | null>(null);
   readonly courseTimetable = signal<CourseTimetable | null>(null);
+  readonly refreshingTimetable = signal(false);
+  readonly timetableError = signal('');
   readonly calendarEntries = computed(() => calendarEntries(this.generatedPlan()?.blocks ?? [],
     this.courseTimetable()?.events ?? [], this.subjects(), this.examSession()));
   readonly calendarStudyBlocks = computed(() => this.calendarEntries().flatMap(entry => entry.block ? [entry.block] : []));
@@ -85,6 +87,7 @@ export class StudyStore {
   readonly notice = signal('');
   private noticeTimer?: ReturnType<typeof setTimeout>;
   private writes: Promise<unknown> = Promise.resolve();
+  private loadVersion = 0;
 
   constructor() {
     void this.load();
@@ -114,11 +117,16 @@ export class StudyStore {
   /** Loads the selected semester's plan (the server remembers the choice). Keeps the shown week
    *  when it is still in range, unless `newSemester` says the user just switched. */
   async load(newSemester=false):Promise<void> {
+    const version = ++this.loadVersion;
+    this.refreshingTimetable.set(false);
     try {
       const semesters = await this.request<Semesters>('/api/semesters');
+      if (version !== this.loadVersion) return;
       this.semesters.set(semesters.available); this.currentSemkez.set(semesters.current);
       if (!this.semkez()) this.semkez.set(semesters.selected);
-      const plan = await this.request<Plan>(`/api/semesters/${this.semkez()}/plan`);
+      const semester = this.semkez();
+      const plan = await this.request<Plan>(`/api/semesters/${semester}/plan`);
+      if (version !== this.loadVersion || semester !== this.semkez()) return;
       const data = planToData(plan, today());
       const first = !this.loaded() || newSemester;
       this.state.set(data);
@@ -128,10 +136,24 @@ export class StudyStore {
       this.courseTimetable.set(plan.timetable ?? null);
       if (first || this.weekStart() < this.firstWeek() || this.weekStart() > this.lastWeek()) this.weekStart.set(mondayOf(today()));
       this.loaded.set(true); this.loadError.set('');
+      // Show the saved plan immediately while current ETH times refresh separately.
+      void this.refreshTimetable(version, semester);
     } catch (e) {
+      if (version !== this.loadVersion) return;
       const message = e instanceof Error ? e.message : 'Could not load your study plan.';
       this.loadError.set(message);
     }
+  }
+
+  private async refreshTimetable(version:number, semester:string):Promise<void> {
+    this.refreshingTimetable.set(true); this.timetableError.set('');
+    const current = () => version === this.loadVersion && semester === this.semkez();
+    try {
+      const timetable = await this.request<CourseTimetable>(`/api/semesters/${semester}/timetable/refresh`, {method:'POST'});
+      if (current()) this.courseTimetable.set(timetable);
+    } catch {
+      if (current()) this.timetableError.set('Could not refresh course times. Your saved timetable is still shown.');
+    } finally { if (current()) this.refreshingTimetable.set(false); }
   }
 
   /** Sends a change after the ones before it. On failure the server's version is reloaded. */
@@ -351,8 +373,9 @@ export class StudyStore {
   /** One course's availability can change every course's share of the semester target. */
   private async refreshTargets():Promise<void> {
     const semester=this.semkez();
+    const version=this.loadVersion;
     const plan=await this.request<Plan>(`/api/semesters/${semester}/plan`);
-    if(this.semkez()!==semester)return;
+    if(this.semkez()!==semester || version!==this.loadVersion)return;
     this.planSubjects.set(plan.subjects);
     const targets=new Map(plan.subjects.map(s=>[s.id,s.targetHours]));
     this.state.update(data=>({...data,subjects:data.subjects.map(subject=>
@@ -394,17 +417,24 @@ export class StudyStore {
     return this.request<CourseHit[]>(`/api/courses?semkez=${encodeURIComponent(this.semkez())}&q=${encodeURIComponent(q)}&limit=20`);
   }
   /** Adds a course to this semester. It becomes a subject once the plan is reloaded. */
-  async addCourse(hit:CourseHit):Promise<void> {
-    await this.request(`/api/semesters/${this.semkez()}/courses`,this.json('POST',{courseId:hit.id}));
-    await this.load();
-    this.announce(`${hit.title} added to ${this.data().semester}.`);
+  addCourse(hit:CourseHit):Promise<void> {
+    return this.changeCourses(`/api/semesters/${this.semkez()}/courses`, this.json('POST',{courseId:hit.id}), `${hit.title} added`);
   }
   /** Removes a course from this semester, together with its recorded hours and planned sessions. */
-  async removeCourse(subject:Subject):Promise<void> {
-    await this.writes;
-    await this.request(this.courseUrl(subject.id),{method:'DELETE'});
-    await this.load();
-    this.announce(`${subject.name} removed from ${this.data().semester}.`);
+  removeCourse(subject:Subject):Promise<void> {
+    return this.changeCourses(this.courseUrl(subject.id), {method:'DELETE'}, `${subject.name} removed`);
+  }
+
+  private changeCourses(url:string, init:RequestInit, message:string):Promise<void> {
+    const semester = this.semkez();
+    const run = this.writes.then(async () => {
+      await this.request(url, init);
+      if (semester !== this.semkez()) return;
+      await this.load();
+      this.announce(`${message} (${this.data().semester}).`);
+    });
+    this.writes = run.catch(() => undefined);
+    return run;
   }
 
   announce(message:string):void {

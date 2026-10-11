@@ -15,7 +15,7 @@ import { IconComponent } from '../shared/icon.component';
       @if(query().trim().length >= 2 && !searching() && !hits().length && !error()){<p class="course-empty">No courses match “{{query().trim()}}”</p>}
       <ul>@for(hit of hits();track hit.id){
         <li class="course-hit"><div><strong>{{hit.title}}</strong><span>{{hit.code}}@if(hit.ects!==null){ · {{hit.ects}} ECTS}@if(hit.professor){ · {{hit.professor}}}</span></div>
-          <button type="button" class="button secondary" [disabled]="hit.added || adding()===hit.id" (click)="add(hit)">
+          <button type="button" class="button secondary" [disabled]="hit.added || adding()!==null" (click)="add(hit)">
             @if(hit.added){<app-icon name="check" /> Added}@else if(adding()===hit.id){Adding…}@else{<app-icon name="plus" /> Add}</button></li>
       }</ul>
     </div>

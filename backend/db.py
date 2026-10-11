@@ -20,7 +20,7 @@ SCHEMA_PATH = os.path.join(BACKEND_DIR, "schema.sql")
 
 # Filled by the VVZ sync (backend/vvz/), never by the seed, so dump-seed leaves them out.
 VVZ_TABLES = {"course_offerings", "course_lectures", "course_timeslots", "lecturers",
-              "course_lecturers", "course_sections", "course_ratings", "vvz_meta"}
+              "course_lecturers", "course_sections", "course_ratings", "vvz_meta", "course_timetable_cache"}
 # The sync also adds thousands of rows to `courses`; the seed only needs the ones the
 # demo data points at, everything else comes back from VVZ.
 SEED_COURSES_SQL = """SELECT * FROM courses WHERE id IN (SELECT course_id FROM semester_courses)

@@ -47,6 +47,10 @@ export class CalendarComponent {
   readonly hasCourseDays=computed(()=>this.store.week().some(date=>date<this.store.examSession().start));
   readonly inheritedTerms=computed(()=>[...new Set(this.courseEvents().map(event=>event.inheritedFrom).filter(Boolean))].join(', '));
   readonly hasBiweekly=computed(()=>this.courseEvents().some(event=>event.biweekly));
+  readonly coursesWithoutTimes=computed(()=>{
+    const scheduled=new Set(this.store.courseTimetable()?.events.map(event=>event.subjectId)??[]);
+    return this.store.subjects().filter(subject=>!scheduled.has(subject.id));
+  });
   private readonly allowedDates=computed(()=>{
     const session=this.store.examSession();
     return new Set(this.store.dates().filter(date=>date>=session.start&&date<=session.end));
