@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { addDays, dailyTotal, isValidDate, mondayOf, sumHours, validateData, weekDays, segmentedDate, validSession, sessionsOverlap } from '../src/app/models/study.ts';
+import { addDays, dailyTotal, isValidDate, mondayOf, sumHours, validateData, weekDays, validSession, sessionsOverlap } from '../src/app/models/study.ts';
 import type { StudyData } from '../src/app/models/study.ts';
 
 const seed=JSON.parse(readFileSync(new URL('./fixtures/study-data.json',import.meta.url),'utf8')) as StudyData;
@@ -69,14 +69,6 @@ test('reference date must lie in the imported phase and cards must balance',()=>
   assert.equal(validateData(data),false);
   data.referenceDate=seed.referenceDate;data.anki[0].total++;
   assert.equal(validateData(data),false);
-});
-
-test('segmented dates reject partial, impossible, and non-numeric input',()=>{
-  assert.equal(segmentedDate('6','1','2025'),'2025-01-06');
-  assert.equal(segmentedDate('29','02','2024'),'2024-02-29');
-  for(const [day,month,year] of [['29','02','2025'],['31','04','2025'],['','01','2025'],['1','1','25'],['1e','01','2025'],['00','01','2025']]){
-    assert.equal(segmentedDate(day,month,year),null);
-  }
 });
 
 test('planned sessions honor both exam-session boundaries and midnight',()=>{

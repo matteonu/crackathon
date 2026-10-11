@@ -46,12 +46,6 @@ export interface PlannedSession {
   hours: number;
 }
 
-export function segmentedDate(day: string, month: string, year: string): string | null {
-  if (!/^\d{1,2}$/.test(day) || !/^\d{1,2}$/.test(month) || !/^\d{4}$/.test(year)) return null;
-  const iso = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-  return isValidDate(iso) ? iso : null;
-}
-
 export function safeHomepage(value: string): boolean {
   try { return ['https:', 'http:'].includes(new URL(value).protocol); } catch { return false; }
 }
