@@ -89,25 +89,13 @@ export class MaterialStore {
       this.assertParent(subjectId,parentId);const saved=added;
       for(const file of files){
         const extension=/\.([^.]+)$/.exec(file.name)?.[1]?.toLowerCase();
-        if(extension!=='pdf'&&extension!=='md'&&extension!=='txt')throw new Error(`${file.name} must be a PDF, .md or .txt file.`);
-        if(extension==='pdf'&&file.size>=50_000_000)throw new Error(`${file.name} must be smaller than 50 MB.`);
-        if(extension==='pdf'&&!(await file.slice(0,1024).text()).includes('%PDF-'))throw new Error(`${file.name} is not a PDF.`);
-        let content:string|undefined;
-        if(extension!=='pdf'){
-          if(file.size>800_000)throw new Error(`${file.name} is too large. Notes can contain up to 200,000 characters.`);
-          try{content=new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer());}
-          catch{throw new Error(`${file.name} must be a UTF-8 text file.`);}
-          if(content.length>200_000)throw new Error(`${file.name} is too long. Notes can contain up to 200,000 characters.`);
-        }
+        if(extension!=='pdf')throw new Error(`${file.name} must be a PDF.`);
+        if(file.size>=50_000_000)throw new Error(`${file.name} must be smaller than 50 MB.`);
+        if(!(await file.slice(0,1024).text()).includes('%PDF-'))throw new Error(`${file.name} is not a PDF.`);
         let name=file.name;let suffix=2;
         const used=(candidate:string)=>[...this.files(),...saved].some(f=>f.subjectId===subjectId&&(f.parentId??null)===parentId&&f.name.toLowerCase()===candidate.toLowerCase());
         while(used(name))name=file.name.replace(/\.[^.]+$/,` (${suffix++}).${extension}`);
         if(name.length>180)throw new Error(`${file.name} has a name longer than 180 characters.`);
-        if(extension!=='pdf'){
-          saved.push(this.store(await this.request<Material>('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({id:crypto.randomUUID(),subjectId,parentId,kind:extension,name,content,category:'Notes',marker:'To read'})})));
-          continue;
-        }
         // The row comes first so the id exists; then the bytes are uploaded once, and
         // processing reads them from the server instead of sending them again.
         const created=await this.request<Material>('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},

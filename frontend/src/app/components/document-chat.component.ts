@@ -23,10 +23,6 @@ interface ChatState {index:{status:string;error:string|null};turns:ChatTurn[];}
       @for(turn of turns();track turn.id){
         <div class="chat-message question"><span class="eyebrow">YOU · PAGE {{turn.page}}</span><p><app-study-text [text]="turn.question" /></p></div>
         <div class="chat-message answer"><span class="eyebrow">STUDY ASSISTANT</span><p><app-study-text [text]="turn.answer" /></p><small>Context: {{pageLabel(turn.pages)}}{{turn.searchedDocument?' · Searched this document':''}}</small></div>
-      }@empty{
-        @if(!loading()&&!pending()){
-          <p class="chat-empty">Ready when you are</p>
-        }
       }
       @if(loading()){<p class="field-hint"><app-loading-dots label="Loading conversation" /></p>}
       @if(pending();as pending){<div class="chat-message question"><span class="eyebrow">YOU · PAGE {{pending.page}}</span><p><app-study-text [text]="pending.question" /></p></div><p class="field-hint"><app-generation-loader label="Generating answer…" /></p>}

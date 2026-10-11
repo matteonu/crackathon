@@ -4,12 +4,10 @@ import { contextPages, visiblePdfPage } from '../src/app/models/pdf-context.ts';
 import { canChatWithDocument } from '../src/app/models/material.ts';
 import type { Material, DocumentType } from '../src/app/models/material.ts';
 
-test('chat uses the document schema and excludes exercises, notes and folders',()=>{
+test('all PDF types have chat, including exercises and legacy unclassified documents',()=>{
   const material:Material={id:'doc',subjectId:'math',name:'test.pdf',size:1,added:0,category:'Slides',marker:'To read',kind:'pdf'};
-  for(const type of ['slides','exercise_solution','mock_exam','script'] as DocumentType[])assert.equal(canChatWithDocument({...material,type}),true);
-  for(const type of ['exercise','summary','cards','mcq',null] as (DocumentType|null)[])assert.equal(canChatWithDocument({...material,type}),false);
-  assert.equal(canChatWithDocument({...material,kind:'folder'}),false);
-  assert.equal(canChatWithDocument({...material,kind:'txt'}),false);
+  for(const type of ['slides','exercise_solution','mock_exam','script','exercise','notes','summary','cards','mcq',null] as (DocumentType|null)[])assert.equal(canChatWithDocument({...material,type}),true);
+  for(const kind of ['folder','txt','md','deck'] as const)assert.equal(canChatWithDocument({...material,kind}),false);
 });
 
 test('page context is clamped at the ends and disabled until the PDF loads',()=>{

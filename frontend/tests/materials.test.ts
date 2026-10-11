@@ -12,7 +12,7 @@ const fixture=()=>[file('week1',null,'folder'),file('lecture','week1','folder'),
 test('Materials labels every file kind and keeps folders unlabeled',()=>{
   for(const [kind,type,label] of [
     ['deck','cards','Flashcards'],['md','markdown','Markdown'],['txt','text','Text'],
-    ['pdf','slides','slides']
+    ['pdf','slides','Slides']
   ] as const){
     const item=file('item',null,kind);
     assert.equal(materialListType(item),type);
@@ -55,7 +55,7 @@ test('upload types match the backend codes and stored types control card eligibi
   assert.equal(normalizeMaterial(file('folder',null,'folder')).type,null);
   const pdf={...file('typed',null),type:'mock_exam' as const};
   assert.equal(normalizeMaterial(pdf).type,'mock_exam');
-  assert.equal(canGenerateFlashcards(pdf),false);
+  assert.equal(canGenerateFlashcards(pdf),true);
   assert.equal(canGenerateFlashcards({...pdf,type:'script',category:'Notes'}),true);
   assert.equal(canGenerateFlashcards({...pdf,type:null}),false);
 });
@@ -175,12 +175,15 @@ test('source links survive collections and APKG exports without changing note ID
   }finally{original.close();referenced.close();deleted.close();}
 });
 
-test('only slides, solutions and scripts offer PDF flashcards, including folder collections',()=>{
+test('slides, solutions, exams, scripts and notes offer PDF generation, including folder collections',()=>{
   assert.deepEqual(UPLOAD_CATEGORIES,['Slides','Exercises','Solutions','Exams','Scripts','Notes']);
-  for(const category of ['Slides','Solutions','Scripts','Exercises','Exams','Notes'] as const){
+  for(const category of ['Slides','Solutions','Scripts','Exercises','Exams','Notes','Books','Transcripts'] as const){
     const pdf={...file(category,null),category,outputs:{flashcards:{cards:[{question:'Q',answer:'A'}]}}};
-    const allowed=['Slides','Solutions','Scripts'].includes(category);
+    const allowed=['Slides','Solutions','Exams','Scripts','Notes'].includes(category);
     assert.equal(canGenerateFlashcards(pdf),allowed,category);
     assert.equal(folderCards([pdf],null).length,allowed?1:0,category);
+  }
+  for(const category of UPLOAD_CATEGORIES){
+    assert.equal(materialListTypeLabel({...file(category,null),category}),category);
   }
 });

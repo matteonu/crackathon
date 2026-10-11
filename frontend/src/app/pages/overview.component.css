@@ -80,26 +80,29 @@ input.overview-check { flex: 0 0 17px; width: 17px; height: 17px; min-height: 0;
 .state-revisit { --state-ink: var(--warning); --state-surface: var(--warning-soft); --state-line: color-mix(in srgb,var(--warning) 25%,var(--surface)); }
 .state-done { --state-ink: var(--success); --state-surface: var(--success-soft); --state-line: color-mix(in srgb,var(--success) 25%,var(--surface)); }
 .state-ignored { --state-ink: var(--muted); --state-surface: var(--surface-soft); --state-line: var(--line); }
-.overview-state-column { background: var(--state-surface); border: 1px solid var(--state-line); border-radius: 12px; padding: 14px; min-width: 0; }
+.overview-state-column { background: var(--state-surface); border: 1px solid var(--state-line); border-radius: 12px; padding: 14px; min-width: 0; transition: border-color 160ms ease, box-shadow 160ms ease; }
 .overview-state-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--state-ink); }
 .overview-state-heading h3 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; font-weight: 600; }
 .overview-state-heading app-icon { width: 16px; height: 16px; }
 .overview-state-heading > span { display: grid; place-items: center; min-width: 23px; height: 23px; padding: 0 5px; border: 1px solid var(--state-line); background: color-mix(in srgb,var(--surface) 56.47%,transparent); border-radius: 6px; font-size: 11px; }
-.overview-file-list { --card-height: 140px; display: grid; grid-auto-rows: var(--card-height); align-content: start; gap: 9px; list-style: none; margin: 14px 0 0; padding: 0; min-height: var(--card-height); max-height: calc(3 * var(--card-height) + 18px); overflow-y: auto; overscroll-behavior-y: contain; border-radius: 8px; }
-.overview-file-card { display: flex; flex-direction: column; min-width: 0; height: 140px; box-sizing: border-box; gap: 8px; padding: 12px; background: var(--surface); border: 1px solid var(--state-line, var(--line)); border-radius: 8px; cursor: grab; }
+.overview-file-list { --card-height: 140px; position: relative; display: flex; flex-direction: column; gap: 9px; list-style: none; margin: 14px 0 0; padding: 0; min-height: var(--card-height); max-height: calc(3 * var(--card-height) + 18px); overflow-y: auto; overscroll-behavior-y: contain; border-radius: 8px; }
+.overview-file-card { display: flex; flex: 0 0 140px; flex-direction: column; min-width: 0; height: 140px; box-sizing: border-box; gap: 8px; padding: 12px; background: var(--surface); border: 1px solid var(--state-line, var(--line)); border-radius: 8px; cursor: grab; transition: opacity 160ms ease; }
 .overview-file-top { display: flex; align-items: center; justify-content: space-between; gap: 5px; height: 20px; flex-shrink: 0; }
 .overview-file-move { display: grid; place-items: center; padding: 2px; min-height: 24px; width: 24px; height: 24px; color: var(--muted); background: transparent; border: 0; border-radius: 4px; cursor: grab; }
 .overview-file-move app-icon { width: 14px; height: 14px; }
 .overview-file-move:hover, .overview-file-move:focus-visible { background: var(--sage); color: var(--green); }
-.overview-file-card.cdk-drag-preview { box-shadow: 0 7px 18px var(--shadow); cursor: grabbing; }
-.overview-file-card.cdk-drag-placeholder { opacity: .3; }
-.overview-file-list.cdk-drop-list-receiving { outline: 2px dashed var(--state-ink); outline-offset: 2px; }
-.overview-file-card[aria-busy="true"] { opacity: .65; cursor: wait; }
+.overview-file-card.cdk-drag-preview { margin: 0; list-style: none; box-shadow: 0 5px 14px var(--shadow); cursor: grabbing; }
+.overview-file-card.cdk-drag-animating { transition: transform 180ms cubic-bezier(.2,.75,.25,1); }
+.overview-file-card.cdk-drag-placeholder { background: color-mix(in srgb,var(--state-ink) 7%,var(--surface)); border: 1px dashed var(--state-line); }
+.overview-file-card.cdk-drag-placeholder > * { visibility: hidden; }
+.overview-state-column:has(.cdk-drop-list-dragging) { border-color: var(--state-ink); box-shadow: 0 0 0 1px var(--state-line); }
+.overview-file-list.cdk-drop-list-dragging .overview-state-empty { opacity: 0; }
+.overview-file-card[aria-busy="true"] { opacity: .85; cursor: wait; }
 .overview-file-type { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--muted); }
 .overview-file-type app-icon { width: 13px; height: 13px; }
 .overview-file-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--ink); font-size: 12px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; text-decoration: none; }
 .overview-file-course { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 10px; color: var(--muted); line-height: 1.5; text-decoration: none; overflow-wrap: anywhere; }
-.overview-state-empty { padding: 26px 4px; border: 1px dashed var(--state-line); border-radius: 8px; color: var(--state-ink); text-align: center; font-size: 11px; }
+.overview-state-empty { position: absolute; inset: 0; padding: 26px 4px; border: 1px dashed var(--state-line); border-radius: 8px; color: var(--state-ink); text-align: center; font-size: 11px; pointer-events: none; transition: opacity 120ms ease; }
 .overview-error { color: var(--danger); background: var(--danger-soft); border: 1px solid color-mix(in srgb,var(--danger) 25%,var(--surface)); border-radius: 8px; padding: 12px; font-size: 12px; }
 @media (max-width: 1200px) {
   .overview-todos, .overview-insight, .overview-today, .overview-materials { padding: 18px; }
@@ -127,5 +130,6 @@ input.overview-check { flex: 0 0 17px; width: 17px; height: 17px; min-height: 0;
 }
 @media (prefers-reduced-motion: reduce) {
   .overview-progress-track > span, .overview-course-track > span { transition: none; }
+  .overview-state-column, .overview-file-card, .overview-file-card.cdk-drag-animating, .overview-state-empty { transition: none; }
   .overview-greeting { animation: none; }
 }

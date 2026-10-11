@@ -9,8 +9,8 @@ export const CATEGORY_DOCUMENT_TYPES:Partial<Record<MaterialCategory,DocumentTyp
   Slides:'slides', Exams:'mock_exam', Exercises:'exercise', Solutions:'exercise_solution', Scripts:'script', Notes:'notes'
 };
 const DOCUMENT_TYPE_LABELS:Record<DocumentType,string> = {
-  slides:'slides', mock_exam:'exam', exercise:'exercise', exercise_solution:'exercise solution',
-  script:'script', notes:'notes', summary:'summary', cards:'flashcards', mcq:'multiple choice'
+  slides:'Slides', mock_exam:'Exams', exercise:'Exercises', exercise_solution:'Solutions',
+  script:'Scripts', notes:'Notes', summary:'Summary', cards:'Flashcards', mcq:'Multiple choice'
 };
 export type ToolId = 'summary' | 'flashcards';
 export interface FlashcardSource { pdfId:string|null; pdfName:string; pages:number[]; evidence:string; }
@@ -68,8 +68,9 @@ export function materialListTypeLabel(file:Material):string {
     default: return materialTypeLabel(file);
   }
 }
-export function canGenerateFlashcards(file:Material):boolean { return materialKind(file)==='pdf'&&['slides','exercise_solution','script'].includes(materialType(file)??''); }
-export function canChatWithDocument(file:Material):boolean { return materialKind(file)==='pdf'&&['slides','exercise_solution','mock_exam','script'].includes(materialType(file)??''); }
+/** Flashcards and MC questions share the same source-document eligibility. */
+export function canGenerateFlashcards(file:Material):boolean { return materialKind(file)==='pdf'&&['slides','exercise_solution','mock_exam','script','notes'].includes(materialType(file)??''); }
+export function canChatWithDocument(file:Material):boolean { return materialKind(file)==='pdf'; }
 /** Where the server serves this file's bytes: the PDF itself, or a text file's content. */
 export function materialFileUrl(id:string):string { return `/api/materials/${encodeURIComponent(id)}/file`; }
 export function sourcePageUrl(id:string,page:number):string { return `/#/pdf/${encodeURIComponent(id)}?page=${page}`; }

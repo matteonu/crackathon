@@ -87,7 +87,7 @@ class DocumentChatTests(unittest.TestCase):
         id = str(uuid.uuid4())
         response = self.client.post('/api/materials', headers=ALICE, json={
             'id': id, 'subjectId': 'analysis', 'kind': kind, 'name': id + '.' + kind,
-            'category': category, 'parentId': parent})
+            'category': category, 'parentId': parent, 'content': ''})
         self.assertEqual(response.status_code, 201, response.get_json())
         if upload and kind == 'pdf':
             response = self.client.put(f'/api/materials/{id}/file', headers=ALICE,
@@ -177,17 +177,19 @@ class DocumentChatTests(unittest.TestCase):
             decoded = PdfReader(BytesIO(base64.b64decode(attachment['file_data'].split(',')[1])))
             self.assertEqual([int(p.mediabox.width) for p in decoded.pages], [600 + n for n in expected])
 
-    def test_chat_is_owner_scoped_and_rejects_unsupported_types(self):
-        for category in ['Slides', 'Solutions', 'Scripts', 'Exams']:
+    def test_chat_is_owner_scoped_for_all_pdf_categories(self):
+        for category in ['Slides', 'Solutions', 'Scripts', 'Exams', 'Exercises', 'Books', 'Notes', 'Transcripts']:
             id = self.create(category=category)
+            self.assertEqual(self.service.index(id)['status'], 'queued')
             self.assertEqual(self.client.get(f'/api/learning/documents/{id}/chat', headers=ALICE).status_code, 200)
+            self.assertEqual(self.ask(id).status_code, 200)
             for method in [self.client.get, self.client.post]:
                 self.assertEqual(method(f'/api/learning/documents/{id}/chat', headers=BOB).status_code, 404)
             self.assertEqual(self.client.post(f'/api/learning/documents/{id}/chat/index', headers=BOB).status_code, 404)
-        for category in ['Exercises', 'Books', 'Notes']:
-            id = self.create(category=category)
+        for kind in ['folder', 'deck', 'txt', 'md']:
+            id = self.create(category='Notes', kind=kind)
             self.assertEqual(self.client.get(f'/api/learning/documents/{id}/chat', headers=ALICE).status_code, 400)
-            self.assertEqual(self.service.index(id)['status'], 'queued')  # All uploads indexed.
+            self.assertIsNone(self.service.index(id))
 
     def test_request_validation_does_not_call_the_model(self):
         id = self.create()

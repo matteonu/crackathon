@@ -1,6 +1,7 @@
 import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
+import { CdkScrollable } from '@angular/cdk/scrolling';
 import { TaskStore } from '../services/task-store';
 import { PRIORITIES, Priority, Task, MAX_TASK_NOTES, MAX_TASK_TITLE, doneTasks, dueLabel, dueState, openTasks } from '../models/task';
 import { IconComponent } from '../shared/icon.component';
@@ -8,7 +9,7 @@ import { IconComponent } from '../shared/icon.component';
 /** The subject's to-do list: add on Enter, tick off, click a row to edit, drag to reorder,
  *  clear completed. Dragging a task into another priority's group gives it
  *  that priority. */
-@Component({selector:'app-task-list',standalone:true,imports:[FormsModule,IconComponent,CdkDropList,CdkDrag],template:`
+@Component({selector:'app-task-list',standalone:true,imports:[FormsModule,IconComponent,CdkDropList,CdkDrag,CdkScrollable],template:`
   <section class="panel task-panel">
     <div class="panel-heading"><div><h2>To-do</h2><p>{{open().length}} open @if(done().length){· {{done().length}} done}</p></div></div>
     <form class="task-add" (ngSubmit)="add()">
@@ -20,6 +21,7 @@ import { IconComponent } from '../shared/icon.component';
     </form>
     @if(store.error()){<p class="form-error" role="alert">{{store.error()}}</p>}
     @if(store.loading()){<p class="muted task-empty">Loading your to-dos…</p>}
+    <div class="task-scroll" cdkScrollable tabindex="0" role="region" aria-label="Subject to-dos">
     <ul class="task-list" aria-label="Open to-dos" cdkDropList cdkDropListLockAxis="y" (cdkDropListDropped)="drop($event)">
       @for(t of open();track t.id){
         <li class="task" [class.task-editing]="editingId()===t.id" (click)="rowClick($event,t)" cdkDrag [cdkDragData]="t" [cdkDragDisabled]="editingId()===t.id" (cdkDragStarted)="dragged=true">
@@ -66,6 +68,7 @@ import { IconComponent } from '../shared/icon.component';
         </div></div>
       </div>
     }
+    </div>
   </section>
 `})
 export class TaskListComponent {

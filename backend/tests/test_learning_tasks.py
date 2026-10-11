@@ -99,7 +99,7 @@ class LearningTaskTests(unittest.TestCase):
             client = app.test_client()
             jobs = app.extensions['learning_jobs']
             with patch.object(jobs, 'submit', return_value={'status': 'queued'}) as submit:
-                for category in ('Slides', 'Solutions', 'Scripts', 'Exercises', 'Exams', 'Notes'):
+                for category in ('Slides', 'Solutions', 'Scripts', 'Exercises', 'Exams', 'Notes', 'Books', 'Transcripts'):
                     document_id = str(uuid.uuid4())
                     created = client.post('/api/materials', json={'id': document_id, 'subjectId': 'subject',
                                           'kind': 'pdf', 'name': category + '.pdf', 'category': category})
@@ -115,7 +115,7 @@ class LearningTaskTests(unittest.TestCase):
                         self.assertTrue(submit.call_args.kwargs['regenerate'])
                     submit.reset_mock()
                     cards = client.post(url, headers={'X-Learning-Task': 'flashcards', 'X-Flashcard-Count': '12'})
-                    allowed = category in {'Slides', 'Solutions', 'Scripts'}
+                    allowed = category in {'Slides', 'Solutions', 'Exams', 'Scripts', 'Notes'}
                     self.assertEqual(cards.status_code, 202 if allowed else 400, category)
                     self.assertEqual(submit.called, allowed)
                 self.assertEqual(client.post(url, headers={'X-Learning-Task': 'invalid'}).status_code, 400)
