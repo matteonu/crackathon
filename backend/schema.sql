@@ -87,6 +87,17 @@ CREATE TABLE IF NOT EXISTS course_timeslots (
 );
 CREATE INDEX IF NOT EXISTS course_timeslots_offering ON course_timeslots (offering_id);
 
+-- Direct ETH timetable lookups survive replacement of the imported catalogue.
+CREATE TABLE IF NOT EXISTS course_timetable_cache (
+    course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    semkez TEXT NOT NULL,
+    offering_id INTEGER NOT NULL,
+    slots TEXT,
+    checked_at REAL NOT NULL,
+    retry_after REAL NOT NULL,
+    PRIMARY KEY (course_id, semkez)
+);
+
 CREATE TABLE IF NOT EXISTS lecturers (
     id INTEGER PRIMARY KEY,           -- VVZ id
     title TEXT,                       -- 'Prof. Dr.'

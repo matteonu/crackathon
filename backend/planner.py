@@ -40,6 +40,7 @@ from errors import RequestError
 from schedule_planner.main import generate_schedule
 from vvz.sync import semester_of, term_of
 from course_timetable import timetable
+from vvz.timetable import refresh_timetables
 
 bp = Blueprint("planner", __name__, url_prefix="/api")
 
@@ -352,6 +353,15 @@ def plan(semkez):
                    subjects=[] if sid is None else subjects(sid, semkez), sessions=sessions,
                    preferences=DEFAULT_PREFERENCES if sid is None else preferences(sid),
                    plan=None if sid is None else stored_plan(sid))
+
+
+@bp.post("/semesters/<semkez>/timetable/refresh")
+def refresh_course_timetable(semkez):
+    semkez = checked(semkez)
+    sid = semester_id(current_user()["id"], semkez)
+    if sid is not None:
+        refresh_timetables(sid, semkez)
+    return jsonify(timetable(sid, semkez, phase(semkez)[0]))
 
 
 @bp.patch("/semesters/<semkez>/courses/<int:course_id>")

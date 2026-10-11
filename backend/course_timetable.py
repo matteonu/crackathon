@@ -1,5 +1,6 @@
 """Read-only calendar occurrences from the caller's saved VVZ course times."""
 import datetime as dt
+import json
 import re
 
 import db
@@ -33,14 +34,27 @@ def timetable(sid, semkez, study_start):
     result = {"start": start.isoformat(), "end": end.isoformat(), "events": []}
     if sid is None:
         return result
-    rows = db.get_db().execute("""
+    rows = [dict(row) for row in db.get_db().execute("""
         SELECT t.*, o.course_id, l.type_name
         FROM semester_courses sc
         JOIN course_offerings o ON o.course_id = sc.course_id AND o.semkez = ?
         JOIN course_timeslots t ON t.offering_id = o.id
         LEFT JOIN course_lectures l ON l.offering_id = t.offering_id AND l.number = t.lecture_number
         WHERE sc.semester_id = ? ORDER BY t.id
+    """, (semkez, sid))]
+    current = db.get_db().execute("""
+        SELECT cache.course_id, cache.offering_id, cache.slots
+        FROM semester_courses sc
+        JOIN course_offerings o ON o.course_id = sc.course_id AND o.semkez = ?
+        JOIN course_timetable_cache cache ON cache.course_id = o.course_id
+            AND cache.semkez = o.semkez AND cache.offering_id = o.id
+        WHERE sc.semester_id = ? AND cache.slots IS NOT NULL
     """, (semkez, sid)).fetchall()
+    refreshed = {row['course_id'] for row in current}
+    rows = [row for row in rows if row['course_id'] not in refreshed]
+    for row in current:
+        rows.extend({**slot, 'id': f"eth-{row['offering_id']}-{index}", 'course_id': row['course_id']}
+                    for index, slot in enumerate(json.loads(row['slots'])))
     spring = semkez.endswith("S")
     easter_monday = easter(start.year) + dt.timedelta(days=1)
     dates = [start + dt.timedelta(days=i) for i in range((end - start).days + 1)]

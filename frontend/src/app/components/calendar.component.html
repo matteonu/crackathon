@@ -36,6 +36,9 @@
   </div>
   <div class="calendar-legend"><span class="eyebrow">THIS WEEK</span><div>@for(subject of store.subjects();track subject.id){<span><i class="subject-dot" [style.background]="subject.color"></i>{{subject.shortName}} <strong>{{hoursFor(subject.id)}} h</strong></span>}</div></div>
   @if(hasCourseDays()){
+    @if(store.refreshingTimetable()){<p class="field-hint" role="status">Updating course times…</p>}
+    @else if(store.timetableError()){<p class="field-hint" role="status">{{store.timetableError()}}</p>}
+    @else if(coursesWithoutTimes().length){<p class="field-hint">No calendar times available for @for(subject of coursesWithoutTimes();track subject.id;let last=$last){@if(subject.homepage){<a [href]="subject.homepage" target="_blank" rel="noopener">{{subject.shortName}}</a>}@else{<span>{{subject.shortName}}</span>}{{last?'.':', '}}}</p>}
     @if(!courseEvents().length){<p class="calendar-empty">No course times are available for this week.</p>}
     @if(inheritedTerms()){<p class="field-hint">The imported timetable uses course times from {{inheritedTerms()}}. Check your course catalogue for updates and your exercise group.</p>}
     @if(hasBiweekly()){<p class="field-hint">Every-other-week classes are shown from the first teaching week. Confirm their starting week in the course catalogue.</p>}
