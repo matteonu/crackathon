@@ -18,9 +18,25 @@ export class AppComponent {
   readonly store=inject(StudyStore);readonly users=inject(UserStore);private readonly router=inject(Router);
   readonly main=viewChild<ElementRef<HTMLElement>>('main');
   readonly settings=viewChild<ElementRef<HTMLDialogElement>>('settings');
+  private pageMotion:Animation|null=null;
+  private previousPage=this.router.url;
   constructor(){
-    inject(DestroyRef).onDestroy(installPopupDismissal(inject(DOCUMENT)));
-    this.router.events.pipe(filter(e=>e instanceof NavigationEnd),takeUntilDestroyed()).subscribe(()=>{requestAnimationFrame(()=>{this.main()?.nativeElement.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});});});
+    const destroyRef=inject(DestroyRef);
+    destroyRef.onDestroy(installPopupDismissal(inject(DOCUMENT)));
+    destroyRef.onDestroy(()=>this.pageMotion?.cancel());
+    this.router.events.pipe(filter(e=>e instanceof NavigationEnd),takeUntilDestroyed()).subscribe(event=>{
+      const subjectRoute=(url:string)=>/^\/subject-tab\/[^/?#;]+(?:[?#;].*)?$/.test(url);
+      const betweenSubjects=subjectRoute(this.previousPage)&&subjectRoute(event.urlAfterRedirects);
+      this.previousPage=event.urlAfterRedirects;
+      requestAnimationFrame(()=>{
+        const main=this.main()?.nativeElement;
+        main?.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});
+        this.pageMotion?.cancel();this.pageMotion=null;
+        if(!betweenSubjects&&main?.animate&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+          this.pageMotion=main.animate([{transform:'translateY(4px)'},{transform:'translateY(0)'}],{duration:160,easing:'ease-out'});
+        }
+      });
+    });
   }
   /** The sidebar course whose ⋯ menu is open. */
   readonly menuFor=signal<string|null>(null);
