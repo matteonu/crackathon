@@ -1,4 +1,4 @@
-"""The Studyphase backend: /api/* plus the built Angular app, one process on port 8080.
+"""The Studyhub backend: /api/* plus the built Angular app, one process on port 8080.
 
 Run locally with `python backend/app.py`; gunicorn uses `app:create_app()`, the Flask CLI
 `--app app`. Settings come from the environment and, locally, from the repo's .env file.

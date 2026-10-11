@@ -7,7 +7,7 @@ import { THEMES, ThemeId, stepsToTheme, wheelMovement } from '../models/theme';
     [attr.aria-expanded]="open()" [attr.aria-label]="'Theme: '+theme.current().label+'. Click for '+theme.next().label+', or scroll to spin the theme wheel.'"
     (pointerenter)="show()" (pointerleave)="scheduleHide()"
     (focus)="keyboardFocus()" (blur)="blur($event)" (click)="advance()" (wheel)="scroll($event)">
-    <span #mark class="brand-mark">s<span>.</span></span><span #wordmark>studyphase</span>
+    <span #mark class="brand-mark">s<span>.</span></span><span #wordmark>studyhub</span>
   </button>
   <div #popover id="theme-wheel" class="theme-wheel" popover="manual" aria-label="Theme selection"
     (pointerenter)="cancelHide()" (pointerleave)="scheduleHide()" (focusin)="cancelHide()" (focusout)="blur($event)" (wheel)="scroll($event)">

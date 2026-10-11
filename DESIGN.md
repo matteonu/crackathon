@@ -23,7 +23,7 @@ components:
 
 ## Overview
 
-Studyphase is a calm, compact academic workspace. Its visual reference is a well-kept study notebook: restrained sage surfaces, clear ink, and dense controls that leave the source material in charge. Product familiarity wins over decoration; the PDF and the current learning prompt are the signature elements.
+Studyhub is a calm, compact academic workspace. Its visual reference is a well-kept study notebook: restrained sage surfaces, clear ink, and dense controls that leave the source material in charge. Product familiarity wins over decoration; the PDF and the current learning prompt are the signature elements.
 
 ## Colors
 

@@ -373,7 +373,7 @@ export class StudyStore {
   }
   exportData():void {
     const url=URL.createObjectURL(new Blob([JSON.stringify(this.data(),null,2)],{type:'application/json'}));
-    const link=document.createElement('a');link.href=url;link.download=`studyphase-${this.data().semester||'plan'}.json`;link.click();
+    const link=document.createElement('a');link.href=url;link.download=`studyhub-${this.data().semester||'plan'}.json`;link.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000); this.announce('Your study data has been exported.');
   }
 }
