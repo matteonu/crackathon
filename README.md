@@ -366,9 +366,13 @@ algorithm.
   Clear week's hours, left of Record hours, removes actual study records for the displayed
   Monday-Sunday week via `DELETE /api/semesters/<semkez>/hours/weeks/<monday>`; planned
   slots, targets, other weeks, other semesters, and other users' records stay unchanged.
-- **Targets:** a course whose `target_hours` is still 0 gets the scheduler's workload estimate
-  (30 h per ECTS, less 13 weeks of its lecture hours) the first time slots are planned. A target
-  you set, or the seed set, is never overwritten -- it is a semester goal, not what one week holds.
+- **Targets:** forecast the full study phase using the saved Schedule settings. The scheduler
+  allocates the weekly hours budget around study weekdays, days off, meals and exams, then
+  sums each course's allocated hours. Course caps limit active learning; recall is included
+  in targets and remains exempt from the cap. Empty weekly budgets use all available time.
+  Targets update when settings or manual commitments change, without generating calendar
+  slots. Generated weeks and recorded hours do not change the forecast. Marking a course
+  done preserves its full-phase goal. Legacy imported `target_hours` values are ignored.
 - **One source for "planned":** the plan's `sessions` (what the analytics reads) are the
   calendar's course slots. Old hand-planned `study_sessions` rows, including the demo seed's,
   are moved into the calendar as your own slots on every start and reseed

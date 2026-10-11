@@ -94,8 +94,12 @@ export function weekDays(iso: string): string[] {
   return Array.from({length: 7}, (_, day) => addDays(mondayOf(iso), day));
 }
 
+const dayFormatters=new Map<string,Intl.DateTimeFormat>();
 export function dayLabel(iso: string, options: Intl.DateTimeFormatOptions = {day:'numeric', month:'short'}): string {
-  return new Intl.DateTimeFormat('en-GB', {...options, timeZone:'UTC'}).format(new Date(iso + 'T12:00:00Z'));
+  const key=JSON.stringify(options);
+  let formatter=dayFormatters.get(key);
+  if(!formatter){formatter=new Intl.DateTimeFormat('en-GB', {...options, timeZone:'UTC'});dayFormatters.set(key,formatter);}
+  return formatter.format(new Date(iso + 'T12:00:00Z'));
 }
 
 export function dailyTotal(subjects: readonly Subject[], date: string): number {

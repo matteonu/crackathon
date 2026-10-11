@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canGenerateFlashcards, CATEGORY_DOCUMENT_TYPES, UPLOAD_CATEGORIES, descendants, folderCards, materialCards, materialName, normalizeMaterial, sourcePageUrl, treeRows, validParent } from '../src/app/models/material.ts';
+import { canGenerateFlashcards, CATEGORY_DOCUMENT_TYPES, UPLOAD_CATEGORIES, descendants, folderCards, materialCards, materialListType, materialListTypeLabel, materialName, materialPath, normalizeMaterial, sourcePageUrl, treeRows, validParent } from '../src/app/models/material.ts';
 import type { Material } from '../src/app/models/material.ts';
 import { buildApkg } from '../src/app/models/apkg.ts';
 import initSqlJs from 'sql.js';
@@ -8,6 +8,35 @@ import { unzipSync, strFromU8 } from 'fflate';
 
 const file=(id:string,parentId:string|null,kind:Material['kind']='pdf'):Material=>({id,name:id+(kind==='folder'?'':'.'+kind),parentId,kind,subjectId:'subject',size:0,blob:new Blob(),added:0,category:kind==='pdf'?'Slides':'Notes',marker:'To read'});
 const fixture=()=>[file('week1',null,'folder'),file('lecture','week1','folder'),file('notes','lecture','md'),file('slides','week1'),file('root',null)];
+
+test('Materials labels every file kind and keeps folders unlabeled',()=>{
+  for(const [kind,type,label] of [
+    ['deck','cards','Flashcards'],['md','markdown','Markdown'],['txt','text','Text'],
+    ['pdf','slides','slides']
+  ] as const){
+    const item=file('item',null,kind);
+    assert.equal(materialListType(item),type);
+    assert.equal(materialListTypeLabel(item),label);
+  }
+  assert.equal(materialListType(file('folder',null,'folder')),null);
+  assert.equal(materialListTypeLabel({...file('old',null),category:'Books',type:null}),'books');
+});
+
+test('file paths include nested folders and follow moves and renames',()=>{
+  const files=fixture(),notes=files.find(f=>f.id==='notes')!;
+  assert.equal(materialPath(files,notes),'Materials / week1 / lecture');
+  assert.equal(materialPath(files,{...notes,parentId:null}),'Materials');
+  assert.equal(materialPath(files,{...notes,parentId:'week1'}),'Materials / week1');
+  assert.equal(materialPath(files.map(f=>f.id==='week1'?{...f,name:'Week 1'}:f),notes),'Materials / Week 1 / lecture');
+});
+
+test('file paths tolerate missing parents and cycles without crossing subjects',()=>{
+  const notes=file('notes','missing','md');
+  assert.equal(materialPath([],notes),'Materials');
+  const folder=file('missing','notes','folder');
+  assert.equal(materialPath([notes,folder],notes),'Materials / missing');
+  assert.equal(materialPath([{...folder,subjectId:'other'}],notes),'Materials');
+});
 
 test('legacy PDFs remain in Materials with stable card IDs',()=>{
   const old=file('legacy',null);delete old.kind;delete old.parentId;
@@ -21,7 +50,7 @@ test('legacy PDFs remain in Materials with stable card IDs',()=>{
 
 test('upload types match the backend codes and stored types control card eligibility',()=>{
   assert.deepEqual(UPLOAD_CATEGORIES.map(category=>CATEGORY_DOCUMENT_TYPES[category]),
-    ['slides','exercise','exercise_solution','mock_exam','script']);
+    ['slides','exercise','exercise_solution','mock_exam','script','notes']);
   assert.equal(normalizeMaterial({...file('old',null),category:'Books'}).type,null);
   assert.equal(normalizeMaterial(file('folder',null,'folder')).type,null);
   const pdf={...file('typed',null),type:'mock_exam' as const};
@@ -147,7 +176,7 @@ test('source links survive collections and APKG exports without changing note ID
 });
 
 test('only slides, solutions and scripts offer PDF flashcards, including folder collections',()=>{
-  assert.deepEqual(UPLOAD_CATEGORIES,['Slides','Exercises','Solutions','Exams','Scripts']);
+  assert.deepEqual(UPLOAD_CATEGORIES,['Slides','Exercises','Solutions','Exams','Scripts','Notes']);
   for(const category of ['Slides','Solutions','Scripts','Exercises','Exams','Notes'] as const){
     const pdf={...file(category,null),category,outputs:{flashcards:{cards:[{question:'Q',answer:'A'}]}}};
     const allowed=['Slides','Solutions','Scripts'].includes(category);

@@ -9,7 +9,7 @@ export const THEMES = [
 ] as const;
 
 export type ThemeId = typeof THEMES[number]['id'];
-export const THEME_STORAGE_KEY = 'studyphase.theme';
+export const THEME_STORAGE_KEY = 'studyhub.theme';
 
 export function themeId(value:unknown):ThemeId {
   return THEMES.some(theme=>theme.id===value) ? value as ThemeId : 'green';

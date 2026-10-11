@@ -9,6 +9,15 @@ export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export function round1(value: number): number { return Math.round(value * 10) / 10; }
 
+/** Fit the viewport with 8–24 px bars. Below 8 px, scroll; above 24 px, grow height
+ * proportionally and give the extra horizontal space to the gaps between days. */
+export function dailyChartLayout(dayCount: number, viewportWidth: number): {width: number; height: number; dayWidth: number; barWidth: number} {
+  const count = Math.max(1, dayCount);
+  const width = Math.max(viewportWidth, 34 + count * 14 + 8);
+  const dayWidth = (width - 34 - 8) / count;
+  return {width, dayWidth, barWidth: Math.min(24, dayWidth - 6), height: 170 * Math.max(1, dayWidth / 30)};
+}
+
 export function addDay(iso: string, offset: number): string {
   const d = new Date(iso + 'T12:00:00Z');
   d.setUTCDate(d.getUTCDate() + offset);
@@ -59,6 +68,30 @@ export function dailySeries(data: StudyData): DayPoint[] {
     const anyRecord = data.subjects.some(s => s.hours[date] != null);
     return {date, recorded, planned: round1(planned.get(date) ?? 0), bySubject, weekday: weekdayIndex(date), rest: anyRecord && recorded === 0};
   });
+}
+
+export interface ActivityDay { date: string; hours: number; level: number; recorded: boolean; }
+export interface ActivityWeek { start: string; month: string; days: (ActivityDay | null)[]; }
+
+/** Monday-first calendar columns, padded outside the study phase. Colors use fixed hour bands. */
+export function activityWeeks(data: StudyData): ActivityWeek[] {
+  if (!data.dates.length) return [];
+  const days = new Map(data.dates.map(date => {
+    const hours = round1(recordedOn(data.subjects, date));
+    return [date, {date, hours, level: hours <= 0 ? 0 : hours < 2 ? 1 : hours < 4 ? 2 : hours < 6 ? 3 : 4,
+      recorded: data.subjects.some(subject => subject.hours[date] != null)}] as const;
+  }));
+  const weeks: ActivityWeek[] = [];
+  let previousMonth = '';
+  for (let start = addDay(data.dates[0], -weekdayIndex(data.dates[0])); start <= data.dates.at(-1)!; start = addDay(start, 7)) {
+    const column = Array.from({length: 7}, (_, i) => days.get(addDay(start, i)) ?? null);
+    const first = column.find(day => day !== null)!;
+    const monthKey = first.date.slice(0, 7);
+    const month = monthKey !== previousMonth ? new Intl.DateTimeFormat('en-GB', {month: 'short', timeZone: 'UTC'}).format(new Date(first.date + 'T12:00:00Z')) : '';
+    previousMonth = monthKey;
+    weeks.push({start, month, days: column});
+  }
+  return weeks;
 }
 
 export interface WeekPoint { start: string; recorded: number; planned: number; target: number; }
@@ -180,6 +213,30 @@ export function planAdherence(days: DayPoint[], asOf: string): PlanAdherence {
     ratio: plannedHours ? recordedOnPlannedDays / plannedHours : 0};
 }
 
+export interface PlanDeviation {
+  planned: number; recorded: number; delta: number;
+  /** Fixed -20 to +20 hour range; larger gaps stay at the nearest end. */
+  position: number;
+  tone: 'success' | 'strong-success' | 'warning' | 'danger' | 'neutral';
+  /** Color intensity on the fixed range, from 0 to 100 percent. */
+  strength: number;
+}
+
+/** Recorded versus calendar hours so far, including study on unplanned days.
+ * Shortfalls move from yellow to red; excess hours move from green to dark green. */
+export function planDeviation(days: DayPoint[], asOf: string): PlanDeviation {
+  const elapsed = days.filter(day => day.date <= asOf);
+  const planned = round1(elapsed.reduce((sum, day) => sum + day.planned, 0));
+  const recorded = round1(elapsed.reduce((sum, day) => sum + day.recorded, 0));
+  const delta = round1(recorded - planned);
+  const position = Math.max(0, Math.min(100, 50 + delta * 2.5));
+  const strength = Math.min(100, Math.abs(delta) * 5);
+  const tone = planned === 0 || delta === 0 ? 'neutral' : delta < 0
+    ? delta < -10 ? 'danger' : 'warning'
+    : delta > 10 ? 'strong-success' : 'success';
+  return {planned, recorded, delta, position, tone, strength};
+}
+
 export interface PlanVsRecordedDay { date: string; planned: number; recorded: number; }
 
 /** One subject's planned and recorded hours for the `count` study-phase days up to asOf
@@ -203,10 +260,11 @@ export function plannedAhead(data: StudyData, asOf: string): { hours: number; da
 }
 
 /** Largest gap between a subject's share of time and its share of the targets, as a signed delta. */
-export function balanceDelta(stats: SubjectStat[]): { subject: Subject; delta: number } | null {
-  if (!stats.length) return null;
+export function balanceDelta(stats: SubjectStat[]): { subject: Subject; delta: number; recordedShare: number; targetShare: number } | null {
+  if (!stats.length || !stats.some(s => s.recorded > 0) || !stats.some(s => s.target > 0)) return null;
   const worst = stats.reduce((w, s) => Math.abs(s.share - s.targetShare) > Math.abs(w.share - w.targetShare) ? s : w);
-  return {subject: worst.subject, delta: round1((worst.share - worst.targetShare) * 100)};
+  return {subject: worst.subject, delta: round1((worst.share - worst.targetShare) * 100),
+    recordedShare: round1(worst.share * 100), targetShare: round1(worst.targetShare * 100)};
 }
 
 export function sessionsOf(data: StudyData): PlannedSession[] { return data.sessions ?? []; }

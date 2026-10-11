@@ -163,7 +163,7 @@ class PlanTests(PlannerCase):
         first, second = self.plan()["subjects"]
         self.assertEqual(first, {
             "id": "course-1", "courseId": 1, "name": "Algorithms and Data Structures",
-            "shortName": "Algorithms and Data Structures", "color": "#2598A2", "targetHours": 0,
+            "shortName": "Algorithms and Data Structures", "color": "#2598A2", "targetHours": 275,
             "examDate": "2027-02-14", "examStart": None, "examEnd": None, "completed": False, "nextAction": "", "ects": 7,
             "lectureId": "252-0026-00L", "homepage": first["homepage"], "desiredGrade": None, "hours": {},
             "priority": 3, "difficulty": 3, "maxStudyHours": None, "lecturePerWeek": 6})
@@ -178,7 +178,7 @@ class PlanTests(PlannerCase):
         subject = self.plan()["subjects"][0]
         self.assertEqual((subject["targetHours"], subject["examDate"], subject["completed"], subject["nextAction"],
                           subject["color"], subject["desiredGrade"]),
-                         (65.5, "2027-01-28", True, "Exercise sheet 3", "#5586CA", 5.5))
+                         (380, "2027-01-28", True, "Exercise sheet 3", "#5586CA", 5.5))
         for bad in ({"targetHours": -1}, {"targetHours": "5"}, {"examDate": "2027-02-30"}, {"completed": "yes"},
                     {"nextAction": "x" * 1001}, {"color": "blue"}, {"desiredGrade": 7}, {}):
             self.assertEqual(self.patch(bad).status_code, 400, bad)

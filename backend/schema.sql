@@ -276,9 +276,9 @@ CREATE TABLE IF NOT EXISTS materials (
     description TEXT NOT NULL DEFAULT '',
     category TEXT NOT NULL,
     -- Document purpose; kind remains the storage format. NULL for folders and
-    -- unclassified legacy notes/books/transcripts. Generated types are reserved.
+    -- unclassified legacy books/transcripts. Generated types are reserved.
     type TEXT CHECK (type IS NULL OR (type IN ('slides', 'mock_exam', 'exercise', 'exercise_solution',
-                              'script', 'summary', 'cards', 'mcq') AND kind <> 'folder')),
+                              'script', 'notes', 'summary', 'cards', 'mcq') AND kind <> 'folder')),
     marker TEXT NOT NULL,
     size INTEGER NOT NULL DEFAULT 0,
     content TEXT,                     -- md and txt only; PDFs keep their bytes on disk

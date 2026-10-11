@@ -1,4 +1,5 @@
 import type { PlannedSession, StudyData, Subject } from './study';
+import type { CourseTimetable } from './calendar';
 
 /** A course of one subject's semester, as GET /api/semesters/<semkez>/plan returns it. */
 export interface PlanSubject {
@@ -98,6 +99,7 @@ export interface GeneratedPlan {
 
 /** The whole study plan of a semester. */
 export interface Plan {
+  timetable?: CourseTimetable;
   semkez: string;
   label: string;
   start: string;

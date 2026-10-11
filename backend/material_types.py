@@ -6,6 +6,7 @@ CATEGORY_TYPES = {
     "Exercises": "exercise",
     "Solutions": "exercise_solution",
     "Scripts": "script",
+    "Notes": "notes",
 }
 TYPE_CATEGORIES = {value: key for key, value in CATEGORY_TYPES.items()}
 # Reserved artifact types from the learning backend plan. Generation still saves
@@ -21,8 +22,9 @@ def migrate_material_types(conn):
         allowed = ", ".join(f"'{value}'" for value in sorted(DOCUMENT_TYPES))
         conn.execute(f"ALTER TABLE materials ADD COLUMN type TEXT "
                      f"CHECK (type IS NULL OR (type IN ({allowed}) AND kind <> 'folder'))")
-    # Preserve explicit classifications. Legacy notes/books/transcripts have no
+    # Preserve explicit classifications. Legacy books/transcripts have no
     # unambiguous source type, and folders are containers rather than documents.
     for category, document_type in CATEGORY_TYPES.items():
-        conn.execute("UPDATE materials SET type = ? WHERE type IS NULL AND kind <> 'folder' AND category = ?",
+        conn.execute("UPDATE materials SET type = ? WHERE type IS NULL AND kind "
+                     + ("= 'pdf'" if category == 'Notes' else "<> 'folder'") + " AND category = ?",
                      (document_type, category))

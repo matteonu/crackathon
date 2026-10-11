@@ -1,4 +1,4 @@
-# Studyphase — Angular frontend
+# Studyhub — Angular frontend
 
 A working Angular version of the Figma dashboard kit and the original hackathon skeleton. It preserves the Full schedule, What’s next, Analytics, and Modify schedule structure, with a sage sidebar, subject colours, and spreadsheet-style data.
 
@@ -54,7 +54,7 @@ keep navigation and refresh working without server rewrite rules.
 | Types, date arithmetic, aggregation, import validation | `src/app/models/study.ts` |
 | Routes | `src/app/app.routes.ts` |
 
-When you edit the seed JSON, existing browser data takes precedence. Use **Data & settings → Restore original sample** to load your changed seed, or clear the `studyphase-angular-v1` localStorage key.
+When you edit the seed JSON, existing browser data takes precedence. Use **Data & settings → Restore original sample** to load your changed seed, or clear the `studyhub-angular-v1` localStorage key.
 
 ## Data and scope
 

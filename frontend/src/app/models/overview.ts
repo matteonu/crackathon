@@ -1,10 +1,10 @@
 import type { Material, MaterialMarker } from './material';
 import type { Task } from './task';
 
-export const OVERVIEW_QUOTES = [
-  'Azerbaijan is not Dagestan',
-  'Go back to Dagestan and Forget',
-  "If you don't like, go back to Dagestan",
+export const OVERVIEW_GREETINGS = [
+  'Welcome Back USERNAME.',
+  'Time to lock in USERNAME.',
+  "Let's get started USERNAME.",
 ] as const;
 
 export const MATERIAL_STATES: readonly {marker: MaterialMarker; key: string; icon: string}[] = [
@@ -26,7 +26,20 @@ export function materialCoverage(files: readonly Material[]) {
   const counts: Record<MaterialMarker, number> = {'To read': 0, Revisit: 0, Done: 0, Ignore: 0};
   for (const file of files) if (isDocument(file)) counts[file.marker]++;
   const tracked = counts['To read'] + counts.Revisit + counts.Done;
-  return {counts, tracked, total: tracked + counts.Ignore, percent: tracked ? Math.round(counts.Done / tracked * 100) : null};
+  const total = tracked + counts.Ignore;
+  // Ignored files stay on the material board but do not count towards coverage.
+  const segments = ['Done', 'Revisit', 'To read'].map(marker => {
+    const state = MATERIAL_STATES.find(state => state.marker === marker)!;
+    const count = counts[state.marker];
+    const percent = tracked ? count / tracked * 100 : 0;
+    return {...state, count, percent, label: `${marker}: ${count} of ${tracked} files (${Math.round(percent * 10) / 10}%)`};
+  });
+  return {counts, tracked, total, percent: tracked ? Math.round(counts.Done / tracked * 100) : null,
+    segments, description: tracked ? segments.map(segment => segment.label).join('; ') : 'No material to cover'};
+}
+
+export function localDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 /** Urgency wins; within it, earlier deadlines come before undated tasks. */
