@@ -39,6 +39,7 @@ import db
 from errors import RequestError
 from schedule_planner.main import generate_schedule
 from vvz.sync import semester_of, term_of
+from course_timetable import timetable
 
 bp = Blueprint("planner", __name__, url_prefix="/api")
 
@@ -347,6 +348,7 @@ def plan(semkez):
                WHERE semester_id = ? AND course_id IS NOT NULL AND type <> 'meal'""", (sid,))],
         key=lambda s: (s["date"], s["start"]))
     return jsonify(semkez=semkez, label=label_of(semkez), start=start, end=end,
+                   timetable=timetable(sid, semkez, start),
                    subjects=[] if sid is None else subjects(sid, semkez), sessions=sessions,
                    preferences=DEFAULT_PREFERENCES if sid is None else preferences(sid),
                    plan=None if sid is None else stored_plan(sid))

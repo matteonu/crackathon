@@ -59,16 +59,6 @@ input.overview-check { flex: 0 0 17px; width: 17px; height: 17px; min-height: 0;
 .overview-course-row > div > span { font-size: 10px; color: var(--muted); white-space: nowrap; }
 .overview-course-track { display: flex; height: 7px; background: var(--line); border-radius: 4px; overflow: hidden; }
 .overview-today-date { display: block; color: var(--muted); font-size: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
-.overview-agenda-scroll { max-height: 355px; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; margin-top: 18px; }
-.overview-agenda { display: grid; gap: 12px; list-style: none; padding: 0; margin: 0; }
-.overview-agenda-row { display: grid; grid-template-columns: 43px minmax(0, 1fr); gap: 10px; align-items: start; }
-.overview-agenda-time { display: grid; gap: 5px; padding-top: 10px; color: var(--ink); font-size: 11px; font-variant-numeric: tabular-nums; }
-.overview-agenda-time time + time { color: var(--muted); font-size: 10px; }
-.overview-agenda-event { display: grid; gap: 6px; padding: 11px 12px; border-left: 3px solid var(--event-color); border-radius: 0 7px 7px 0; background: color-mix(in srgb, var(--event-color) 9%, var(--surface)); }
-.overview-agenda-event strong { font-size: 12px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
-.overview-agenda-event > span { font-size: 10px; color: var(--muted); }
-.overview-agenda-break { background: var(--surface-soft); }
-.overview-day-empty { min-height: 200px; }
 .overview-schedule-link { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); margin-top: 20px; padding-top: 14px; color: var(--green); font-size: 12px; text-decoration: none; }
 .overview-schedule-link:hover { text-decoration: underline; }
 .overview-muted { color: var(--muted); font-size: 12px; }

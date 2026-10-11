@@ -1,11 +1,15 @@
 import { Component, DestroyRef, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { StudyStore } from '../services/study-store';
 import { dayLabel } from '../models/study';
 import { PlanBlock, blockLabel, dayHourDifferences, isStudyDayOff, mealBlock, minutesOf, studyHours, timeOf } from '../models/semester';
 import type { HourDifference } from '../models/semester';
 import { IconComponent } from '../shared/icon.component';
 import { ScheduleSetupComponent } from './schedule-setup.component';
+import { CALENDAR_HOURS, DAY_MINUTES, calendarViewport, courseEventColumns } from '../models/calendar';
+
+import { CalendarScrollDirective } from '../shared/calendar-scroll.directive';
+import { CalendarNowComponent } from '../shared/calendar-now.component';
 
 const HOUR=56;const SNAP=15;const MIN_SLOT=15;const BLOCK_GAP=6;
 /** A gesture in progress: moving a slot, dragging one of its edges, or drawing a new one. */
@@ -14,7 +18,7 @@ interface Drag{mode:'move'|'start'|'end'|'create';id:number|null;date:string;sta
 interface CalendarSlot extends PlanBlock{displayName:string;color:string;duration:number;top:number;height:number;
   isMeal:boolean;ariaLabel:string;title:string;deleteLabel:string;}
 
-@Component({selector:'app-calendar',standalone:true,imports:[IconComponent,ScheduleSetupComponent],templateUrl:'./calendar.component.html'})
+@Component({selector:'app-calendar',standalone:true,imports:[IconComponent,ScheduleSetupComponent,RouterLink,CalendarScrollDirective,CalendarNowComponent],templateUrl:'./calendar.component.html'})
 export class CalendarComponent {
   readonly store=inject(StudyStore);private readonly router=inject(Router);
   private readonly destroyRef=inject(DestroyRef);
@@ -30,12 +34,18 @@ export class CalendarComponent {
   readonly weekLabel=computed(()=>`${dayLabel(this.store.week()[0])} – ${dayLabel(this.store.week()[6],{day:'numeric',month:'short',year:'numeric'})}`);
   private readonly blocksByDate=computed(()=>{
     const result=new Map<string,PlanBlock[]>();
-    for(const block of this.store.generatedPlan()?.blocks??[]){
+    for(const block of this.store.calendarStudyBlocks()){
       const day=result.get(block.date);if(day)day.push(block);else result.set(block.date,[block]);
     }
     return result;
   });
   private readonly subjectsById=computed(()=>new Map(this.store.subjects().map(subject=>[subject.id,subject])));
+  readonly currentDate=this.store.currentDate;
+  readonly courseEvents=computed(()=>this.store.calendarCourses().filter(event=>this.store.week().includes(event.date)));
+  readonly courseHours=computed(()=>Math.round(this.courseEvents().reduce((sum,event)=>sum+minutesOf(event.end)-minutesOf(event.start),0)/60*100)/100);
+  readonly hasCourseDays=computed(()=>this.store.week().some(date=>date<this.store.examSession().start));
+  readonly inheritedTerms=computed(()=>[...new Set(this.courseEvents().map(event=>event.inheritedFrom).filter(Boolean))].join(', '));
+  readonly hasBiweekly=computed(()=>this.courseEvents().some(event=>event.biweekly));
   private readonly allowedDates=computed(()=>{
     const session=this.store.examSession();
     return new Set(this.store.dates().filter(date=>date>=session.start&&date<=session.end));
@@ -53,10 +63,10 @@ export class CalendarComponent {
     }
     return new Map([...grouped].map(([id,blocks])=>[id,studyHours(blocks)]));
   });
-  readonly daysOff=computed(()=>new Set(this.store.week().filter(date=>isStudyDayOff(date,this.store.preferences(),this.store.subjects()))));
-  readonly timedExams=computed(()=>this.store.subjects().flatMap(subject=>
-    this.store.week().includes(subject.examDate)&&subject.examStart&&subject.examEnd
-      ? [{id:subject.id,name:subject.shortName,color:subject.color,date:subject.examDate,start:subject.examStart,end:subject.examEnd}]:[]));
+  readonly daysOff=computed(()=>new Set(this.store.week().filter(date=>this.allowed(date)&&isStudyDayOff(date,this.store.preferences(),this.store.subjects()))));
+  readonly timedExams=computed(()=>this.store.calendarExams().flatMap(exam=>
+    this.store.week().includes(exam.date)&&exam.start&&exam.end
+      ? [{id:exam.id,name:exam.shortName,color:exam.color,date:exam.date,start:exam.start,end:exam.end}]:[]));
   readonly hoursMismatches=computed(()=>{
     const result=new Map<string,HourDifference[]>();
     const subjects=this.store.subjects(), blocks=this.planned();
@@ -66,13 +76,22 @@ export class CalendarComponent {
     }
     return result;
   });
-  /** The grid spans the user's day, and stretches for any slot outside it. */
-  readonly firstHour=computed(()=>Math.min(Math.floor(minutesOf(this.store.preferences().dayStart)/60),...this.planned().map(b=>Math.floor(minutesOf(b.start)/60)),...this.timedExams().map(exam=>Math.floor(minutesOf(exam.start)/60))));
-  readonly lastHour=computed(()=>Math.max(Math.ceil(minutesOf(this.store.preferences().dayEnd)/60),...this.planned().map(b=>Math.ceil(minutesOf(b.end)/60)),...this.timedExams().map(exam=>Math.ceil(minutesOf(exam.end)/60))));
-  readonly ticks=computed(()=>Array.from({length:this.lastHour()-this.firstHour()},(_,i)=>this.firstHour()+i));
-  readonly height=computed(()=>(this.lastHour()-this.firstHour())*HOUR);
+  /** Full-day geometry is independent of the preferred hours and the week's events. */
+  readonly firstHour=computed(()=>0);
+  readonly lastHour=computed(()=>24);
+  readonly ticks=computed(()=>CALENDAR_HOURS);
+  readonly height=computed(()=>24*HOUR);
+  readonly viewport=computed(()=>calendarViewport(this.store.preferences().dayStart,this.store.preferences().dayEnd,HOUR));
   readonly dayLabel=dayLabel;
   readonly timeOf=timeOf;readonly minutesOf=minutesOf;
+  readonly coursesByDate=computed(()=>new Map(this.store.week().map(date=>[date,
+    courseEventColumns(this.courseEvents().filter(event=>event.date===date)).map(event=>{
+      const name=this.subject(event.subjectId)?.shortName??'Course';
+      const detail=[event.label, ...event.rooms, event.inheritedFrom?`Based on ${event.inheritedFrom} timetable`:'',event.biweekly?'Every other week; confirm dates in the course catalogue':''].filter(Boolean).join(' · ');
+      return {...event,name,detail,color:this.subject(event.subjectId)?.color??'#9aa39b',top:this.top(minutesOf(event.start)),height:this.tall(minutesOf(event.start),minutesOf(event.end)),
+        left:`calc(${event.column/event.columns*100}% + 3px)`,width:`calc(${100/event.columns}% - 6px)`};
+    })
+  ])));
   private readonly slotsByDate=computed(()=>new Map(this.store.week().map(date=>[
     date,(this.blocksByDate().get(date)??[]).map(block=>this.slotView(block))
   ])));
@@ -97,6 +116,7 @@ export class CalendarComponent {
 
   subject(id:string|null){return id?this.subjectsById().get(id):undefined;}
   allowed(date:string):boolean{return this.allowedDates().has(date);}
+  courseDay(date:string):boolean{const period=this.store.courseTimetable();return !!period&&date>=period.start&&date<=period.end&&date<this.store.examSession().start;}
   /** A day's slots, with the one being dragged drawn where the pointer has it. */
   slotsOn(date:string):CalendarSlot[]{return this.visibleSlots().get(date)??[];}
   private slotView(block:PlanBlock):CalendarSlot{
@@ -111,7 +131,7 @@ export class CalendarComponent {
   top(minutes:number):number{return (minutes/60-this.firstHour())*HOUR;}
   /** Keep a visual gap between adjoining blocks without changing their clock times. */
   tall(start:number,end:number):number{return Math.max(8,(end-start)/60*HOUR-BLOCK_GAP);}
-  hoursFor(id:string):number{return this.subjectHours().get(id)??0;}
+  hoursFor(id:string):number{return Math.round(((this.subjectHours().get(id)??0)+this.courseEvents().filter(event=>event.subjectId===id).reduce((sum,event)=>sum+(minutesOf(event.end)-minutesOf(event.start))/60,0))*100)/100;}
   examsOn(date:string){return this.examsByDate().get(date)??[];}
   hoursMismatchLabel(date:string):string{return this.mismatchLabels().get(date)??'';}
   private buildHoursMismatchLabel(date:string):string{
@@ -124,7 +144,7 @@ export class CalendarComponent {
   private minutesAt(clientY:number,date:string):number{
     const day=document.querySelector<HTMLElement>(`.calendar-day[data-date="${date}"]`);if(!day)return 0;
     const raw=this.firstHour()*60+(clientY-day.getBoundingClientRect().top)/HOUR*60;
-    return Math.max(this.firstHour()*60,Math.min(this.lastHour()*60,Math.round(raw/SNAP)*SNAP));
+    return Math.max(this.firstHour()*60,Math.min(DAY_MINUTES-1,Math.round(raw/SNAP)*SNAP));
   }
   private dayAt(clientX:number,clientY:number):string|null{
     const el=document.elementsFromPoint(clientX,clientY).find(e=>e.classList.contains('calendar-day'));
@@ -189,7 +209,7 @@ export class CalendarComponent {
     if(d.mode==='move'){
       const date=this.dayAt(event.clientX,event.clientY)??d.date;const length=d.end-d.start;
       let start=this.minutesAt(event.clientY,date)-d.grab;start=Math.round(start/SNAP)*SNAP;
-      start=Math.max(this.firstHour()*60,Math.min(this.lastHour()*60-length,start));
+      start=Math.max(this.firstHour()*60,Math.min(DAY_MINUTES-1-length,start));
       this.drag.set({...d,date,start,end:start+length,moved:moved||date!==d.originDate});return;
     }
     const at=this.minutesAt(event.clientY,d.date);

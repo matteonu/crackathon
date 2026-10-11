@@ -1,7 +1,5 @@
 import type { Material, MaterialMarker } from './material';
 import type { Task } from './task';
-import type { PlanBlock } from './semester';
-import type { Subject } from './study';
 
 export const OVERVIEW_GREETINGS = [
   'Welcome Back USERNAME.',
@@ -42,27 +40,6 @@ export function materialCoverage(files: readonly Material[]) {
 
 export function localDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-/** Use the saved plan, independent of the week selected on the Schedule page. */
-export function overviewDayPlan(blocks: readonly PlanBlock[], subjects: readonly Subject[], date: string) {
-  const byId = new Map(subjects.map(subject => [subject.id, subject]));
-  const entries = blocks.filter(block => block.date === date).map((block, index) => {
-    const subject = block.subjectId ? byId.get(block.subjectId) : undefined;
-    return {
-      id: `block-${block.id ?? index}`,
-      start: block.start as string | null, end: block.end as string | null,
-      name: subject?.name ?? block.label ?? (block.type === 'meal' ? 'Break' : 'Study session'),
-      label: block.type === 'meal' ? 'Break' : block.type === 'recall' ? 'Recall' : 'Learning',
-      color: subject?.color ?? 'var(--muted)', type: block.type as PlanBlock['type'] | 'exam',
-    };
-  });
-  for (const subject of subjects.filter(subject => subject.examDate === date)) {
-    entries.push({id: `exam-${subject.id}`, start: subject.examStart ?? null, end: subject.examEnd ?? null,
-      name: subject.name, label: 'Exam', color: subject.color, type: 'exam'});
-  }
-  return entries.sort((a, b) => (a.start ?? '').localeCompare(b.start ?? '')
-    || (a.end ?? '').localeCompare(b.end ?? '') || a.id.localeCompare(b.id));
 }
 
 /** Urgency wins; within it, earlier deadlines come before undated tasks. */

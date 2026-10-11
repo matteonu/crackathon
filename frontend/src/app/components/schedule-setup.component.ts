@@ -2,7 +2,7 @@ import { Component, ElementRef, computed, inject, signal, viewChild } from '@ang
 import { StudyStore } from '../services/study-store';
 import { DayOff, Preferences } from '../models/semester';
 import { IconComponent } from '../shared/icon.component';
-import { validExamTimes } from '../models/study';
+import { dayLabel, validExamTimes } from '../models/study';
 
 /** One course as the form edits it, before anything is sent. */
 interface CourseDraft {courseId:number;name:string;color:string;examDate:string;examStart:string|null;examEnd:string|null;priority:number;difficulty:number;maxStudyHours:number|null;}
@@ -17,6 +17,7 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
     <div class="dialog-top"><span class="eyebrow">STUDY SETUP</span><button type="button" class="icon-button" aria-label="Close" (click)="dialog.close()"><app-icon name="close" /></button></div>
     <h2 id="setup-title">When are your exams, and when do you study?</h2>
     <p class="muted">That is all the schedule needs. Everything else has a sensible default under Advanced.</p>
+    <p class="setup-phase"><strong>Learning phase (Lernphase)</strong><br>{{phaseLabel()}}<br><span class="field-hint">Course times appear before this period. These settings control the study plan during it.</span></p>
 
     <h3 class="setup-heading">Exams</h3>
     @if(!courses().length){<p class="empty-state">No courses yet. Add one with + next to Your subjects.</p>}
@@ -94,6 +95,7 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
 `})
 export class ScheduleSetupComponent {
   readonly store=inject(StudyStore);
+  readonly phaseLabel=computed(()=>`${dayLabel(this.store.examSession().start,{day:'numeric',month:'long',year:'numeric'})} – ${dayLabel(this.store.examSession().end,{day:'numeric',month:'long',year:'numeric'})}`);
   readonly dialog=viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
   readonly priorities=PRIORITIES;readonly difficulties=DIFFICULTIES;
   readonly weekdays=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((name,value)=>({value,name,short:name.slice(0,3)}));
@@ -148,6 +150,7 @@ export class ScheduleSetupComponent {
           difficulty:course.difficulty,maxStudyHours:course.maxStudyHours})){this.error.set(this.store.planError());return;}
       }
       if(thenGenerate&&!await this.store.generate()){this.error.set(this.store.planError());return;}
+      if(thenGenerate)this.store.setWeek(this.store.generatedPlan()?.fromDate??this.store.examSession().start);
       this.dialog().nativeElement.close();
     }finally{this.saving.set(false);}
   }

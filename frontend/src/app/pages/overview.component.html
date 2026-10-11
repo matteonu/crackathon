@@ -84,25 +84,7 @@
       <time class="overview-today-date" [attr.datetime]="today()">{{todayLabel()}}</time>
       @if (!store.loaded()) { <p class="overview-empty" role="status">Loading today's plan…</p> }
       @else {
-        <div class="overview-agenda-scroll" tabindex="0" role="region" aria-label="Today's calendar">
-          <ol class="overview-agenda">
-            @for (entry of todayPlan(); track entry.id) {
-              <li class="overview-agenda-row">
-                <div class="overview-agenda-time">
-                  @if (entry.start) {
-                    <time [attr.datetime]="today() + 'T' + entry.start">{{entry.start}}</time>
-                    @if (entry.end) { <time [attr.datetime]="today() + 'T' + entry.end">{{entry.end}}</time> }
-                  } @else { <span>All day</span> }
-                </div>
-                <div class="overview-agenda-event" [style.--event-color]="entry.color" [class.overview-agenda-break]="entry.type === 'meal'">
-                  <strong>{{entry.name}}</strong><span>{{entry.label}}</span>
-                </div>
-              </li>
-            } @empty {
-              <li class="overview-empty overview-day-empty"><span class="overview-empty-icon"><app-icon name="calendar" /></span><strong>Nothing planned for today.</strong><span>Your study sessions will appear here.</span></li>
-            }
-          </ol>
-        </div>
+        <app-today-calendar />
         <a class="overview-schedule-link" routerLink="/schedule" (click)="store.setWeek(today())">Open schedule <span aria-hidden="true">↗</span></a>
       }
     </div>

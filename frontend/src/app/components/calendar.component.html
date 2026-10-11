@@ -1,17 +1,17 @@
 <section class="panel calendar-panel">
-  <div class="panel-heading"><div><span class="eyebrow">YOUR STUDY PHASE</span><h2>Weekly calendar</h2><p>{{plannedHours()}} h planned this week</p></div><div class="action-buttons"><button class="button secondary" (click)="openSetup()"><app-icon name="settings" /> Study setup</button><button class="button primary" [disabled]="store.generating()" (click)="generateWeek()"><app-icon name="leaf" /> @if(store.generating()){Generating…}@else{Generate schedule}</button></div></div>
+  <div class="panel-heading study-panel-heading"><div><h2>Weekly calendar</h2><p>@if(hasCourseDays()){Course timetable · {{courseHours()}} h@if(planWeek()){ · {{plannedHours()}} h study}}@else{Study plan · {{plannedHours()}} h planned this week}</p></div><ng-content select="[schedule-view-switch]" /><div class="action-buttons"><button class="button secondary" (click)="openSetup()"><app-icon name="settings" /> Study setup</button>@if(planWeek()){<button class="button primary" [disabled]="store.generating()" (click)="generateWeek()"><app-icon name="leaf" /> @if(store.generating()){Generating…}@else{Generate schedule}</button>}</div></div>
   @if(store.planError()){<p class="form-error" role="alert">{{store.planError()}}</p>}
-  <div class="week-toolbar"><div class="week-navigation"><button class="icon-button" aria-label="Previous week" [disabled]="!store.canGoBack()" (click)="store.moveWeek(-1)"><app-icon name="left" /></button><span aria-live="polite">{{weekLabel()}}</span><button class="icon-button" aria-label="Next week" [disabled]="!store.canGoNext()" (click)="store.moveWeek(1)"><app-icon name="right" /></button></div><p class="calendar-hint">Drag on empty space to add a slot · drag a slot to move it, its edges to resize · <app-icon name="plus" /> plans a day, <app-icon name="trash" /> clears it</p></div>
-  <div class="calendar-scroll" tabindex="0" role="region" aria-label="Weekly study calendar, scroll horizontally">
-    <div class="calendar-grid" [class.dragging]="drag()"><div class="calendar-corner">Time</div>@for(date of store.week();track date){<div class="calendar-day-heading" [class.outside-session]="!allowed(date)" [class.day-off]="daysOff().has(date)" [class.exam-day]="store.examDays().has(date)" [style.--exam-colors]="store.examDays().get(date)?.background" [class.has-hours-mismatch]="hoursMismatches().has(date)" [title]="store.examDays().get(date)?.label??(daysOff().has(date)?'Day off':null)"><span>{{dayLabels().get(date)?.weekday}}</span><strong>{{dayLabels().get(date)?.short}}</strong>
+  <div class="week-toolbar"><div class="week-navigation"><button class="icon-button" aria-label="Previous week" [disabled]="!store.canGoBack()" (click)="store.moveWeek(-1)"><app-icon name="left" /></button><span aria-live="polite">{{weekLabel()}}</span><button class="icon-button" aria-label="Next week" [disabled]="!store.canGoNext()" (click)="store.moveWeek(1)"><app-icon name="right" /></button><button class="button secondary calendar-today" (click)="store.setWeek(currentDate())">Today</button></div><p class="calendar-hint">@if(planWeek()){Drag on empty space to add a study slot · drag to move or resize}@else{Learning phase: {{dayLabel(store.examSession().start)}} – {{dayLabel(store.examSession().end,{day:'numeric',month:'short',year:'numeric'})}}} </p></div>
+  <div class="calendar-scroll" tabindex="0" role="region" aria-label="Weekly calendar, midnight to 23:59, scroll for other hours or days" [style.height.px]="viewport().height + 110" [calendarScrollStart]="store.loaded() ? viewport().offset : null">
+    <div class="calendar-grid" [class.dragging]="drag()"><div class="calendar-corner">Time</div>@for(date of store.week();track date){<div class="calendar-day-heading" [class.is-today]="date===currentDate()" [attr.aria-current]="date===currentDate()?'date':null" [class.outside-session]="!allowed(date)&&!courseDay(date)" [class.course-day]="courseDay(date)" [class.day-off]="daysOff().has(date)" [class.exam-day]="store.examDays().has(date)" [style.--exam-colors]="store.examDays().get(date)?.background" [class.has-hours-mismatch]="hoursMismatches().has(date)" [title]="store.examDays().get(date)?.label??(daysOff().has(date)?'Day off':null)"><span>{{dayLabels().get(date)?.weekday}}</span><strong>{{dayLabels().get(date)?.short}}</strong>
         @if(allowed(date)){<div class="day-actions">
           <button type="button" class="day-action" [disabled]="planningDay()!==null||store.generating()" [attr.aria-label]="'Plan '+dayLabels().get(date)?.long" [title]="'Plan this day'" (click)="planDay(date)">@if(planningDay()===date){<span class="day-spinner"></span>}@else{<app-icon name="plus" />}</button>
           <button type="button" class="day-action" [disabled]="!hasSlots(date)" [attr.aria-label]="'Clear '+dayLabels().get(date)?.long" [title]="'Clear this day'" (click)="clearDay(date)"><app-icon name="trash" /></button>
         </div>}
         @if(allowed(date)&&hoursMismatches().has(date)){<span class="calendar-hours-mismatch" role="img" [attr.aria-label]="hoursMismatchLabel(date)" [title]="hoursMismatchLabel(date)"><app-icon name="flag" /> Hours differ</span>}
       </div>}
-      <div class="calendar-times" [style.height.px]="height()">@for(hour of ticks();track hour){<span [style.top.px]="(hour-firstHour())*56">{{hour.toString().padStart(2,'0')}}:00</span>}</div>
-      @for(date of store.week();track date){<div class="calendar-day" [attr.data-date]="date" [class.outside-session]="!allowed(date)" [class.day-off]="daysOff().has(date)" [class.exam-day]="store.examDays().has(date)" [style.--exam-colors]="store.examDays().get(date)?.background" [style.height.px]="height()" (pointerdown)="startCreate($event,date)">
+      <div class="calendar-times" [style.height.px]="height()">@for(hour of ticks();track hour){<span [style.top.px]="(hour-firstHour())*56">{{hour.toString().padStart(2,'0')}}:00</span>}<span class="calendar-day-end">23:59</span></div>
+      @for(date of store.week();track date){<div class="calendar-day" [attr.data-date]="date" [class.outside-session]="!allowed(date)&&!courseDay(date)" [class.course-day]="courseDay(date)" [class.day-off]="daysOff().has(date)" [class.exam-day]="store.examDays().has(date)" [style.--exam-colors]="store.examDays().get(date)?.background" [style.height.px]="height()" (pointerdown)="startCreate($event,date)">
         @for(block of slotsOn(date);track block.id){
           <div class="calendar-session calendar-slot" role="button" tabindex="0" [class.is-recall]="block.type==='recall'" [class.is-break]="!block.subjectId" [class.is-meal]="block.isMeal" [class.is-short]="block.duration<45" [class.is-compact]="block.duration<90" [class.is-dragged]="drag()?.id===block.id"
             [style.top.px]="block.top" [style.height.px]="block.height" [style.--subject-color]="block.color"
@@ -23,14 +23,27 @@
             <span class="slot-edge bottom" aria-hidden="true" (pointerdown)="startMove($event,block,'end')"></span>
           </div>
         }
+        @for(course of coursesByDate().get(date)??[];track course.id){
+          <a class="calendar-session calendar-course" [routerLink]="['/subject-tab',course.subjectId]" [style.top.px]="course.top" [style.height.px]="course.height" [style.left]="course.left" [style.width]="course.width" [style.--subject-color]="course.color" [attr.aria-label]="course.name+', '+course.start+' to '+course.end+', '+course.detail" [title]="course.name+' · '+course.start+'–'+course.end+' · '+course.detail" (pointerdown)="$event.stopPropagation()">
+            <strong>{{course.name}}</strong><span>{{course.start}}–{{course.end}}</span><small>{{course.label}}@if(course.rooms.length===1){ · {{course.rooms[0]}}}@else if(course.rooms.length>1){ · {{course.rooms.length}} groups}</small>
+          </a>
+        }
         @for(exam of examsOn(date);track exam.id){<div class="calendar-session calendar-exam" role="img" [class.is-short]="minutesOf(exam.end)-minutesOf(exam.start)<45" [style.top.px]="top(minutesOf(exam.start))" [style.height.px]="tall(minutesOf(exam.start),minutesOf(exam.end))" [style.--subject-color]="exam.color" [attr.aria-label]="exam.name+' exam, '+dayLabel(date)+', '+exam.start+' to '+exam.end" [title]="exam.name+' exam · '+exam.start+'–'+exam.end"><strong>Exam · {{exam.name}}</strong><span>{{exam.start}}–{{exam.end}}</span></div>}
+        @if(date===currentDate()){<app-calendar-now [style.top.px]="top(store.clock().minutes)" />}
         @if(ghost(date);as g){<div class="calendar-ghost" [style.top.px]="top(g.start)" [style.height.px]="tall(g.start,g.end)"><span>{{timeOf(g.start)}}–{{timeOf(g.end)}}</span></div>}
       </div>}
     </div>
   </div>
   <div class="calendar-legend"><span class="eyebrow">THIS WEEK</span><div>@for(subject of store.subjects();track subject.id){<span><i class="subject-dot" [style.background]="subject.color"></i>{{subject.shortName}} <strong>{{hoursFor(subject.id)}} h</strong></span>}</div></div>
-  @if(!store.generatedPlan()){<p class="calendar-empty">Generate a study schedule, or drag on the calendar to add a study slot.</p>}
-  @else if(store.generatedPlan()?.generatedAt;as at){<p class="field-hint">Scheduled on {{at.slice(0,16).replace('T',' at ')}}. Generation uses the open week's budget and custom study. The + saves only its day.</p>}
+  @if(hasCourseDays()){
+    @if(!courseEvents().length){<p class="calendar-empty">No course times are available for this week.</p>}
+    @if(inheritedTerms()){<p class="field-hint">The imported timetable uses course times from {{inheritedTerms()}}. Check your course catalogue for updates and your exercise group.</p>}
+    @if(hasBiweekly()){<p class="field-hint">Every-other-week classes are shown from the first teaching week. Confirm their starting week in the course catalogue.</p>}
+  }
+  @if(planWeek()){
+    @if(!planned().length){<p class="calendar-empty">Generate a study schedule, or drag on the calendar to add a study slot.</p>}
+    @else if(store.generatedPlan()?.generatedAt;as at){<p class="field-hint">Scheduled on {{at.slice(0,16).replace('T',' at ')}}. Generation uses the open week's budget and custom study. The + saves only its day.</p>}
+  }
 </section>
 <dialog #chooser class="edit-dialog slot-chooser" aria-labelledby="chooser-title" (close)="pending.set(null)">
   <div class="dialog-top"><span class="eyebrow">NEW SLOT</span><button type="button" class="icon-button" aria-label="Close" (click)="chooser.close()"><app-icon name="close" /></button></div>

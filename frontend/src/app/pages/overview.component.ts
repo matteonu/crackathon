@@ -1,4 +1,4 @@
-import { Component, DestroyRef, ElementRef, computed, effect, inject, signal } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, signal } from '@angular/core';
 import { CdkDrag, CdkDragDrop, CdkDropList, CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { CdkScrollable } from '@angular/cdk/scrolling';
 import { CdkMenu, CdkMenuItemRadio, CdkMenuTrigger } from '@angular/cdk/menu';
@@ -12,12 +12,13 @@ import { UserStore } from '../services/user-store';
 import { IconComponent } from '../shared/icon.component';
 import { Material, MaterialMarker, materialKind, materialTypeLabel } from '../models/material';
 import { MAX_TASK_TITLE, PRIORITIES, Priority, Task, dueLabel, dueState } from '../models/task';
-import { MATERIAL_STATES, OVERVIEW_GREETINGS, localDateKey, materialCoverage, overviewDayPlan, overviewMaterials, overviewTasks } from '../models/overview';
+import { MATERIAL_STATES, OVERVIEW_GREETINGS, materialCoverage, overviewMaterials, overviewTasks } from '../models/overview';
+import { TodayCalendarComponent } from '../components/today-calendar.component';
 import { dayLabel } from '../models/study';
 
 @Component({
   standalone: true,
-  imports: [FormsModule, RouterLink, IconComponent, CdkDrag, CdkDropList, CdkDropListGroup, CdkScrollable, CdkMenu, CdkMenuItemRadio, CdkMenuTrigger],
+  imports: [TodayCalendarComponent, FormsModule, RouterLink, IconComponent, CdkDrag, CdkDropList, CdkDropListGroup, CdkScrollable, CdkMenu, CdkMenuItemRadio, CdkMenuTrigger],
   templateUrl: './overview.component.html',
   styleUrl: './overview.component.css',
 })
@@ -46,9 +47,8 @@ export class OverviewComponent {
   readonly coverage = computed(() => materialCoverage(this.files()));
   readonly courseProgress = computed(() => this.store.subjects().map(subject => ({subject,
     ...materialCoverage(this.files().filter(file => file.subjectId === subject.id))})));
-  readonly today = signal(localDateKey(new Date()));
+  readonly today = this.store.currentDate;
   readonly todayLabel = computed(() => dayLabel(this.today(), {weekday: 'long', day: 'numeric', month: 'long'}));
-  readonly todayPlan = computed(() => overviewDayPlan(this.store.generatedPlan()?.blocks ?? [], this.store.subjects(), this.today()));
   readonly boardCourse = signal('');
   readonly boardCourseLabel = computed(() => this.subjectsById().get(this.boardCourse())?.name ?? 'All courses');
   readonly courseFilterPositions: ConnectedPosition[] = [
@@ -68,9 +68,6 @@ export class OverviewComponent {
   draftPriority: Priority = 'medium';
 
   constructor() {
-    // Keep the day current even when the overview stays open overnight.
-    const dayTimer = setInterval(() => this.today.set(localDateKey(new Date())), 60_000);
-    inject(DestroyRef).onDestroy(() => clearInterval(dayTimer));
     effect(() => {
       const ids = this.subjectIds();
       if (!ids.has(this.draftCourse())) this.draftCourse.set(this.store.subjects()[0]?.id ?? '');
