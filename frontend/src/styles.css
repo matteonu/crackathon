@@ -333,7 +333,7 @@ textarea { resize: vertical; line-height: 1.7; }
 .subject-source-note p { max-width: 750px; line-height: 1.8; }
 .subject-source-note strong { color: var(--muted); font-weight: 550; }
 .edit-dialog { width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); margin: auto; padding: 25px; border-radius: 18px; border: 1px solid var(--line); box-shadow: 0 24px 100px color-mix(in srgb,var(--ink) 16.08%,transparent); color: var(--ink); background:var(--surface); overflow-y: auto; }
-.edit-dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
+.edit-dialog::backdrop { background: var(--backdrop); }
 .edit-dialog[open] { animation: dialog-in 180ms ease-out; }
 .dialog-top { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 10px; }
 .dialog-top .icon-button { border: none; background: var(--surface-soft); }

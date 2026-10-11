@@ -3,23 +3,23 @@
   @if(store.planError()){<p class="form-error" role="alert">{{store.planError()}}</p>}
   <div class="week-toolbar"><div class="week-navigation"><button class="icon-button" aria-label="Previous week" [disabled]="!store.canGoBack()" (click)="store.moveWeek(-1)"><app-icon name="left" /></button><span aria-live="polite">{{weekLabel()}}</span><button class="icon-button" aria-label="Next week" [disabled]="!store.canGoNext()" (click)="store.moveWeek(1)"><app-icon name="right" /></button></div><p class="calendar-hint">Drag on empty space to add a slot · drag a slot to move it, its edges to resize · <app-icon name="plus" /> plans a day, <app-icon name="trash" /> clears it</p></div>
   <div class="calendar-scroll" tabindex="0" role="region" aria-label="Weekly study calendar, scroll horizontally">
-    <div class="calendar-grid" [class.dragging]="drag()"><div class="calendar-corner">Time</div>@for(date of store.week();track date){<div class="calendar-day-heading" [class.outside-session]="!allowed(date)" [class.day-off]="daysOff().has(date)" [class.exam-day]="store.examDays().has(date)" [style.--exam-colors]="store.examDays().get(date)?.background" [class.has-hours-mismatch]="hoursMismatches().has(date)" [title]="store.examDays().get(date)?.label??(daysOff().has(date)?'Day off':null)"><span>{{weekday(date)}}</span><strong>{{dayLabel(date)}}</strong>
+    <div class="calendar-grid" [class.dragging]="drag()"><div class="calendar-corner">Time</div>@for(date of store.week();track date){<div class="calendar-day-heading" [class.outside-session]="!allowed(date)" [class.day-off]="daysOff().has(date)" [class.exam-day]="store.examDays().has(date)" [style.--exam-colors]="store.examDays().get(date)?.background" [class.has-hours-mismatch]="hoursMismatches().has(date)" [title]="store.examDays().get(date)?.label??(daysOff().has(date)?'Day off':null)"><span>{{dayLabels().get(date)?.weekday}}</span><strong>{{dayLabels().get(date)?.short}}</strong>
         @if(allowed(date)){<div class="day-actions">
-          <button type="button" class="day-action" [disabled]="planningDay()!==null||store.generating()" [attr.aria-label]="'Plan '+dayLabel(date,{weekday:'long',day:'numeric',month:'long'})" [title]="'Plan this day'" (click)="planDay(date)">@if(planningDay()===date){<span class="day-spinner"></span>}@else{<app-icon name="plus" />}</button>
-          <button type="button" class="day-action" [disabled]="!hasSlots(date)" [attr.aria-label]="'Clear '+dayLabel(date,{weekday:'long',day:'numeric',month:'long'})" [title]="'Clear this day'" (click)="clearDay(date)"><app-icon name="trash" /></button>
+          <button type="button" class="day-action" [disabled]="planningDay()!==null||store.generating()" [attr.aria-label]="'Plan '+dayLabels().get(date)?.long" [title]="'Plan this day'" (click)="planDay(date)">@if(planningDay()===date){<span class="day-spinner"></span>}@else{<app-icon name="plus" />}</button>
+          <button type="button" class="day-action" [disabled]="!hasSlots(date)" [attr.aria-label]="'Clear '+dayLabels().get(date)?.long" [title]="'Clear this day'" (click)="clearDay(date)"><app-icon name="trash" /></button>
         </div>}
         @if(allowed(date)&&hoursMismatches().has(date)){<span class="calendar-hours-mismatch" role="img" [attr.aria-label]="hoursMismatchLabel(date)" [title]="hoursMismatchLabel(date)"><app-icon name="flag" /> Hours differ</span>}
       </div>}
       <div class="calendar-times" [style.height.px]="height()">@for(hour of ticks();track hour){<span [style.top.px]="(hour-firstHour())*56">{{hour.toString().padStart(2,'0')}}:00</span>}</div>
       @for(date of store.week();track date){<div class="calendar-day" [attr.data-date]="date" [class.outside-session]="!allowed(date)" [class.day-off]="daysOff().has(date)" [class.exam-day]="store.examDays().has(date)" [style.--exam-colors]="store.examDays().get(date)?.background" [style.height.px]="height()" (pointerdown)="startCreate($event,date)">
         @for(block of slotsOn(date);track block.id){
-          <div class="calendar-session calendar-slot" role="button" tabindex="0" [class.is-recall]="block.type==='recall'" [class.is-break]="!block.subjectId" [class.is-meal]="meal(block)" [class.is-short]="minutesOf(block.end)-minutesOf(block.start)<45" [class.is-compact]="minutesOf(block.end)-minutesOf(block.start)<90" [class.is-dragged]="drag()?.id===block.id"
-            [style.top.px]="top(minutesOf(block.start))" [style.height.px]="tall(minutesOf(block.start),minutesOf(block.end))" [style.--subject-color]="color(block)"
-            [attr.aria-label]="name(block)+', '+blockLabel(block)+', '+dayLabel(block.date)+', '+block.start+' to '+block.end+(block.subjectId?'. Open the subject.':'')"
-            [title]="name(block)+' · '+block.start+'–'+block.end" (pointerdown)="startMove($event,block,'move')" (keydown.enter)="open(block)" (keydown.delete)="remove(block)" (keydown.backspace)="remove(block)">
+          <div class="calendar-session calendar-slot" role="button" tabindex="0" [class.is-recall]="block.type==='recall'" [class.is-break]="!block.subjectId" [class.is-meal]="block.isMeal" [class.is-short]="block.duration<45" [class.is-compact]="block.duration<90" [class.is-dragged]="drag()?.id===block.id"
+            [style.top.px]="block.top" [style.height.px]="block.height" [style.--subject-color]="block.color"
+            [attr.aria-label]="block.ariaLabel"
+            [title]="block.title" (pointerdown)="startMove($event,block,'move')" (keydown.enter)="open(block)" (keydown.delete)="remove(block)" (keydown.backspace)="remove(block)">
             <span class="slot-edge top" aria-hidden="true" (pointerdown)="startMove($event,block,'start')"></span>
-            <strong>{{name(block)}}</strong><span>{{block.start}}–{{block.end}}@if(block.type==='recall'){ · Recall}</span>
-            <button type="button" class="slot-delete" [attr.aria-label]="'Delete '+name(block)+' at '+block.start" (pointerdown)="$event.stopPropagation()" (click)="remove(block)"><app-icon name="close" /></button>
+            <strong>{{block.displayName}}</strong><span>{{block.start}}–{{block.end}}@if(block.type==='recall'){ · Recall}</span>
+            <button type="button" class="slot-delete" [attr.aria-label]="block.deleteLabel" (pointerdown)="$event.stopPropagation()" (click)="remove(block)"><app-icon name="close" /></button>
             <span class="slot-edge bottom" aria-hidden="true" (pointerdown)="startMove($event,block,'end')"></span>
           </div>
         }

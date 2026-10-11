@@ -62,6 +62,7 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
 
     <details class="setup-advanced" [open]="advanced()" (toggle)="advanced.set($any($event.target).open)">
       <summary>Advanced settings</summary>
+      @if(advanced()){
       <div class="form-grid setup-day">
         <label>Study block (minutes)<input type="number" min="15" max="240" step="5" [value]="habits().studyBlockSize" (change)="setHabit({studyBlockSize:+$any($event.target).value})"></label>
         <label>Hours a week<input type="number" min="0" max="168" step="1" [placeholder]="freeHours()+' (all free time)'" [value]="habits().studyHoursPerWeek ?? ''" (change)="setHabit({studyHoursPerWeek:number($any($event.target).value)})"></label>
@@ -79,7 +80,7 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
           </div>
         </div>
       }</div>
-
+      }
     </details>
 
     @if(error()){<p class="form-error" role="alert">{{error()}}</p>}
