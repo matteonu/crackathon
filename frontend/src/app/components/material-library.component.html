@@ -2,14 +2,13 @@
   <div class="panel-heading"><h2>Materials</h2></div>
   <div class="material-upload-bar">
     <details #uploadMenu class="material-upload-menu" data-popup>
-      <summary class="button primary" [attr.aria-disabled]="materials.loading()||materials.busy()"><app-icon name="upload" />Upload PDF<app-icon name="down" /></summary>
+      <summary class="button primary" [attr.aria-disabled]="materials.loading()||materials.busy()"><app-icon name="upload" />Upload<app-icon name="down" /></summary>
       <div class="upload-type-options" aria-label="Document type">
-        @for(category of uploadCategories;track category){<button type="button" [disabled]="materials.loading()||materials.busy()" (click)="prepareUpload(category);rootUpload.click();uploadMenu.open=false"><span>{{category}}</span><small>{{category==='Slides'||category==='Solutions'||category==='Scripts'?'Summary · Optional flashcards':'Summary only'}}</small></button>}
+        @for(category of uploadCategories;track category){<button type="button" [disabled]="materials.loading()||materials.busy()" (click)="prepareUpload(category);rootUpload.click();uploadMenu.open=false"><span>{{category}}</span><small>{{category==='Slides'||category==='Solutions'||category==='Scripts'?'PDF · Summary · Optional flashcards':'PDF · Summary only'}}</small></button>}
+        <button type="button" [disabled]="materials.loading()||materials.busy()" (click)="prepareTextUpload();rootUpload.click();uploadMenu.open=false"><span>Text or Markdown notes</span><small>.txt or .md</small></button>
       </div>
     </details>
-    <button type="button" class="button secondary" [disabled]="materials.loading()||materials.busy()" (click)="prepareTextUpload();textUpload.click()"><app-icon name="upload" />Upload notes</button>
-    <input #rootUpload hidden type="file" multiple accept=".pdf,application/pdf" (change)="upload($event)">
-    <input #textUpload hidden type="file" multiple accept=".txt,.md,text/plain,text/markdown" (change)="upload($event)">
+    <input #rootUpload hidden type="file" multiple accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" (change)="upload($event)">
   </div>
   <div class="library-filters"><input aria-label="Search materials" type="search" placeholder="Find a file or folder…" [ngModel]="query()" (ngModelChange)="query.set($event)"><select aria-label="Filter by marker" [ngModel]="marker()" (ngModelChange)="marker.set($event)"><option value="">All markers</option>@for(m of markers;track m){<option>{{m}}</option>}</select></div>
   @if(materials.error()||localError()){<p class="form-error" role="alert">{{localError()||materials.error()}}</p>}
