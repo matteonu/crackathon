@@ -33,6 +33,16 @@ export interface FolderCard extends Flashcard { key:string; fileId:string; fileN
 export interface TreeRow { material:Material; depth:number; }
 
 export function materialKind(file:Material):MaterialKind { return file.kind??'pdf'; }
+export function materialPath(files:readonly Material[],file:Material):string {
+  const parts:string[]=[],seen=new Set([file.id]);let parentId=file.parentId;
+  while(parentId&&!seen.has(parentId)){
+    seen.add(parentId);
+    const parent=files.find(f=>f.id===parentId&&f.subjectId===file.subjectId&&materialKind(f)==='folder');
+    if(!parent)break;
+    parts.unshift(parent.name);parentId=parent.parentId;
+  }
+  return ['Materials',...parts].join(' / ');
+}
 export function materialType(file:Material):DocumentType|null {
   if(materialKind(file)==='folder')return null;
   return file.type===undefined?(CATEGORY_DOCUMENT_TYPES[file.category]??null):file.type;

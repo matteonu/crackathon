@@ -1,7 +1,7 @@
 import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MaterialStore } from '../services/material-store';
-import { MATERIAL_MARKERS, Material, MaterialKind, MaterialMarker, MaterialCategory, UPLOAD_CATEGORIES, materialKind, materialTypeLabel, materialCards, folderCards, treeRows } from '../models/material';
+import { MATERIAL_MARKERS, Material, MaterialKind, MaterialMarker, MaterialCategory, UPLOAD_CATEGORIES, materialKind, materialTypeLabel, materialCards, materialPath, folderCards, treeRows, validParent } from '../models/material';
 import { IconComponent } from '../shared/icon.component';
 import { FileViewerComponent } from './file-viewer.component';
 import { FolderFlashcardsComponent } from './folder-flashcards.component';
@@ -22,6 +22,8 @@ export class MaterialLibraryComponent {
   readonly query=signal('');readonly marker=signal('');readonly dragging=signal(false);readonly selectedId=signal<string|null>(null);readonly activeFolder=signal<string|null>(null);readonly expanded=signal(new Set<string>());
   readonly subjectFiles=computed(()=>this.materials.files().filter(f=>f.subjectId===this.subjectId()));
   readonly selected=computed(()=>this.subjectFiles().find(f=>f.id===this.selectedId()));
+  readonly selectedPath=computed(()=>this.selected()?materialPath(this.subjectFiles(),this.selected()!):'Materials');
+  readonly draggedFile=signal<string|null>(null);readonly dropFolder=signal<string|null|undefined>(undefined);readonly movingFile=signal<string|null>(null);
   readonly rows=computed(()=>treeRows(this.subjectFiles(),this.expanded(),this.query(),this.marker()));
   readonly folderName=computed(()=>this.subjectFiles().find(f=>f.id===this.activeFolder())?.name??'Materials');
   readonly collectionFolder=signal<string|null>(null);readonly collectionOpen=signal(false);readonly collectionCards=computed(()=>folderCards(this.subjectFiles(),this.collectionFolder()));readonly collectionName=computed(()=>this.subjectFiles().find(f=>f.id===this.collectionFolder())?.name??'Materials');
@@ -31,7 +33,7 @@ export class MaterialLibraryComponent {
   readonly exporting=signal(false);readonly localError=signal('');readonly status=signal('');readonly creating=signal(false);readonly creationError=signal('');
   createType:Exclude<MaterialKind,'pdf'|'deck'>='folder';newName='';private createParent:string|null=null;
   constructor(){
-    effect(()=>{this.subjectId();this.activeFolder.set(null);this.selectedId.set(null);this.expanded.set(new Set());this.query.set('');this.marker.set('');});
+    effect(()=>{this.subjectId();this.endFileDrag();this.activeFolder.set(null);this.selectedId.set(null);this.expanded.set(new Set());this.query.set('');this.marker.set('');});
     effect(()=>{
       const ids=new Set(this.subjectFiles().map(file=>file.id));
       if(this.selectedId()&&!ids.has(this.selectedId()!)){this.preview()?.nativeElement.close();this.selectedId.set(null);}
@@ -64,7 +66,40 @@ export class MaterialLibraryComponent {
   newItem(kind:Exclude<MaterialKind,'pdf'|'deck'>,parentId:string|null):void{this.chooseFolder(parentId);this.createType=kind;this.newName='';this.createParent=parentId;this.creationError.set('');this.createDialog()?.nativeElement.showModal();}
   async create():Promise<void>{this.creating.set(true);try{const file=await this.materials.create(this.subjectId(),this.createParent,this.createType,this.newName);if(this.createParent)this.expanded.update(s=>new Set([...s,this.createParent!]));this.createDialog()?.nativeElement.close();if(file.kind==='folder')this.chooseFolder(file.id);else this.open(file.id);this.status.set(`${file.name} created.`);}catch(e){this.creationError.set(e instanceof Error?e.message:'Could not create item.');}finally{this.creating.set(false);}}
   async upload(event:Event):Promise<void>{const input=event.target as HTMLInputElement;await this.materials.add(this.subjectId(),Array.from(input.files??[]),this.uploadCategory(),this.uploadParent);input.value='';}
-  async drop(event:DragEvent):Promise<void>{event.preventDefault();this.dragging.set(false);await this.materials.add(this.subjectId(),Array.from(event.dataTransfer?.files??[]),this.uploadCategory(),this.activeFolder());}
+  startFileDrag(event:DragEvent,id:string):void{
+    if(this.movingFile()||this.deleting().has(id)||!event.dataTransfer){event.preventDefault();return;}
+    this.draggedFile.set(id);event.dataTransfer.effectAllowed='move';
+    event.dataTransfer.setData('application/x-studyhub-material',id);
+  }
+  endFileDrag():void{this.draggedFile.set(null);this.dropFolder.set(undefined);this.dragging.set(false);}
+  dragOver(event:DragEvent):void{
+    event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect=this.draggedFile()?'move':'copy';
+    this.dropFolder.set(undefined);this.dragging.set(!this.draggedFile());
+  }
+  dragOverFolder(event:DragEvent,id:string|null):void{
+    if(!this.draggedFile()&&!event.dataTransfer?.types.includes('Files'))return;
+    event.preventDefault();event.stopPropagation();this.dropFolder.set(id);
+    if(event.dataTransfer)event.dataTransfer.dropEffect=this.draggedFile()?'move':'copy';
+  }
+  leaveFolder(event:DragEvent):void{
+    if(event.currentTarget instanceof Element&&event.relatedTarget instanceof Node&&event.currentTarget.contains(event.relatedTarget))return;
+    this.dropFolder.set(undefined);
+  }
+  async drop(event:DragEvent,parentId:string|null=this.activeFolder()):Promise<void>{
+    event.preventDefault();event.stopPropagation();const id=this.draggedFile();this.endFileDrag();
+    if(id){
+      const file=this.subjectFiles().find(f=>f.id===id);
+      if(!file||materialKind(file)==='folder'||this.movingFile()||(file.parentId??null)===parentId)return;
+      if(!validParent(this.subjectFiles(),this.subjectId(),parentId,id))return;
+      this.movingFile.set(id);this.localError.set('');
+      try{
+        if(await this.materials.update(id,{parentId})){
+          if(parentId)this.expanded.update(s=>new Set([...s,parentId]));
+          this.status.set(`${file.name} moved to ${this.subjectFiles().find(f=>f.id===parentId)?.name??'Materials'}.`);
+        }else this.localError.set(this.materials.error());
+      }finally{this.movingFile.set(null);}
+    }else await this.materials.add(this.subjectId(),Array.from(event.dataTransfer?.files??[]),this.uploadCategory(),parentId);
+  }
   requestFolderDelete(id:string):void{const file=this.subjectFiles().find(file=>file.id===id);if(!file||materialKind(file)!=='folder')return;this.pendingDelete.set(file);this.deleteDialog()?.nativeElement.showModal();}
   async confirmFolderDelete():Promise<void>{const file=this.pendingDelete();if(file&&await this.remove(file.id)){this.deleteDialog()?.nativeElement.close();this.pendingDelete.set(null);}}
   async remove(id:string):Promise<boolean>{

@@ -53,7 +53,6 @@ export class FileViewerComponent {
   readonly file=computed(()=>this.materials.files().find(f=>f.id===this.fileId()));readonly kind=computed(()=>this.file()?materialKind(this.file()!):'pdf');
   readonly linkedDeck=computed(()=>this.materials.files().find(f=>f.kind==='deck'&&f.sourcePdfId===this.fileId()));
   readonly cards=computed(()=>(this.kind()==='pdf'?this.linkedDeck():this.file())?.outputs?.flashcards?.cards??[]);readonly selectedCard=signal<string|null>(null);readonly card=computed(()=>this.cards().find(c=>c.id===this.selectedCard()));
-  readonly folders=computed(()=>this.materials.files().filter(f=>f.kind==='folder'&&f.subjectId===this.file()?.subjectId));
   readonly deckCards=computed(()=>this.cards().map(c=>({...c,key:c.id!,fileId:this.file()?.sourcePdfId??this.fileId(),fileName:this.file()?.name??'',deckId:this.fileId()})));
   readonly revealed=signal(false);readonly generating=computed(()=>['queued','running'].includes(this.file()?.processing?.status??''));readonly saving=signal(false);readonly editing=signal(false);readonly addingCard=signal(false);
   readonly error=signal('');readonly notice=signal('');readonly fileUrl=computed(()=>materialFileUrl(this.fileId()));
@@ -96,7 +95,6 @@ export class FileViewerComponent {
   async addCard():Promise<void>{const value=this.cardForm.getRawValue();if(!value.question.trim()||!value.answer.trim()){this.error.set('Enter a question and an answer.');return;}if(await this.materials.appendCards(this.fileId(),[{question:value.question.trim(),answer:value.answer.trim(),demo:false}])){this.cardForm.reset();this.addingCard.set(false);this.error.set('');}else this.error.set(this.materials.error());}
   async saveContent():Promise<void>{if(await this.materials.update(this.fileId(),{content:this.content.value})){this.editing.set(false);this.notice.set('File content saved.');}else this.error.set(this.materials.error());}
   cancelContent():void{this.content.setValue(this.file()?.content??'');this.editing.set(false);}
-  async moveDeck(parentId:string|null):Promise<void>{if(!await this.materials.update(this.fileId(),{parentId}))this.error.set(this.materials.error());else this.notice.set('Deck moved. Learning progress is preserved.');}
   heading(line:string):number{return /^(#{1,3}) /.exec(line)?.[1].length??0;}
   text(line:string):string{return line.replace(/^#{1,3} /,'').replace(/^- /,'• ');}
   async loadMcq():Promise<void>{

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canGenerateFlashcards, CATEGORY_DOCUMENT_TYPES, UPLOAD_CATEGORIES, descendants, folderCards, materialCards, materialName, normalizeMaterial, sourcePageUrl, treeRows, validParent } from '../src/app/models/material.ts';
+import { canGenerateFlashcards, CATEGORY_DOCUMENT_TYPES, UPLOAD_CATEGORIES, descendants, folderCards, materialCards, materialName, materialPath, normalizeMaterial, sourcePageUrl, treeRows, validParent } from '../src/app/models/material.ts';
 import type { Material } from '../src/app/models/material.ts';
 import { buildApkg } from '../src/app/models/apkg.ts';
 import initSqlJs from 'sql.js';
@@ -8,6 +8,22 @@ import { unzipSync, strFromU8 } from 'fflate';
 
 const file=(id:string,parentId:string|null,kind:Material['kind']='pdf'):Material=>({id,name:id+(kind==='folder'?'':'.'+kind),parentId,kind,subjectId:'subject',size:0,blob:new Blob(),added:0,category:kind==='pdf'?'Slides':'Notes',marker:'To read'});
 const fixture=()=>[file('week1',null,'folder'),file('lecture','week1','folder'),file('notes','lecture','md'),file('slides','week1'),file('root',null)];
+
+test('file paths include nested folders and follow moves and renames',()=>{
+  const files=fixture(),notes=files.find(f=>f.id==='notes')!;
+  assert.equal(materialPath(files,notes),'Materials / week1 / lecture');
+  assert.equal(materialPath(files,{...notes,parentId:null}),'Materials');
+  assert.equal(materialPath(files,{...notes,parentId:'week1'}),'Materials / week1');
+  assert.equal(materialPath(files.map(f=>f.id==='week1'?{...f,name:'Week 1'}:f),notes),'Materials / Week 1 / lecture');
+});
+
+test('file paths tolerate missing parents and cycles without crossing subjects',()=>{
+  const notes=file('notes','missing','md');
+  assert.equal(materialPath([],notes),'Materials');
+  const folder=file('missing','notes','folder');
+  assert.equal(materialPath([notes,folder],notes),'Materials / missing');
+  assert.equal(materialPath([{...folder,subjectId:'other'}],notes),'Materials');
+});
 
 test('legacy PDFs remain in Materials with stable card IDs',()=>{
   const old=file('legacy',null);delete old.kind;delete old.parentId;
