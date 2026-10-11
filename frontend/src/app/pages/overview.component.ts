@@ -1,19 +1,23 @@
-import { Component, ElementRef, computed, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, computed, effect, inject, signal } from '@angular/core';
 import { CdkDrag, CdkDragDrop, CdkDropList, CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { CdkScrollable } from '@angular/cdk/scrolling';
+import { CdkMenu, CdkMenuItemRadio, CdkMenuTrigger } from '@angular/cdk/menu';
+import type { ConnectedPosition } from '@angular/cdk/overlay';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { StudyStore } from '../services/study-store';
 import { TaskStore } from '../services/task-store';
 import { MaterialStore } from '../services/material-store';
+import { UserStore } from '../services/user-store';
 import { IconComponent } from '../shared/icon.component';
 import { Material, MaterialMarker, materialKind, materialTypeLabel } from '../models/material';
 import { MAX_TASK_TITLE, PRIORITIES, Priority, Task, dueLabel, dueState } from '../models/task';
-import { MATERIAL_STATES, OVERVIEW_QUOTES, materialCoverage, overviewMaterials, overviewTasks } from '../models/overview';
+import { MATERIAL_STATES, OVERVIEW_GREETINGS, localDateKey, materialCoverage, overviewDayPlan, overviewMaterials, overviewTasks } from '../models/overview';
+import { dayLabel } from '../models/study';
 
 @Component({
   standalone: true,
-  imports: [FormsModule, RouterLink, IconComponent, CdkDrag, CdkDropList, CdkDropListGroup, CdkScrollable],
+  imports: [FormsModule, RouterLink, IconComponent, CdkDrag, CdkDropList, CdkDropListGroup, CdkScrollable, CdkMenu, CdkMenuItemRadio, CdkMenuTrigger],
   templateUrl: './overview.component.html',
   styleUrl: './overview.component.css',
 })
@@ -21,8 +25,13 @@ export class OverviewComponent {
   readonly store = inject(StudyStore);
   readonly tasks = inject(TaskStore);
   readonly materials = inject(MaterialStore);
+  private readonly users = inject(UserStore);
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
-  readonly quote = OVERVIEW_QUOTES[Math.floor(Math.random() * OVERVIEW_QUOTES.length)];
+  private readonly greetingTemplate = OVERVIEW_GREETINGS[Math.floor(Math.random() * OVERVIEW_GREETINGS.length)];
+  readonly greeting = computed(() => {
+    const user = this.users.user();
+    return user ? this.greetingTemplate.replace('USERNAME', () => user.name.trim() || user.email) : '';
+  });
   readonly priorities = PRIORITIES;
   readonly states = MATERIAL_STATES;
   readonly maxTitle = MAX_TASK_TITLE;
@@ -37,7 +46,15 @@ export class OverviewComponent {
   readonly coverage = computed(() => materialCoverage(this.files()));
   readonly courseProgress = computed(() => this.store.subjects().map(subject => ({subject,
     ...materialCoverage(this.files().filter(file => file.subjectId === subject.id))})));
+  readonly today = signal(localDateKey(new Date()));
+  readonly todayLabel = computed(() => dayLabel(this.today(), {weekday: 'long', day: 'numeric', month: 'long'}));
+  readonly todayPlan = computed(() => overviewDayPlan(this.store.generatedPlan()?.blocks ?? [], this.store.subjects(), this.today()));
   readonly boardCourse = signal('');
+  readonly boardCourseLabel = computed(() => this.subjectsById().get(this.boardCourse())?.name ?? 'All courses');
+  readonly courseFilterPositions: ConnectedPosition[] = [
+    {originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6},
+    {originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -6},
+  ];
   readonly filteredFiles = computed(() => this.files().filter(file => !this.boardCourse() || file.subjectId === this.boardCourse()));
   readonly columns = computed(() => this.states.map(state => ({...state, files: this.filteredFiles().filter(file => file.marker === state.marker)})));
   readonly ready = computed(() => this.store.loaded() && !this.materials.loading());
@@ -51,6 +68,9 @@ export class OverviewComponent {
   draftPriority: Priority = 'medium';
 
   constructor() {
+    // Keep the day current even when the overview stays open overnight.
+    const dayTimer = setInterval(() => this.today.set(localDateKey(new Date())), 60_000);
+    inject(DestroyRef).onDestroy(() => clearInterval(dayTimer));
     effect(() => {
       const ids = this.subjectIds();
       if (!ids.has(this.draftCourse())) this.draftCourse.set(this.store.subjects()[0]?.id ?? '');
@@ -60,10 +80,6 @@ export class OverviewComponent {
 
   subjectName(id: string): string { return this.subjectsById().get(id)?.name ?? ''; }
   priorityLabel(priority: Priority): string { return this.priorities.find(item => item.value === priority)!.label; }
-  private today(): string {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  }
   overdue(task: Task): boolean { return !!task.due && dueState(task.due, this.today()) === 'overdue'; }
   dueText(task: Task): string { return task.due ? `${this.overdue(task) ? 'Overdue · ' : ''}${dueLabel(task.due, this.today())}` : ''; }
 

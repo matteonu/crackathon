@@ -1,10 +1,10 @@
 <header class="page-heading overview-heading">
-  <div><span class="eyebrow">DAILY QUOTE</span><h1>{{quote}}</h1></div>
+  <h1 [class.overview-greeting]="greeting()">{{greeting()}}</h1>
 </header>
 @if (store.loadError()) { <p class="overview-error" role="alert">{{store.loadError()}}</p> }
 
 <div class="overview-dashboard">
-  <section class="panel overview-focus" aria-label="To-dos and progress">
+  <section class="panel overview-focus" aria-label="To-dos, material covered and today's plan">
     <div class="overview-todos">
       <div class="overview-section-heading">
         <h2>To-dos</h2>
@@ -56,25 +56,71 @@
     </div>
 
     <div class="overview-insight">
-      <div class="overview-section-heading"><div><span class="eyebrow">YOUR PROGRESS</span><h2>Material covered</h2></div><span class="overview-section-icon"><app-icon name="chart" /></span></div>
+      <div class="overview-section-heading"><h2>Material covered</h2><span class="overview-section-icon"><app-icon name="chart" /></span></div>
       @if (!ready()) { <p class="overview-empty" role="status">Loading your progress…</p> }
       @else {
-        <div class="overview-coverage"><strong>{{coverage().percent === null ? '—' : coverage().percent + '%'}}</strong><div><span>{{coverage().counts.Done}} of {{coverage().tracked}} files done</span><small>{{coverage().counts.Ignore ? coverage().counts.Ignore + ' ignored · excluded from progress' : 'Based on the state of your course material'}}</small></div></div>
-        <div class="overview-progress-track" role="progressbar" aria-label="Material covered" [attr.aria-valuenow]="coverage().percent ?? 0" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuetext]="coverage().tracked ? coverage().counts.Done + ' of ' + coverage().tracked + ' files done' : 'No material to cover yet'"><span [style.width.%]="coverage().percent ?? 0"></span></div>
+        <div class="overview-coverage"><strong>{{coverage().percent === null ? '—' : coverage().percent + '%'}}</strong><div><span>{{coverage().counts.Done}} of {{coverage().tracked}} files done</span><small>Course material by state</small></div></div>
+        <div class="overview-progress-track" role="img" [attr.aria-label]="'All material: ' + coverage().description">
+          @for (segment of coverage().segments; track segment.marker) { <span [class]="'state-' + segment.key" [style.width.%]="segment.percent" [title]="segment.label"></span> }
+        </div>
         <div class="overview-legend">
-          @for (state of states; track state.marker) { <span [class]="'state-' + state.key"><i></i>{{state.marker}} <b>{{coverage().counts[state.marker]}}</b></span> }
+          @for (state of coverage().segments; track state.marker) { <span [class]="'state-' + state.key"><i></i>{{state.marker}} <b>{{state.count}}</b></span> }
         </div>
         <div class="overview-course-progress">
           @for (course of courseProgress(); track course.subject.id) {
-            <div class="overview-course-row"><div><a [routerLink]="['/subject-tab', course.subject.id]"><i [style.background]="course.subject.color"></i>{{course.subject.name}}</a><span>{{course.tracked ? course.counts.Done + '/' + course.tracked : course.total ? 'All ignored' : 'No material'}}</span></div><div class="overview-course-track" role="progressbar" [attr.aria-label]="course.subject.name + ' material covered'" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="course.percent ?? 0" [attr.aria-valuetext]="course.tracked ? course.counts.Done + ' of ' + course.tracked + ' files done' : 'No material to cover'"><span [style.width.%]="course.percent ?? 0"></span></div></div>
+            <div class="overview-course-row">
+              <div><a [routerLink]="['/subject-tab', course.subject.id]"><i [style.background]="course.subject.color"></i>{{course.subject.name}}</a><span>{{course.tracked ? course.counts.Done + '/' + course.tracked + ' done' : 'No material to cover'}}</span></div>
+              <div class="overview-course-track" role="img" [attr.aria-label]="course.subject.name + ': ' + course.description">
+                @for (segment of course.segments; track segment.marker) { <span [class]="'state-' + segment.key" [style.width.%]="segment.percent" [title]="segment.label"></span> }
+              </div>
+            </div>
           } @empty { <p class="overview-muted">Your courses will appear here once you add them.</p> }
         </div>
+      }
+    </div>
+
+    <div class="overview-today">
+      <div class="overview-section-heading"><h2>Today's plan</h2><span class="overview-section-icon"><app-icon name="calendar" /></span></div>
+      <time class="overview-today-date" [attr.datetime]="today()">{{todayLabel()}}</time>
+      @if (!store.loaded()) { <p class="overview-empty" role="status">Loading today's plan…</p> }
+      @else {
+        <div class="overview-agenda-scroll" tabindex="0" role="region" aria-label="Today's calendar">
+          <ol class="overview-agenda">
+            @for (entry of todayPlan(); track entry.id) {
+              <li class="overview-agenda-row">
+                <div class="overview-agenda-time">
+                  @if (entry.start) {
+                    <time [attr.datetime]="today() + 'T' + entry.start">{{entry.start}}</time>
+                    @if (entry.end) { <time [attr.datetime]="today() + 'T' + entry.end">{{entry.end}}</time> }
+                  } @else { <span>All day</span> }
+                </div>
+                <div class="overview-agenda-event" [style.--event-color]="entry.color" [class.overview-agenda-break]="entry.type === 'meal'">
+                  <strong>{{entry.name}}</strong><span>{{entry.label}}</span>
+                </div>
+              </li>
+            } @empty {
+              <li class="overview-empty overview-day-empty"><span class="overview-empty-icon"><app-icon name="calendar" /></span><strong>Nothing planned for today.</strong><span>Your study sessions will appear here.</span></li>
+            }
+          </ol>
+        </div>
+        <a class="overview-schedule-link" routerLink="/schedule" (click)="store.setWeek(today())">Open schedule <span aria-hidden="true">↗</span></a>
       }
     </div>
   </section>
 
   <section class="panel overview-materials" aria-labelledby="overview-materials-title">
-    <div class="overview-section-heading overview-board-heading"><h2 id="overview-materials-title">Course materials</h2><select aria-label="Filter materials by course" [ngModel]="boardCourse()" (ngModelChange)="boardCourse.set($event)"><option value="">All courses</option>@for (subject of store.subjects(); track subject.id) { <option [value]="subject.id">{{subject.name}}</option> }</select></div>
+    <div class="overview-section-heading overview-board-heading">
+      <h2 id="overview-materials-title">Course materials</h2>
+      <button class="overview-course-filter" type="button" [attr.aria-label]="'Filter materials by course: ' + boardCourseLabel()" [title]="boardCourseLabel()" [cdkMenuTriggerFor]="courseFilter" [cdkMenuPosition]="courseFilterPositions"><span>{{boardCourseLabel()}}</span><app-icon name="down" /></button>
+      <ng-template #courseFilter>
+        <div class="overview-course-menu" cdkMenu aria-label="Filter materials by course">
+          <button type="button" cdkMenuItemRadio [cdkMenuItemChecked]="!boardCourse()" (cdkMenuItemTriggered)="boardCourse.set('')"><span>All courses</span><app-icon name="check" /></button>
+          @for (subject of store.subjects(); track subject.id) {
+            <button type="button" cdkMenuItemRadio [cdkMenuItemChecked]="boardCourse() === subject.id" (cdkMenuItemTriggered)="boardCourse.set(subject.id)"><span>{{subject.name}}</span><app-icon name="check" /></button>
+          }
+        </div>
+      </ng-template>
+    </div>
     @if (materials.error()) { <p class="overview-error" role="alert">{{materials.error()}}</p> }
     @if (!ready()) { <p class="overview-empty" role="status">Loading your materials…</p> }
     @else {
