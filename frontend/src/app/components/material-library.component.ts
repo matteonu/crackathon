@@ -18,7 +18,6 @@ export class MaterialLibraryComponent {
   private uploadParent:string|null=null;
   private openRequest=0;
   prepareUpload(category:MaterialCategory):void{this.uploadCategory.set(category);this.uploadParent=this.activeFolder();}
-  prepareTextUpload():void{this.prepareUpload('Notes');}
   readonly deleting=signal(new Set<string>());
   readonly deleteDialog=viewChild<ElementRef<HTMLDialogElement>>('deleteDialog');readonly pendingDelete=signal<Material|null>(null);
   readonly query=signal('');readonly marker=signal('');readonly dragging=signal(false);readonly selectedId=signal<string|null>(null);readonly activeFolder=signal<string|null>(null);readonly expanded=signal(new Set<string>());

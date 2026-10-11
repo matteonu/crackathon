@@ -4,11 +4,10 @@
     <details #uploadMenu class="material-upload-menu" data-popup>
       <summary class="button primary" [attr.aria-disabled]="materials.loading()||materials.busy()"><app-icon name="upload" />Upload<app-icon name="down" /></summary>
       <div class="upload-type-options" aria-label="Document type">
-        @for(category of uploadCategories;track category){<button type="button" [disabled]="materials.loading()||materials.busy()" (click)="prepareUpload(category);rootUpload.click();uploadMenu.open=false"><span>{{category}}</span><small>{{category==='Slides'||category==='Solutions'||category==='Scripts'?'PDF · Summary · Optional flashcards':'PDF · Summary only'}}</small></button>}
-        <button type="button" [disabled]="materials.loading()||materials.busy()" (click)="prepareTextUpload();rootUpload.click();uploadMenu.open=false"><span>Text or Markdown notes</span><small>.txt or .md</small></button>
+        @for(category of uploadCategories;track category){<button type="button" [disabled]="materials.loading()||materials.busy()" (click)="prepareUpload(category);rootUpload.click();uploadMenu.open=false"><span>{{category}}</span></button>}
       </div>
     </details>
-    <input #rootUpload hidden type="file" multiple accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" (change)="upload($event)">
+    <input #rootUpload hidden type="file" multiple accept=".pdf,application/pdf" (change)="upload($event)">
   </div>
   <div class="library-filters"><input aria-label="Search materials" type="search" placeholder="Find a file or folder…" [ngModel]="query()" (ngModelChange)="query.set($event)"><select aria-label="Filter by marker" [ngModel]="marker()" (ngModelChange)="marker.set($event)"><option value="">All markers</option>@for(m of markers;track m){<option>{{m}}</option>}</select></div>
   @if(materials.error()||localError()){<p class="form-error" role="alert">{{localError()||materials.error()}}</p>}
@@ -38,10 +37,9 @@
             <select class="tree-marker" [attr.aria-label]="'Marker for '+row.material.name" [ngModel]="row.material.marker" (ngModelChange)="setMarker(row.material.id,$event)">@for(m of markers;track m){<option>{{m}}</option>}</select>
           }
           <button class="icon-button small delete-material" [attr.aria-label]="'Delete '+row.material.name" title="Delete file" [disabled]="deleting().has(row.material.id)" (click)="remove(row.material.id)"><app-icon name="minus" /></button>
-          <span class="file-format-badge" [attr.data-kind]="kind(row.material)">{{kind(row.material).toUpperCase()}}</span>
         }
       </div>
-    }@empty{<div class="empty-state">{{query()||marker()?'No matching files or folders.':'Create a folder or upload a PDF, .txt or .md file to get started.'}}</div>}}
+    }@empty{<div class="empty-state">{{query()||marker()?'No matching files or folders.':'Create a folder or upload a document to get started.'}}</div>}}
   </div>
   @if(exporting()){<div class="explorer-footer"><span>Preparing .apkg…</span></div>}<p class="viewer-notice" aria-live="polite">{{status()}}</p>
 </section>

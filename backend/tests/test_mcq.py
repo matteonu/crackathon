@@ -66,6 +66,24 @@ class McqApiTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_only_generation_document_types_can_list_and_generate_mcq(self):
+        jobs = self.app.extensions['mcq_jobs']
+        with mock.patch.object(jobs, 'submit') as submit:
+            for category in ['Slides', 'Solutions', 'Exams', 'Scripts', 'Exercises', 'Notes', 'Books', 'Transcripts']:
+                with self.subTest(category=category):
+                    document_id = str(uuid.uuid4())
+                    created = self.client.post('/api/materials', json={
+                        'id': document_id, 'subjectId': 'course-1', 'kind': 'pdf',
+                        'name': category + '-eligibility.pdf', 'category': category})
+                    self.assertEqual(created.status_code, 201)
+                    allowed = category in {'Slides', 'Solutions', 'Exams', 'Scripts', 'Notes'}
+                    url = f'/api/learning/documents/{document_id}/mcq-sets'
+                    self.assertEqual(self.client.get(url).status_code, 200 if allowed else 400)
+                    submit.reset_mock()
+                    response = self.client.post(url, json={'idempotencyKey': str(uuid.uuid4())})
+                    self.assertEqual(response.status_code, 202 if allowed else 400)
+                    self.assertEqual(submit.called, allowed)
+
     def completed_set(self):
         set_id, series_id, question_id = str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
         option_ids = [str(uuid.uuid4()) for _ in range(3)]

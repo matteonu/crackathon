@@ -19,7 +19,7 @@ const isDocument = (file: Material): boolean => file.kind !== 'folder' && file.k
 /** Only the selected semester's documents; folders and generated decks are not extra reading. */
 export function overviewMaterials(files: readonly Material[], subjectIds: ReadonlySet<string>): Material[] {
   return files.filter(file => subjectIds.has(file.subjectId) && isDocument(file))
-    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    .sort((a, b) => b.added - a.added || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
 export function materialCoverage(files: readonly Material[]) {

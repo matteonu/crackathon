@@ -20,17 +20,17 @@ whether it found a key, and `GET /api/learning/health` reports it.
 
 ## Upload-to-study workflow
 
-1. Open a subject from the Overview or Your subjects. Under **Materials**, open **Upload PDF**
-   and choose **Slides**, **Exercises**, **Solutions**, **Exams**, or **Scripts**. The upload
+1. Open a subject from the Overview or Your subjects. Under **Materials**, open **Upload**
+   and choose **Slides**, **Exercises**, **Solutions**, **Exams**, **Scripts**, or **Notes**. The upload
    goes into the selected folder. Dragged PDFs use the last selected document type.
 2. Uploading stores the PDF once and automatically starts a **summary-only** job. The
    one-sentence summary uses full PDF pages (deep mode), including scanned pages and visuals.
    It appears under the file title and in the Materials list; no example or final cards
    are generated during this job.
-3. Open a Slides, Solutions, or Scripts PDF to generate flashcards. Choose **Shallow** or
+3. Open a Slides, Solutions, Exams, Scripts, or Notes PDF to generate flashcards or MC questions. Choose **Shallow** or
    **Deep**, enter **Anki cards** (5–300, default 60), then press **Generate flashcards**.
-   The existing summary stays visible and is reused. Exercises, Exams, and legacy PDF
-   categories show the source and summary without a flashcard panel.
+   The existing summary stays visible and is reused. Every PDF has page-context chat;
+   Exercises and legacy PDF categories offer chat without either generator.
 4. Questions and answers are saved to JSON and displayed in the flashcard panel.
    Reveal, folder practice, and Anki `.apkg` export use these cards. Changing the count
    starts a new run for the same PDF; no new upload is needed.
