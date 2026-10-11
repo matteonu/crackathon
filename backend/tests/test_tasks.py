@@ -2,6 +2,7 @@
 import tempfile
 import unittest
 import uuid
+from unittest.mock import patch
 
 from tests.support import build_app
 
@@ -116,6 +117,44 @@ class TaskTests(unittest.TestCase):
         self.assertEqual(self.titles('analysis'), [keep['title']])
         self.assertEqual(self.titles('algebra'), ['done elsewhere'])   # another subject's done tasks stay
         self.assertEqual(self.client.delete('/api/tasks/completed', headers=ALICE).status_code, 400)
+
+    def test_daily_cleanup_keeps_today_open_and_other_users_tasks(self):
+        # UTC value of midnight in the caller's local time zone; the server must
+        # use this boundary exactly, not its own calendar day or "24 hours ago".
+        midnight = 1_792_015_200_000
+        with patch('tasks.time.time', return_value=(midnight - 1) / 1000):
+            old = self.create('yesterday')
+            elsewhere = self.create('yesterday elsewhere', subject='algebra')
+            bob = self.create('bob yesterday', headers=BOB)
+            self.create('unfinished')
+            reopened = self.create('reopened')
+            for task, headers in ((old, ALICE), (elsewhere, ALICE), (bob, BOB), (reopened, ALICE)):
+                self.client.patch(f"/api/tasks/{task['id']}", json={'done': True}, headers=headers)
+            self.client.patch(f"/api/tasks/{reopened['id']}", json={'done': False}, headers=ALICE)
+        with patch('tasks.time.time', return_value=midnight / 1000):
+            today = self.create('exactly midnight')
+            self.client.patch(f"/api/tasks/{today['id']}", json={'done': True}, headers=ALICE)
+            response = self.client.delete(f'/api/tasks/completed?before={midnight}', headers=ALICE)
+            self.assertEqual(response.get_json(), {'deleted': 2})
+            self.assertEqual(sorted(self.titles()), ['exactly midnight', 'reopened', 'unfinished'])
+            self.assertEqual(self.titles(headers=BOB), ['bob yesterday'])
+            self.assertEqual(self.client.delete(f'/api/tasks/completed?before={midnight}', headers=ALICE).get_json(), {'deleted': 0})
+
+    def test_daily_cleanup_validates_cutoff_and_requires_authentication(self):
+        with patch('tasks.time.time', return_value=1000):
+            for cutoff in ('tomorrow', '-1', '1.5', '1000001', ''):
+                self.assertEqual(self.client.delete(f'/api/tasks/completed?before={cutoff}', headers=ALICE).status_code, 400)
+            self.assertEqual(self.client.delete('/api/tasks/completed?before=1000000').status_code, 401)
+
+    def test_daily_cleanup_can_be_scoped_to_a_subject(self):
+        with patch('tasks.time.time', return_value=1):
+            for subject in ('analysis', 'algebra'):
+                task = self.create(subject, subject=subject)
+                self.client.patch(f"/api/tasks/{task['id']}", json={'done': True}, headers=ALICE)
+        with patch('tasks.time.time', return_value=10):
+            response = self.client.delete('/api/tasks/completed?subject=analysis&before=5000', headers=ALICE)
+            self.assertEqual(response.get_json(), {'deleted': 1})
+            self.assertEqual(self.titles(), ['algebra'])
 
 
 if __name__ == '__main__':

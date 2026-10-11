@@ -6,7 +6,7 @@
     "analytics": false
   },
   "projects": {
-    "studyphase": {
+    "studyhub": {
       "projectType": "application",
       "root": "",
       "sourceRoot": "src",
@@ -80,10 +80,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "studyphase:build:production"
+              "buildTarget": "studyhub:build:production"
             },
             "development": {
-              "buildTarget": "studyphase:build:development"
+              "buildTarget": "studyhub:build:development"
             }
           },
           "defaultConfiguration": "development"

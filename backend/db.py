@@ -40,7 +40,7 @@ def seed_dirs():
 
 
 def connect(path=None):
-    db = sqlite3.connect(path or db_path())
+    db = sqlite3.connect(path or db_path(), timeout=30)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     return db
@@ -108,6 +108,9 @@ def init_db():
     """Apply schema and migrate the legacy material table in one transaction."""
     os.makedirs(os.path.dirname(db_path()), exist_ok=True)
     with closing(connect()) as db, open(SCHEMA_PATH) as f:
+        # Keep readers responsive while catalogue imports and workers write.
+        # Set this once at startup, before opening a migration transaction.
+        db.execute('PRAGMA journal_mode = WAL')
         schema = f.read()
         # executescript commits implicitly, so execute complete statements individually.
         statements, pending = [], ''
@@ -120,11 +123,13 @@ def init_db():
         db.execute('BEGIN IMMEDIATE')
         try:
             columns = {r['name'] for r in db.execute('PRAGMA table_info(materials)')}
-            if columns and 'source_pdf_id' not in columns:
+            material_schema = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='materials'").fetchone()
+            if columns and ('source_pdf_id' not in columns or "'notes'" not in material_schema['sql']):
                 material_sql = next(s for s in statements if 'CREATE TABLE IF NOT EXISTS materials (' in s)
                 db.execute(material_sql.replace('CREATE TABLE IF NOT EXISTS materials (',
                                                'CREATE TABLE materials_new ('))
-                names = ','.join('"' + name + '"' for name in sorted(columns))
+                target_columns = {r['name'] for r in db.execute('PRAGMA table_info(materials_new)')}
+                names = ','.join('"' + name + '"' for name in sorted(columns & target_columns))
                 db.execute(f'INSERT INTO materials_new ({names}) SELECT {names} FROM materials')
                 db.execute('DROP TABLE materials')
                 db.execute('ALTER TABLE materials_new RENAME TO materials')
@@ -256,6 +261,26 @@ def get_user_by_email(email):
 def upsert_user(email, display_name):
     """The user row for this email, created on first sight. Keeps the name the proxy sends."""
     conn = get_db()
+    user = get_user_by_email(email)
+    # Most API requests only identify an existing user. Even a no-op INSERT
+    # would take the writer lock and wait behind the catalogue import.
+    if user is not None and user['display_name'] == display_name:
+        return user
+    if user is not None:
+        # A cosmetic name refresh must not block file reads behind a writer.
+        # Retry naturally on a later request once the catalogue write finishes.
+        busy_timeout = conn.execute('PRAGMA busy_timeout').fetchone()[0]
+        conn.execute('PRAGMA busy_timeout = 0')
+        try:
+            with conn:
+                conn.execute('UPDATE users SET display_name = ? WHERE id = ?', (display_name, user['id']))
+        except sqlite3.OperationalError as exc:
+            if (getattr(exc, 'sqlite_errorcode', 0) & 255) not in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+                raise
+            return user
+        finally:
+            conn.execute(f'PRAGMA busy_timeout = {busy_timeout}')
+        return get_user_by_email(email)
     with conn:
         conn.execute(
             "INSERT INTO users (email, display_name) VALUES (?, ?) ON CONFLICT (email) DO NOTHING",

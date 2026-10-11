@@ -16,10 +16,10 @@ import { Flashcard, sourcePageUrl } from '../models/material';
     @if(!source.pdfId){<span> (PDF deleted)</span>}
   }@else if(card().generated){<span>Source not recorded</span>}
 `,styles:`
-  :host{display:block;color:#7d857e;font-size:11px;font-weight:400;line-height:1.5;overflow-wrap:anywhere;text-align:inherit;}
+  :host{display:block;color:var(--muted);font-size:11px;font-weight:400;line-height:1.5;overflow-wrap:anywhere;text-align:inherit;}
   :host:empty{display:none;}
-  a{color:inherit;text-decoration:underline;text-decoration-color:#bcc5bc;text-underline-offset:3px;}
-  a:hover,a:focus-visible{color:#315c47;text-decoration-color:currentColor;}
+  a{color:inherit;text-decoration:underline;text-decoration-color:var(--line-strong);text-underline-offset:3px;}
+  a:hover,a:focus-visible{color:var(--accent);text-decoration-color:currentColor;}
 `})
 export class CardSourceComponent {
   readonly card=input.required<Flashcard>();

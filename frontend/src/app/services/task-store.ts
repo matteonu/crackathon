@@ -1,5 +1,5 @@
-import { Injectable, signal } from '@angular/core';
-import { Priority, Task, cleanTitle, droppedPlacement, openTasks, topPosition, validTask } from '../models/task';
+import { DestroyRef, Injectable, inject, signal } from '@angular/core';
+import { Priority, Task, cleanTitle, droppedPlacement, openTasks, taskDayBounds, topPosition, validTask } from '../models/task';
 
 type TaskPatch=Partial<Pick<Task,'title'|'notes'|'due'|'priority'|'done'|'position'>>;
 
@@ -9,7 +9,25 @@ type TaskPatch=Partial<Pick<Task,'title'|'notes'|'due'|'priority'|'done'|'positi
 export class TaskStore {
   readonly tasks=signal<Task[]>([]);readonly loading=signal(true);readonly error=signal('');
   private mutations:Promise<unknown>=Promise.resolve();
-  constructor(){void this.load();}
+  private cleanedBefore = -1;
+  constructor(){
+    void this.queue(() => this.load());
+    const refreshDay = () => { if (taskDayBounds().start !== this.cleanedBefore) void this.queue(() => this.load()); };
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      timer = setTimeout(() => { refreshDay(); schedule(); }, Math.max(1000, taskDayBounds().next - Date.now() + 100));
+    };
+    schedule();
+    // A laptop may sleep across midnight; catch up when the user comes back.
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshDay(); };
+    window.addEventListener('focus', refreshDay);
+    document.addEventListener('visibilitychange', onVisible);
+    inject(DestroyRef).onDestroy(() => {
+      clearTimeout(timer);
+      window.removeEventListener('focus', refreshDay);
+      document.removeEventListener('visibilitychange', onVisible);
+    });
+  }
   private async request<T>(url:string,init?:RequestInit):Promise<T>{
     let response:Response;
     try{response=await fetch(url,{cache:'no-store',...init});}
@@ -23,7 +41,16 @@ export class TaskStore {
   private queue<T>(work:()=>Promise<T>):Promise<T>{const operation=this.mutations.then(work);this.mutations=operation.catch(()=>undefined);return operation;}
   private store(task:Task):Task{this.tasks.update(values=>values.some(t=>t.id===task.id)?values.map(t=>t.id===task.id?task:t):[...values,task]);return task;}
   private async load():Promise<void>{
-    try{this.tasks.set((await this.request<unknown[]>('/api/tasks')).filter(validTask));this.error.set('');}
+    try{
+      const before = taskDayBounds().start;
+      if (before !== this.cleanedBefore) {
+        try {
+          await this.request(`/api/tasks/completed?before=${before}`, {method: 'DELETE'});
+          this.cleanedBefore = before;
+        } catch { /* Cleanup is best-effort; retry on the next visit or focus. */ }
+      }
+      this.tasks.set((await this.request<unknown[]>('/api/tasks')).filter(validTask));this.error.set('');
+    }
     catch(e){this.error.set(e instanceof Error?e.message:'Could not load your tasks.');}
     finally{this.loading.set(false);}
   }

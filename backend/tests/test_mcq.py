@@ -49,6 +49,7 @@ class McqValidationTests(unittest.TestCase):
         with mock.patch.object(mcq.pdf_study, "API_KEY", "test-key"):
             result = mcq.generate("slides.pdf", "shallow", requested_count=10)
         self.assertEqual(len(result), 1)
+        self.assertNotIn("title", request_json.call_args.args[3]["properties"])
         request_json.assert_called_once()
 
 
@@ -105,6 +106,29 @@ class McqApiTests(unittest.TestCase):
         with self.app.app_context():
             self.assertEqual(db.get_db().execute("SELECT count(*) FROM mcq_sets").fetchone()[0], 0)
             self.assertEqual(db.get_db().execute("SELECT count(*) FROM mcq_sessions").fetchone()[0], 0)
+
+    def test_regeneration_uses_questions_without_a_title(self):
+        old_id, _question_id, _options = self.completed_set()
+        old = self.client.get(f"/api/learning/mcq-sets/{old_id}").get_json()
+        self.assertNotIn("title", old)
+        jobs = self.app.extensions["mcq_jobs"]
+        with mock.patch.object(jobs, "submit"):
+            queued = self.client.post(f"/api/learning/documents/{self.material_id}/mcq-sets", json={
+                "action": "regenerate", "setId": old_id, "idempotencyKey": str(uuid.uuid4())})
+        self.assertEqual(queued.status_code, 202)
+        new_id = queued.get_json()["id"]
+        self.assertNotIn("title", queued.get_json())
+        with self.app.app_context():
+            conn = db.get_db()
+            row = conn.execute("SELECT * FROM mcq_sets WHERE id=?", (new_id,)).fetchone()
+            jobs._save(conn, row, [{
+                "prompt": "A different question?", "selectionMode": "single",
+                "options": ["Yes", "No"], "correctOptionIndexes": [0],
+                "explanation": "The source confirms this.", "sourcePages": [1]}])
+        detail = self.client.get(f"/api/learning/mcq-sets/{new_id}").get_json()
+        self.assertNotIn("title", detail)
+        self.assertEqual(detail["version"], 2)
+        self.assertNotIn("title", self.client.get(f"/api/learning/documents/{self.material_id}/mcq-sets").get_json()[0])
 
     def test_attempt_history_review_and_independent_active_sessions(self):
         set_id, question_id, options = self.completed_set()

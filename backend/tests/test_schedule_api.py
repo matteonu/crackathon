@@ -308,28 +308,109 @@ class StoredTotalsTests(ScheduleApiCase):
 
 class TargetHoursTests(ScheduleApiCase):
 
-    def test_generating_fills_an_empty_target_with_the_workload_estimate(self):
+    def total(self):
+        return sum(s["targetHours"] for s in self.plan()["subjects"])
+
+    def narrow_days(self, **extra):
+        return self.prefs({"dayStart": "08:00", "dayEnd": "10:00",
+                           "studyBlockSize": 60, "studyHoursPerWeek": 14, **extra})
+
+    def test_targets_follow_the_weekly_budget_without_generated_slots(self):
+        self.add(1)
+        self.prefs({"studyHoursPerWeek": 14})
+        self.assertEqual(self.total(), 112)  # eight weeks, recall included
+        self.assertIsNone(self.plan()["plan"])
+        self.prefs({"studyHoursPerWeek": 28})
+        self.assertEqual(self.total(), 224)
+        self.prefs({"studyHoursPerWeek": 0})
+        self.assertEqual(self.total(), 0)
+
+    def test_weekdays_days_off_and_available_time_limit_the_target(self):
+        self.add(1)
+        self.narrow_days(studyDays=[0, 2, 4])
+        self.assertEqual(self.total(), 48)  # three two-hour days for eight weeks
+        self.prefs({"daysOff": [{"startDate": "2026-12-21", "rangeLength": 3},
+                               {"startDate": "2026-12-22", "rangeLength": 2}]})
+        self.assertEqual(self.total(), 44)  # overlapping days off count once
+        self.prefs({"studyHoursPerWeek": None})
+        self.assertEqual(self.total(), 44)  # no limit still respects available days
+
+    def test_exam_dates_stop_the_course_target_at_the_exam(self):
+        self.add(1)
+        self.narrow_days(studyDays=[0, 2, 4])
+        self.client.patch("/api/semesters/2026W/courses/1",
+                          json={"examDate": "2027-01-01"}, headers=ALICE)
+        self.assertEqual(self.total(), 10)  # five eligible days before the Friday exam
+        self.client.patch("/api/semesters/2026W/courses/1",
+                          json={"examDate": "2026-12-21"}, headers=ALICE)
+        self.assertEqual(self.total(), 0)
+
+    def test_exam_day_preference_and_exam_times_reduce_other_courses_time(self):
         self.add(1)
         self.add(2)
-        self.assertEqual([s["targetHours"] for s in self.plan()["subjects"]], [0, 0])
-        self.generate()
-        # 7 ECTS x 30 h, less 6 weekly lecture hours x 13 weeks.
-        self.assertEqual([s["targetHours"] for s in self.plan()["subjects"]], [132, 132])
+        self.narrow_days()
+        self.client.patch("/api/semesters/2026W/courses/2", headers=ALICE,
+                          json={"examDate": "2026-12-22", "examStart": "08:00", "examEnd": "09:00"})
+        self.assertEqual(self.total(), 108)  # two whole exam days excluded
+        self.prefs({"examDaysOff": False})
+        self.assertEqual(self.total(), 109)  # one hour reserved; course 1 ends before its exam
+        self.client.patch("/api/semesters/2026W/courses/2", headers=ALICE,
+                          json={"examStart": "08:00", "examEnd": "10:00"})
+        self.assertEqual(self.total(), 108)
 
-    def test_a_target_already_set_is_kept(self):
+    def test_cap_limits_active_learning_but_recall_is_included(self):
         self.add(1)
+        self.narrow_days()
+        self.client.patch("/api/semesters/2026W/courses/1", headers=ALICE,
+                          json={"maxStudyHours": 4})
+        self.assertEqual(self.total(), 59)  # four active hours plus 55 one-hour recall blocks
+        self.client.patch("/api/semesters/2026W/courses/1", headers=ALICE,
+                          json={"maxStudyHours": 0})
+        self.assertEqual(self.total(), 55)
+
+    def test_old_saved_targets_do_not_override_the_schedule_forecast(self):
+        self.add(1)
+        self.prefs({"studyHoursPerWeek": 14})
         self.client.patch("/api/semesters/2026W/courses/1", json={"targetHours": 80}, headers=ALICE)
+        self.assertEqual(self.total(), 112)
+
+    def test_generated_weeks_recordings_and_completion_do_not_erase_the_goal(self):
+        self.add(1)
+        self.prefs({"studyHoursPerWeek": 14})
+        before = self.total()
         self.generate(fromDate="2027-02-01")
         self.generate(fromDate="2027-02-08")
-        self.assertEqual(self.plan()["subjects"][0]["targetHours"], 80)
+        self.assertEqual(self.total(), before)
+        self.client.put("/api/semesters/2026W/courses/1/hours/2026-12-21",
+                        json={"hours": 2}, headers=ALICE)
+        self.client.patch("/api/semesters/2026W/courses/1", json={"completed": True}, headers=ALICE)
+        self.assertEqual(self.total(), before)
+        self.assertEqual(self.plan(user=BOB)["subjects"], [])
 
-    studied = PreferenceTests.studied
-    minutes = GenerateTests.minutes
-
-    def test_a_dry_run_changes_no_target(self):
+    def test_a_dry_run_changes_neither_target_nor_calendar(self):
         self.add(1)
+        before = self.total()
         self.generate(dryRun=True)
-        self.assertEqual(self.plan()["subjects"][0]["targetHours"], 0)
+        self.assertEqual(self.total(), before)
+        self.assertIsNone(self.plan()["plan"])
+
+    def test_manual_breaks_reduce_available_time_without_storing_forecast_slots(self):
+        self.add(1)
+        self.narrow_days()
+        self.assertEqual(self.total(), 110)
+        self.client.post("/api/semesters/2026W/plan/blocks", headers=ALICE,
+                         json={"date": "2026-12-21", "start": "08:00", "end": "10:00", "kind": "break"})
+        self.assertEqual(self.total(), 108)
+        self.assertEqual(len(self.plan()["plan"]["blocks"]), 1)
+
+    def test_manual_study_counts_towards_the_same_goal(self):
+        self.add(1)
+        self.narrow_days()
+        self.assertEqual(self.total(), 110)
+        self.client.post("/api/semesters/2026W/plan/blocks", headers=ALICE,
+                         json={"date": "2026-12-21", "start": "08:00", "end": "09:00",
+                               "kind": "course", "courseId": 1})
+        self.assertEqual(self.total(), 110)  # one manual hour plus one forecast recall hour
 
 
 class SlotTests(ScheduleApiCase):
@@ -355,7 +436,7 @@ class SlotTests(ScheduleApiCase):
         self.assertIsNone(plan["generatedAt"])
         self.assertEqual([(b["start"], b["end"], b["subjectId"], b["type"]) for b in plan["blocks"]],
                          [("09:00", "11:00", "course-1", "active_learning")])
-        self.assertEqual(self.plan()["subjects"][0]["targetHours"], 132)  # an empty target is filled in
+        self.assertGreater(self.plan()["subjects"][0]["targetHours"], 0)  # full-phase schedule forecast
 
     def test_a_break_is_a_slot_without_a_course(self):
         self.add(1)

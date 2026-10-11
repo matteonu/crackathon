@@ -1,9 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanTitle, doneTasks, droppedPlacement, dueLabel, dueState, openTasks, priorityRank, topPosition, validTask } from '../src/app/models/task.ts';
+import { cleanTitle, doneTasks, droppedPlacement, dueLabel, dueState, openTasks, priorityRank, taskDayBounds, topPosition, validTask } from '../src/app/models/task.ts';
 import type { Task } from '../src/app/models/task.ts';
 
 const task=(id:string,position:number,extra:Partial<Task>={}):Task=>({id,subjectId:'analysis',title:id,notes:'',due:null,priority:'medium',done:false,completedAt:null,position,createdAt:Number(id.replace(/\D/g,''))||0,...extra});
+
+test('daily cleanup uses local midnight across month, year and daylight-saving boundaries', () => {
+  for (const [year, month, day] of [[2026, 2, 29], [2026, 9, 25], [2026, 11, 31], [2028, 1, 29]]) {
+    const now = new Date(year, month, day, 23, 59);
+    const bounds = taskDayBounds(now);
+    assert.equal(bounds.start, new Date(year, month, day).getTime());
+    assert.equal(bounds.next, new Date(year, month, day + 1).getTime());
+    assert.ok(bounds.start < now.getTime() && bounds.next > now.getTime());
+  }
+});
 
 test('open tasks follow their manual order, done tasks the latest completion first',()=>{
   const tasks=[task('a1',2),task('b2',1),task('c3',3,{done:true,completedAt:10}),task('d4',0,{done:true,completedAt:20}),task('e5',-1,{subjectId:'algebra'})];

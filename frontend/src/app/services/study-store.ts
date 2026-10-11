@@ -1,7 +1,10 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 import { StudyData, Subject, PlannedSession, validSession, sessionsOverlap, addDays, dailyTotal, dayLabel, mondayOf, round, sumHours, validateData, weekDays } from '../models/study';
 import { CourseHit, GeneratedPlan, Plan, PlanBlock, PlanSubject, Preferences, SemesterOption, Semesters,
   courseIdOf, dayFulfilled, emptyData, planToData, studyHours } from '../models/semester';
+import { calendarClock, calendarEntries } from '../models/calendar';
+import type { CourseTimetable } from '../models/calendar';
+import { localDateKey } from '../models/overview';
 
 /** The habits of a semester nobody has configured, mirroring the server's defaults. */
 const DEFAULT_PREFERENCES: Preferences = {dayStart:'08:00', dayEnd:'20:00', lunch:['12:00','13:00'],
@@ -12,13 +15,16 @@ const DEFAULT_PREFERENCES: Preferences = {dayStart:'08:00', dayEnd:'20:00', lunc
 export type CoursePlanPatch = Partial<{priority:number; difficulty:number|null; maxStudyHours:number|null;
   lecturePerWeek:number|null; examDate:string; examStart:string|null; examEnd:string|null; targetHours:number}>;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateKey(new Date());
 
 /** The study plan of the current semester, kept on the server (see backend/planner.py).
  *  This is the in-memory copy the pages read. A change shows at once, is sent to the server
  *  in order, and if the server refuses it the plan is reloaded from the server. */
 @Injectable({providedIn:'root'})
 export class StudyStore {
+  private readonly now = signal(new Date());
+  readonly currentDate = computed(() => localDateKey(this.now()));
+  readonly clock = computed(() => calendarClock(this.now()));
   readonly loaded = signal(false);
   readonly loadError = signal('');
   readonly semkez = signal('');
@@ -44,17 +50,17 @@ export class StudyStore {
     return new Map([...days].map(([date,subjects])=>[date,{
       label:subjects.map(subject=>`${subject.shortName} exam${subject.examStart&&subject.examEnd?' · '+subject.examStart+'–'+subject.examEnd:''}`).join(' · '),
       background:`linear-gradient(90deg, ${subjects.flatMap((subject,index)=>{
-        const color=`color-mix(in srgb, ${subject.color} var(--exam-tint,40%), #fff)`;
+        const color=`color-mix(in srgb, ${subject.color} var(--exam-tint,40%), var(--surface))`;
         return [`${color} ${index/subjects.length*100}%`,`${color} ${(index+1)/subjects.length*100}%`];
       }).join(', ')})`
     }] as const));
   });
-  readonly weekStart = signal(mondayOf(this.data().referenceDate));
+  readonly weekStart = signal(mondayOf(today()));
   readonly week = computed(() => weekDays(this.weekStart()));
   readonly weekHours = computed(() => round(this.subjects().reduce((s,subject) => s + sumHours(subject,this.week()), 0)));
   readonly hasWeekRecordedHours = computed(() => this.subjects().some(s => this.week().some(date => s.hours[date] != null)));
-  readonly firstWeek = computed(() => mondayOf(this.dates()[0]));
-  readonly lastWeek = computed(() => mondayOf(this.dates().at(-1)!));
+  readonly firstWeek = computed(() => mondayOf([today(), this.courseTimetable()?.start ?? this.dates()[0]].sort()[0]));
+  readonly lastWeek = computed(() => mondayOf([today(), this.dates().at(-1)!].sort().at(-1)!));
   readonly canGoBack = computed(() => this.weekStart() > this.firstWeek());
   readonly canGoNext = computed(() => this.weekStart() < this.lastWeek());
   readonly editor = signal<{subjectId:string,date:string} | null>(null);
@@ -63,6 +69,13 @@ export class StudyStore {
   readonly preferences = signal<Preferences>(DEFAULT_PREFERENCES);
   /** The generated schedule, or null while none has been generated. */
   readonly generatedPlan = signal<GeneratedPlan | null>(null);
+  readonly courseTimetable = signal<CourseTimetable | null>(null);
+  readonly calendarEntries = computed(() => calendarEntries(this.generatedPlan()?.blocks ?? [],
+    this.courseTimetable()?.events ?? [], this.subjects(), this.examSession()));
+  readonly calendarStudyBlocks = computed(() => this.calendarEntries().flatMap(entry => entry.block ? [entry.block] : []));
+  readonly calendarCourses = computed(() => this.calendarEntries().flatMap(entry => entry.course ? [entry.course] : []));
+  readonly calendarExams = computed(() => this.calendarEntries().filter(entry => entry.type === 'exam'));
+  readonly todayPlan = computed(() => this.calendarEntries().filter(entry => entry.date === this.currentDate()));
   readonly planError = signal('');
   readonly generating = signal(false);
   readonly fulfillingDay = signal<string|null>(null);
@@ -73,7 +86,17 @@ export class StudyStore {
   private noticeTimer?: ReturnType<typeof setTimeout>;
   private writes: Promise<unknown> = Promise.resolve();
 
-  constructor() { void this.load(); }
+  constructor() {
+    void this.load();
+    const updateDate = () => this.now.set(new Date());
+    const dayTimer = setInterval(updateDate, 60_000);
+    // A sleeping tab may miss midnight; refresh immediately when it becomes visible.
+    document.addEventListener('visibilitychange', updateDate);
+    inject(DestroyRef).onDestroy(() => {
+      clearInterval(dayTimer);
+      document.removeEventListener('visibilitychange', updateDate);
+    });
+  }
 
   private async request<T>(url:string, init?:RequestInit):Promise<T> {
     let response:Response;
@@ -102,7 +125,8 @@ export class StudyStore {
       this.planSubjects.set(plan.subjects);
       this.preferences.set(plan.preferences ?? DEFAULT_PREFERENCES);
       this.generatedPlan.set(plan.plan);
-      if (first || this.weekStart() < mondayOf(data.dates[0]) || this.weekStart() > mondayOf(data.dates.at(-1)!)) this.weekStart.set(mondayOf(data.referenceDate));
+      this.courseTimetable.set(plan.timetable ?? null);
+      if (first || this.weekStart() < this.firstWeek() || this.weekStart() > this.lastWeek()) this.weekStart.set(mondayOf(today()));
       this.loaded.set(true); this.loadError.set('');
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Could not load your study plan.';
@@ -111,9 +135,9 @@ export class StudyStore {
   }
 
   /** Sends a change after the ones before it. On failure the server's version is reloaded. */
-  private write<T=unknown>(url:string, init:RequestInit, saved?:(result:T)=>void):Promise<boolean> {
+  private write<T=unknown>(url:string, init:RequestInit, saved?:(result:T)=>void|Promise<void>):Promise<boolean> {
     const run = this.writes.then(async () => {
-      try { const result=await this.request<T>(url, init); saved?.(result); return true; }
+      try { const result=await this.request<T>(url, init); await saved?.(result); return true; }
       catch (e) {
         const message = e instanceof Error ? e.message : 'Could not save that change.';
         this.announce(`Not saved: ${message}`);
@@ -190,8 +214,11 @@ export class StudyStore {
     const url=this.courseUrl(id);
     const semester=this.semkez();
     this.state.set(data); this.announce('Subject changes saved.');
-    void this.write<PlanSubject>(url,this.json('PATCH',patch),subject=>{
-      if(this.semkez()===semester)this.planSubjects.update(subjects=>subjects.map(s=>s.id===id?subject:s));
+    void this.write<PlanSubject>(url,this.json('PATCH',patch),async subject=>{
+      if(this.semkez()===semester){
+        this.planSubjects.update(subjects=>subjects.map(s=>s.id===id?subject:s));
+        await this.refreshTargets();
+      }
     });
   }
   /** The slots the calendar shows on one day, earliest first, lunch and dinner included. */
@@ -293,6 +320,7 @@ export class StudyStore {
     try {
       this.preferences.set(await this.request<Preferences>(
         `/api/semesters/${this.semkez()}/preferences`, this.json('PUT', patch)));
+      await this.refreshTargets();
       this.announce('Study habits saved.');
       return true;
     } catch (e) {
@@ -312,11 +340,23 @@ export class StudyStore {
       this.state.update(d => ({...d, subjects: d.subjects.map(s => s.courseId === courseId
         ? {...s, examDate:subject.examDate, examStart:subject.examStart, examEnd:subject.examEnd,
           targetHours:subject.targetHours, completed:subject.completed} : s)}));
+      await this.refreshTargets();
       return true;
     } catch (e) {
       this.planError.set(e instanceof Error ? e.message : 'Could not save that course.');
       return false;
     }
+  }
+
+  /** One course's availability can change every course's share of the semester target. */
+  private async refreshTargets():Promise<void> {
+    const semester=this.semkez();
+    const plan=await this.request<Plan>(`/api/semesters/${semester}/plan`);
+    if(this.semkez()!==semester)return;
+    this.planSubjects.set(plan.subjects);
+    const targets=new Map(plan.subjects.map(s=>[s.id,s.targetHours]));
+    this.state.update(data=>({...data,subjects:data.subjects.map(subject=>
+      ({...subject,targetHours:targets.get(subject.id)??0}))}));
   }
 
   toggleDone(id:string):void {
@@ -373,7 +413,7 @@ export class StudyStore {
   }
   exportData():void {
     const url=URL.createObjectURL(new Blob([JSON.stringify(this.data(),null,2)],{type:'application/json'}));
-    const link=document.createElement('a');link.href=url;link.download=`studyphase-${this.data().semester||'plan'}.json`;link.click();
+    const link=document.createElement('a');link.href=url;link.download=`studyhub-${this.data().semester||'plan'}.json`;link.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000); this.announce('Your study data has been exported.');
   }
 }

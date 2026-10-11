@@ -20,7 +20,7 @@ whether it found a key, and `GET /api/learning/health` reports it.
 
 ## Upload-to-study workflow
 
-1. Open a subject from Exam view or Your subjects. Under **Materials**, open **Upload PDF**
+1. Open a subject from the Overview or Your subjects. Under **Materials**, open **Upload PDF**
    and choose **Slides**, **Exercises**, **Solutions**, **Exams**, or **Scripts**. The upload
    goes into the selected folder. Dragged PDFs use the last selected document type.
 2. Uploading stores the PDF once and automatically starts a **summary-only** job. The

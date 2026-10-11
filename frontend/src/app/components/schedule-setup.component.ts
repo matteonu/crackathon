@@ -2,7 +2,8 @@ import { Component, ElementRef, computed, inject, signal, viewChild } from '@ang
 import { StudyStore } from '../services/study-store';
 import { DayOff, Preferences } from '../models/semester';
 import { IconComponent } from '../shared/icon.component';
-import { validExamTimes } from '../models/study';
+import { dayLabel, validExamTimes } from '../models/study';
+import { GenerationLoaderComponent } from '../shared/generation-loader.component';
 
 /** One course as the form edits it, before anything is sent. */
 interface CourseDraft {courseId:number;name:string;color:string;examDate:string;examStart:string|null;examEnd:string|null;priority:number;difficulty:number;maxStudyHours:number|null;}
@@ -12,11 +13,12 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
 
 /** Everything the scheduler needs from the user: their courses' weights and their habits.
  *  Opened from the calendar whenever they want to adjust it. */
-@Component({selector:'app-schedule-setup',standalone:true,imports:[IconComponent],template:`
+@Component({selector:'app-schedule-setup',standalone:true,imports:[IconComponent,GenerationLoaderComponent],template:`
   <dialog #dialog class="edit-dialog schedule-setup-dialog" aria-labelledby="setup-title" (close)="error.set('')">
     <div class="dialog-top"><span class="eyebrow">STUDY SETUP</span><button type="button" class="icon-button" aria-label="Close" (click)="dialog.close()"><app-icon name="close" /></button></div>
     <h2 id="setup-title">When are your exams, and when do you study?</h2>
     <p class="muted">That is all the schedule needs. Everything else has a sensible default under Advanced.</p>
+    <p class="setup-phase"><strong>Learning phase (Lernphase)</strong><br>{{phaseLabel()}}<br><span class="field-hint">Course times appear before this period. These settings control the study plan during it.</span></p>
 
     <h3 class="setup-heading">Exams</h3>
     @if(!courses().length){<p class="empty-state">No courses yet. Add one with + next to Your subjects.</p>}
@@ -62,6 +64,7 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
 
     <details class="setup-advanced" [open]="advanced()" (toggle)="advanced.set($any($event.target).open)">
       <summary>Advanced settings</summary>
+      @if(advanced()){
       <div class="form-grid setup-day">
         <label>Study block (minutes)<input type="number" min="15" max="240" step="5" [value]="habits().studyBlockSize" (change)="setHabit({studyBlockSize:+$any($event.target).value})"></label>
         <label>Hours a week<input type="number" min="0" max="168" step="1" [placeholder]="freeHours()+' (all free time)'" [value]="habits().studyHoursPerWeek ?? ''" (change)="setHabit({studyHoursPerWeek:number($any($event.target).value)})"></label>
@@ -79,7 +82,7 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
           </div>
         </div>
       }</div>
-
+      }
     </details>
 
     @if(error()){<p class="form-error" role="alert">{{error()}}</p>}
@@ -87,12 +90,13 @@ const DIFFICULTIES=[{value:1,label:'1 — easy'},{value:2,label:'2'},{value:3,la
       <button type="button" class="text-button" (click)="dialog.close()">Cancel</button>
       <button type="button" class="button secondary" [disabled]="saving()" (click)="save(false)">Save</button>
       <button type="button" class="button primary" [disabled]="saving()||!courses().length" (click)="save(true)">
-        @if(saving()){Saving…}@else{Save and generate}</button>
+        @if(saving()&&store.generating()){<app-generation-loader label="Generating…" [compact]="true" />}@else if(saving()){Saving…}@else{Save and generate}</button>
     </div>
   </dialog>
 `})
 export class ScheduleSetupComponent {
   readonly store=inject(StudyStore);
+  readonly phaseLabel=computed(()=>`${dayLabel(this.store.examSession().start,{day:'numeric',month:'long',year:'numeric'})} – ${dayLabel(this.store.examSession().end,{day:'numeric',month:'long',year:'numeric'})}`);
   readonly dialog=viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
   readonly priorities=PRIORITIES;readonly difficulties=DIFFICULTIES;
   readonly weekdays=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((name,value)=>({value,name,short:name.slice(0,3)}));
@@ -147,6 +151,7 @@ export class ScheduleSetupComponent {
           difficulty:course.difficulty,maxStudyHours:course.maxStudyHours})){this.error.set(this.store.planError());return;}
       }
       if(thenGenerate&&!await this.store.generate()){this.error.set(this.store.planError());return;}
+      if(thenGenerate)this.store.setWeek(this.store.generatedPlan()?.fromDate??this.store.examSession().start);
       this.dialog().nativeElement.close();
     }finally{this.saving.set(false);}
   }

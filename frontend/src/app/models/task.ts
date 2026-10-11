@@ -43,6 +43,12 @@ export interface Task {
 export const MAX_TASK_TITLE = 500;
 export const MAX_TASK_NOTES = 5000;
 
+/** Calendar-day boundaries in the browser's time zone (not a fixed 24-hour interval). */
+export function taskDayBounds(now = new Date()): {start: number; next: number} {
+  return {start: new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(),
+    next: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime()};
+}
+
 /** Collapse whitespace; empty means "not a title". */
 export function cleanTitle(value: string): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, MAX_TASK_TITLE);

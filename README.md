@@ -229,29 +229,11 @@ Locally there is no proxy. `python backend/app.py` stands in as `alice@ethz.ch`;
 `DEV_USER=bob@ethz.ch` in `.env` to be someone else. A real header always wins over it, and
 on the VM `DEV_USER` is unset, so a request that bypasses the proxy gets 401.
 
-### Signing out only goes two layers deep
+### Signing out
 
-There are three sessions between a visitor and this app:
-
-| Session | Who owns it | Can we end it? |
-|---|---|---|
-| `_oauth2_proxy` cookie | the hackathon proxy | yes, `/oauth2/sign_out` |
-| VSETH Keycloak SSO | `auth.vseth.ethz.ch` | yes, its logout endpoint |
-| SWITCH AAI / Shibboleth + the ETH IdP | the university | **no** |
-
-`SIGN_OUT_URL` chains the first two: Keycloak's logout (with
-`post_logout_redirect_uri`) into the proxy's `/oauth2/sign_out?rd=`, then back here. Keycloak
-has to come first, because oauth2-proxy only redirects to `*.hackathon.ethz.ch`.
-
-**You will be signed straight back in**, because the Shibboleth session is still live and the
-whole domain is auth-gated, so there is nowhere to land that does not re-authenticate. That is
-not a bug we can fix: `auth.vseth.ethz.ch/Shibboleth.sso/Logout` refuses a `return=` with an
-`opensaml::SecurityPolicyException`, and a university SSO session is not ours to end anyway.
-
-So: to use the app as somebody else, **open it in a private window**. If a real sign-out
-matters for a demo, ask the organizers whether the proxy can send `prompt=login` instead of
-`approval_prompt=force` -- that is their config, and it would force a fresh login for every
-team's app. Set `SIGN_OUT_URL` empty in `.env` to hide the button entirely.
+There is no sign-out button: the proxy's login sits on top of the university's single
+sign-on, which we cannot end, so a sign-out would only sign you straight back in. To use the
+app as somebody else, **open it in a private window**.
 
 ## Course catalogue (VVZ)
 
@@ -384,9 +366,13 @@ algorithm.
   Clear week's hours, left of Record hours, removes actual study records for the displayed
   Monday-Sunday week via `DELETE /api/semesters/<semkez>/hours/weeks/<monday>`; planned
   slots, targets, other weeks, other semesters, and other users' records stay unchanged.
-- **Targets:** a course whose `target_hours` is still 0 gets the scheduler's workload estimate
-  (30 h per ECTS, less 13 weeks of its lecture hours) the first time slots are planned. A target
-  you set, or the seed set, is never overwritten -- it is a semester goal, not what one week holds.
+- **Targets:** forecast the full study phase using the saved Schedule settings. The scheduler
+  allocates the weekly hours budget around study weekdays, days off, meals and exams, then
+  sums each course's allocated hours. Course caps limit active learning; recall is included
+  in targets and remains exempt from the cap. Empty weekly budgets use all available time.
+  Targets update when settings or manual commitments change, without generating calendar
+  slots. Generated weeks and recorded hours do not change the forecast. Marking a course
+  done preserves its full-phase goal. Legacy imported `target_hours` values are ignored.
 - **One source for "planned":** the plan's `sessions` (what the analytics reads) are the
   calendar's course slots. Old hand-planned `study_sessions` rows, including the demo seed's,
   are moved into the calendar as your own slots on every start and reseed

@@ -57,7 +57,7 @@ def classification(body, kind, existing_category=None):
             raise RequestError(400, "Folders do not have a document type.")
         return category, None
     if "type" not in body:
-        document_type = CATEGORY_TYPES.get(category)
+        document_type = CATEGORY_TYPES.get(category) if kind == "pdf" or category != "Notes" else None
     elif (document_type is not None and TYPE_CATEGORIES[document_type] != category
           or document_type is None and category in CATEGORY_TYPES):
         raise RequestError(400, "The document type must match its category.")

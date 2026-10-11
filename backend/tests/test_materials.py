@@ -65,7 +65,7 @@ class MaterialTests(unittest.TestCase):
         url = f"/api/materials/{created['id']}"
         for change, expected in (({'type': 'exercise'}, ('Exercises', 'exercise')),
                                  ({'category': 'Solutions'}, ('Solutions', 'exercise_solution')),
-                                 ({'category': 'Notes'}, ('Notes', None))):
+                                 ({'category': 'Notes'}, ('Notes', 'notes'))):
             result = self.client.patch(url, json=change, headers=ALICE)
             self.assertEqual(result.status_code, 200, result.get_json())
             self.assertEqual((result.get_json()['category'], result.get_json()['type']), expected)
@@ -128,6 +128,7 @@ class MaterialTests(unittest.TestCase):
     def test_a_note_keeps_its_text_and_its_size(self):
         note = self.create(name='summary.md', kind='md', content='# Title\n', category='Notes')
         self.assertEqual((note['content'], note['size']), ('# Title\n', 8))
+        self.assertIsNone(note['type'])
         updated = self.client.patch(f"/api/materials/{note['id']}", json={'content': 'longer text'},
                                     headers=ALICE).get_json()
         self.assertEqual((updated['content'], updated['size']), ('longer text', 11))
@@ -178,6 +179,14 @@ class MaterialTests(unittest.TestCase):
         folder = self.create(name='week1', kind='folder', category='Notes')
         self.assertEqual(self.client.put(f"/api/materials/{folder['id']}/file", data=b'%PDF-1.4',
                                          content_type='application/pdf', headers=ALICE).status_code, 400)
+
+    def test_notes_pdf_can_be_imported_with_its_document_type(self):
+        note = self.create(name='notes.pdf', category='Notes', type='notes')
+        self.assertEqual(note['type'], 'notes')
+        uploaded = self.client.put(f"/api/materials/{note['id']}/file", data=FIXTURE.read_bytes(),
+                                   content_type='application/pdf', headers=ALICE)
+        self.assertEqual(uploaded.status_code, 200)
+        self.assertEqual(uploaded.get_json()['type'], 'notes')
 
     def test_deleting_a_folder_removes_what_is_inside_it_and_the_stored_pdf(self):
         folder = self.create(name='week1', kind='folder', category='Notes')

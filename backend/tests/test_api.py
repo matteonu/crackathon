@@ -2,11 +2,42 @@
 import tempfile
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 from tests.support import build_app
 
 
 class AuthTests(unittest.TestCase):
+    def test_unchanged_user_can_read_during_a_background_write(self):
+        import db
+        with tempfile.TemporaryDirectory() as temp:
+            app = build_app(temp)
+            self.addCleanup(app.extensions['learning_jobs'].pool.shutdown, wait=True)
+            self.addCleanup(app.extensions['mcq_jobs'].pool.shutdown, wait=True)
+            client = app.test_client()
+            headers = {'X-User-Id': 'reader@ethz.ch', 'X-User-Name': 'Reader'}
+            self.assertEqual(client.get('/api/me', headers=headers).status_code, 200)
+            writer = db.connect(app.config['DATABASE_PATH'])
+            original_connect = db.connect
+            def fail_fast(*args, **kwargs):
+                conn = original_connect(*args, **kwargs)
+                conn.execute('PRAGMA busy_timeout = 0')
+                return conn
+            try:
+                writer.execute('BEGIN IMMEDIATE')
+                with patch('db.connect', side_effect=fail_fast):
+                    self.assertEqual(client.get('/api/me', headers=headers).status_code, 200)
+                    self.assertEqual(client.get('/api/materials', headers=headers).status_code, 200)
+                    renamed = {**headers, 'X-User-Name': 'Reader renamed'}
+                    response = client.get('/api/me', headers=renamed)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.get_json()['name'], 'Reader')
+                    self.assertEqual(client.get('/api/materials', headers=renamed).status_code, 200)
+            finally:
+                writer.rollback()
+                writer.close()
+            self.assertEqual(client.get('/api/me', headers=renamed).get_json()['name'], 'Reader renamed')
+
     def test_pdf_module_worker_is_served_as_javascript(self):
         with tempfile.TemporaryDirectory() as temp:
             worker = Path(temp) / 'pdf.worker.min.mjs'
@@ -63,17 +94,6 @@ class AuthTests(unittest.TestCase):
                              {'email': 'alice@ethz.ch', 'name': 'Alice Example'})
             self.assertEqual(client.get('/api/me', headers={'X-User-Id': 'bob@ethz.ch'}).get_json()['email'],
                              'bob@ethz.ch')
-
-    def test_sign_out_is_offered_only_to_a_request_from_the_proxy(self):
-        with tempfile.TemporaryDirectory() as temp:
-            app = build_app(temp, DEV_USER='alice@ethz.ch', SIGN_OUT_URL='https://auth.example/logout')
-            client = app.test_client()
-            self.assertNotIn('signOutUrl', client.get('/api/me').get_json())
-            through_proxy = client.get('/api/me', headers={'X-User-Id': 'alice@ethz.ch'}).get_json()
-            self.assertEqual(through_proxy['signOutUrl'], 'https://auth.example/logout')
-            # Configuring it empty hides the button everywhere.
-            silent = build_app(temp, SIGN_OUT_URL='').test_client()
-            self.assertNotIn('signOutUrl', silent.get('/api/me', headers={'X-User-Id': 'a@ethz.ch'}).get_json())
 
     def test_a_seeded_user_keeps_their_data(self):
         with tempfile.TemporaryDirectory() as temp:
