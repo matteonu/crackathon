@@ -6,7 +6,7 @@
 .overview-dashboard { display: grid; gap: 24px; }
 .overview-focus { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0; }
 .overview-todos, .overview-insight, .overview-today { padding: 24px; min-width: 0; }
-.overview-insight { background: var(--surface-soft); border-left: 1px solid var(--line); }
+.overview-insight { background: var(--surface); border-left: 1px solid var(--line); }
 .overview-today { border-left: 1px solid var(--line); }
 .overview-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
 .overview-section-heading h2 { display: flex; align-items: center; gap: 10px; margin: 7px 0 0; font-size: 21px; }
@@ -47,10 +47,13 @@ input.overview-check { flex: 0 0 17px; width: 17px; height: 17px; min-height: 0;
 .overview-coverage span { font-size: 13px; }
 .overview-coverage small { color: var(--muted); font-size: 11px; line-height: 1.5; }
 .overview-progress-track { display: flex; height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; }
-.overview-progress-track > span, .overview-course-track > span { display: block; flex: 0 0 auto; height: 100%; background: color-mix(in srgb, color-mix(in srgb, var(--state-ink) 65%, var(--accent)) 55%, var(--surface)); transition: width .25s ease; }
+.overview-progress-track > span, .overview-course-track > span { display: block; flex: 0 0 auto; height: 100%; background: var(--state-surface); transition: width .25s ease; }
+.overview-insight .state-unread { --state-surface: #d6d6d6; }
+.overview-insight .state-done { --state-surface: #83bc91; }
+.overview-insight .state-revisit { --state-surface: #e7c45b; }
 .overview-legend { display: flex; flex-wrap: wrap; gap: 12px 18px; margin-top: 14px; }
 .overview-legend > span { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--muted); }
-.overview-legend i { width: 7px; height: 7px; border-radius: 2px; background: var(--state-ink); }
+.overview-legend i { width: 7px; height: 7px; border-radius: 2px; background: var(--state-surface); }
 .overview-legend b { color: var(--ink); font-weight: 600; }
 .overview-course-progress { display: grid; gap: 19px; margin-top: 27px; padding-top: 23px; border-top: 1px solid var(--line); max-height: 310px; overflow-y: auto; }
 .overview-course-row > div:first-child { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
