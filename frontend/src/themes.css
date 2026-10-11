@@ -98,33 +98,39 @@
 :root:is([data-theme='dark'],[data-theme='contrast']) .calendar-day-heading.exam-day,
 :root:is([data-theme='dark'],[data-theme='contrast']) .schedule-table thead .exam-day { --exam-tint:20%; }
 
-/* Only the right-hand arc is visible. Logos turn with the wheel, like tiles glued to it. */
+/* The right-hand arc rotates into the original logo; the wordmark stays in place. */
 .theme-trigger { border:0; padding:0; background:transparent; text-align:left; cursor:pointer; }
 .theme-trigger:hover .brand-mark { box-shadow:0 0 0 3px var(--accent-border); }
 .theme-trigger:focus-visible { border-radius:10px; }
-.theme-trigger[aria-expanded=true] { opacity:0; }
+.theme-trigger[aria-expanded=true] .brand-mark { visibility:hidden; }
 .theme-wheel {
-  position:fixed; inset:auto; margin:0; width:270px; height:264px; max-width:calc(100vw - 16px);
-  padding:0; color:var(--ink); background:var(--sidebar);
-  border:0; border-radius:22px; box-shadow:0 14px 45px var(--shadow);
-  overflow:hidden;
+  --theme-radius:44px;
+  position:fixed; inset:auto; margin:0;
+  width:calc(2 * var(--theme-radius) + var(--theme-logo-width) + 12px);
+  height:calc(2 * var(--theme-radius) + var(--theme-logo-height) + 12px);
+  max-width:none; max-height:none; padding:0; color:var(--ink); background:transparent;
+  border:0; overflow:visible; pointer-events:none;
+  transition:display 240ms allow-discrete,overlay 240ms allow-discrete;
 }
-.theme-wheel:popover-open { animation:theme-wheel-in 160ms ease-out; }
 .theme-wheel::backdrop { background:transparent; pointer-events:none; }
-.theme-close { position:absolute; z-index:2; top:9px; right:9px; border:0; background:none; color:var(--muted); font-size:22px; width:30px; height:30px; padding:0; border-radius:50%; }
-.theme-close:hover { background:var(--surface-hover); color:var(--ink); }
-.theme-orbit { --theme-radius:106px; position:absolute; inset:0; overflow:hidden; }
-.theme-track { position:absolute; left:-12px; top:50%; width:0; height:0; transform-origin:0 0; transition:transform 380ms cubic-bezier(.22,.8,.25,1); }
+.theme-orbit { position:absolute; inset:0; }
+.theme-track { position:absolute; left:50%; top:50%; width:0; height:0; transform-origin:0 0; transition:transform 380ms cubic-bezier(.22,.8,.25,1); }
 .theme-spoke { position:absolute; left:0; top:0; width:0; height:0; transform-origin:0 0; }
-.theme-choice { display:grid; place-items:center; width:56px; height:56px; padding:0; border:2px solid var(--accent); border-radius:15px; background:var(--surface); color:var(--accent); transform:translate(-50%,-50%); opacity:0; pointer-events:none; transition:opacity 380ms ease; }
-.theme-choice-near { opacity:1; pointer-events:auto; }
+.theme-reveal { width:0; height:0; opacity:0; transform:translateX(-12px) scale(.82); transition:opacity 200ms ease-in,transform 240ms cubic-bezier(.4,0,1,1); }
+.theme-wheel:popover-open .theme-reveal { opacity:1; transform:none; transition-timing-function:ease-out,cubic-bezier(0,0,.2,1); }
+.theme-reveal.theme-reveal-current { opacity:1; transform:none; }
+.theme-choice { display:grid; place-items:center; width:var(--theme-logo-width); height:var(--theme-logo-height); padding:0; border:1px solid var(--accent); border-radius:var(--theme-logo-radius); background:var(--surface); color:var(--accent); transform:translate(-50%,-50%) scale(.65); opacity:0; pointer-events:none; transition:opacity 380ms ease,transform 380ms cubic-bezier(.22,.8,.25,1); }
+.theme-choice-near { opacity:1; }
+.theme-wheel:popover-open .theme-choice-near { pointer-events:auto; }
 .theme-choice:hover { box-shadow:0 0 0 3px var(--accent); }
-.theme-choice[aria-current=true] { background:var(--accent); color:var(--on-accent); }
-.theme-logo { display:inline-flex; align-items:center; justify-content:center; font-size:46px; font-weight:500; line-height:1; padding-bottom:5px; }
+.theme-choice[aria-current=true] { border:0; background:var(--accent); color:var(--on-accent); transform:translate(-50%,-50%); }
+.theme-logo { display:inline-flex; align-items:center; justify-content:center; font-size:var(--theme-logo-font); font-weight:500; line-height:1; padding-bottom:var(--theme-logo-padding); letter-spacing:var(--theme-logo-spacing); }
 .theme-logo > span { color:currentColor; opacity:.6; }
 .theme-choice[aria-current=true] .theme-logo > span { color:var(--logo-dot); opacity:1; }
-.theme-wordmark { position:absolute; left:134px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:8px 0; border:0; background:none; color:var(--ink); text-align:left; }
-.theme-wordmark strong { font-size:22px; font-weight:650; letter-spacing:-.04em; }
-.theme-wordmark > span { max-width:124px; color:var(--muted); font-size:10px; line-height:1.4; }
-@keyframes theme-wheel-in { from{opacity:0;transform:translateY(-6px) scale(.96);} to{opacity:1;transform:none;} }
+.theme-label { position:absolute; left:var(--theme-label-left); top:var(--theme-label-top); white-space:nowrap; color:var(--muted); font-size:10px; line-height:1.4; opacity:0; transform:translateY(-4px); transition:opacity 200ms ease-in,transform 240ms ease-in; }
+.theme-wheel:popover-open .theme-label { opacity:1; transform:none; transition-timing-function:ease-out; }
+@starting-style {
+  .theme-wheel:popover-open .theme-reveal:not(.theme-reveal-current) { opacity:0; transform:translateX(-12px) scale(.82); }
+  .theme-wheel:popover-open .theme-label { opacity:0; transform:translateY(-4px); }
+}
 @media(max-width:720px){.theme-trigger{width:auto;}}
