@@ -192,8 +192,8 @@ if __name__ == "__main__":
     # No proxy locally, so stand in for its headers unless the shell says otherwise.
     app = create_app({"SECRET_KEY": os.environ.get("SECRET_KEY") or "dev-only-secret",
                       "START_BACKGROUND_TASKS": os.environ.get("WERKZEUG_RUN_MAIN") == "true",
-                      "DEV_USER": os.environ.get("DEV_USER") or "alice@ethz.ch",
-                      "DEV_USER_NAME": os.environ.get("DEV_USER_NAME") or "Alice Example"})
+                      "DEV_USER": os.environ.get("DEV_USER") or "kaaddi@ethz.ch",
+                      "DEV_USER_NAME": os.environ.get("DEV_USER_NAME") or "Karim Addi"})
     # The debug reloader runs this file twice; only announce from the outer process.
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         print(f" * Database: {app.config['DATABASE_PATH']}", flush=True)

@@ -56,7 +56,7 @@ class McqValidationTests(unittest.TestCase):
 class McqApiTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.app = build_app(self.temp.name, DEV_USER="alice@ethz.ch", DEV_USER_NAME="Alice")
+        self.app = build_app(self.temp.name, DEV_USER="kaaddi@ethz.ch", DEV_USER_NAME="Karim Addi")
         self.client = self.app.test_client()
         self.material_id = str(uuid.uuid4())
         response = self.client.post("/api/materials", json={"id": self.material_id, "subjectId": "course-1",
@@ -70,7 +70,7 @@ class McqApiTests(unittest.TestCase):
         set_id, series_id, question_id = str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
         option_ids = [str(uuid.uuid4()) for _ in range(3)]
         with self.app.app_context():
-            conn = db.get_db(); user_id = db.get_user_by_email("alice@ethz.ch")["id"]
+            conn = db.get_db(); user_id = db.get_user_by_email("kaaddi@ethz.ch")["id"]
             with conn:
                 conn.execute("""INSERT INTO mcq_sets
                     (id,material_id,user_id,mode,series_id,version,status,idempotency_key)

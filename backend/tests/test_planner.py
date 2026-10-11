@@ -6,7 +6,7 @@ from unittest.mock import patch
 import db
 from tests.support import build_app
 
-ALICE = {"X-User-Id": "alice@ethz.ch", "X-User-Name": "Alice"}
+ALICE = {"X-User-Id": "kaaddi@ethz.ch", "X-User-Name": "Karim Addi"}
 BOB = {"X-User-Id": "bob@ethz.ch", "X-User-Name": "Bob"}
 
 
@@ -350,7 +350,7 @@ class SchemaUpgradeTests(unittest.TestCase):
             old.executescript("""CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL COLLATE NOCASE,
                                  display_name TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')),
                                  birth_date TEXT, study_start TEXT);
-                                 INSERT INTO users (email) VALUES ('alice@ethz.ch');""")
+                                 INSERT INTO users (email) VALUES ('kaaddi@ethz.ch');""")
             old.commit()
             old.close()
             app = build_app(temp)

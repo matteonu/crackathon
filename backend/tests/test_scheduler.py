@@ -16,7 +16,7 @@ from tests.support import build_app
 from errors import RequestError
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=timezone.utc)
-ALICE = {'X-User-Id': 'alice@ethz.ch'}
+ALICE = {'X-User-Id': 'kaaddi@ethz.ch'}
 BOB = {'X-User-Id': 'bob@ethz.ch'}
 CARD = {'question': 'Question?', 'answer': 'Answer.'}
 
@@ -396,7 +396,7 @@ class LegacyMigration(unittest.TestCase):
             path = str(Path(temp)/'app.db')
             conn = sqlite3.connect(path)
             conn.executescript('''CREATE TABLE users(id INTEGER PRIMARY KEY,email TEXT);
-                INSERT INTO users VALUES(1,'alice@ethz.ch');
+                INSERT INTO users VALUES(1,'kaaddi@ethz.ch');
                 CREATE TABLE materials(id TEXT PRIMARY KEY,user_id INTEGER,subject_id TEXT,
                   parent_id TEXT,kind TEXT,name TEXT,category TEXT,marker TEXT,size INTEGER DEFAULT 0,
                   added_at INTEGER,outputs TEXT,processing TEXT);''')
@@ -425,7 +425,7 @@ class LegacyMigration(unittest.TestCase):
                 '    folder_weight REAL NOT NULL DEFAULT 1 CHECK (folder_weight > 0),\n', '').replace(
                 '    processing TEXT,\n    UNIQUE (id, user_id)', '    processing TEXT')
             conn.executescript(schema)
-            conn.execute("INSERT INTO users(id,email) VALUES(1,'alice@ethz.ch')")
+            conn.execute("INSERT INTO users(id,email) VALUES(1,'kaaddi@ethz.ch')")
             folder, pdf = str(uuid.uuid4()), str(uuid.uuid4())
             for id_, parent, kind, name, outputs in [(folder, None, 'folder', 'Folder', None),
                     (pdf, folder, 'pdf', 'lecture.pdf', json.dumps({'summary': {'text': 'Summary.'},

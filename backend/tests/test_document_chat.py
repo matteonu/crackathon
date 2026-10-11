@@ -19,7 +19,7 @@ from learning.document_chat import CHAT_MODEL, CHAT_REASONING_EFFORT, DocumentCh
 from tests.support import build_app
 import db
 
-ALICE = {'X-User-Id': 'alice@ethz.ch'}
+ALICE = {'X-User-Id': 'kaaddi@ethz.ch'}
 BOB = {'X-User-Id': 'bob@ethz.ch'}
 
 
